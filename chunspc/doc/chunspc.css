@@ -1,0 +1,78 @@
+@charset 'UTF-8';
+
+@import 'base.css';
+
+/* mask */
+/*
+table.dump tr.track1 { display: none; }
+table.dump tr.track2 { display: none; }
+table.dump tr.track3 { display: none; }
+table.dump tr.track4 { display: none; }
+table.dump tr.track5 { display: none; }
+table.dump tr.track6 { display: none; }
+table.dump tr.track7 { display: none; }
+table.dump tr.track8 { display: none; }
+*/
+
+/* colors a event */
+table.dump tr.unknown td.hex
+{ background: #000000; color: #ff3333; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* general */
+table.chunspc.event-list td.ch 
+{ text-align: right; }
+table.chunspc.event-list td.tick 
+{ text-align: right; }
+table.chunspc.event-list td.address 
+{ text-align: right; }
+table.chunspc.event-list td.hex-dump 
+{ font-family: 'Courier New', monospace; }
+
+/* events */
+table.chunspc.event-list tr.unknown.event td.hex-dump 
+{ background: #000000; color: #ff3333; }
+table.chunspc.event-list tr.event.ev-note td.hex-dump 
+{ background: #99ddff; }
+table.chunspc.event-list tr.event.ev-jump td.hex-dump 
+{ background: #ff99ff; }
+table.chunspc.event-list tr.event.ev-vol td.hex-dump 
+{ background: #ff9999; }
+
+
+
+
+
+
+
+
+/* program change */
+table.dq6.event-list tr.event.ev-d4 td.hex-dump 
+{ background: #ff99ff; }
+/* volume */
+table.dq6.event-list tr.event.ev-e3 td.hex-dump 
+{ background: #ff9999; }
+/* jump */
+/* loop, adsr, etc... */
+table.dq6.event-list tr.event.ev-f9 td.hex-dump 
+{ background: #fff999; }
+/* unknown */

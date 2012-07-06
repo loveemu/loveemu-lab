@@ -1,0 +1,9 @@
+LIBRARY ifnscr.spi
+DESCRIPTION "Nintendo NSCR Susie Plug-in"
+VERSION 0.1
+EXPORTS
+	GetPluginInfo
+	IsSupported
+	GetPictureInfo
+	GetPicture
+	GetPreview

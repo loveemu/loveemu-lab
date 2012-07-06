@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
+	"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="ja">
+	<head>
+		<!--[if lt IE 7]><meta http-equiv="Content-Type" content="text/html; charset=UTF-8" /><![endif]-->
+		<meta name="author" content="loveemu" />
+		<link rel="stylesheet" href="css/foo.css" />
+		<link rev="made" href="m&#97;&#105;l&#x74;&#x6F;&#x3A;&#x6c;&#111;ve&#x65;m&#x75;&#x40;&#x68;&#x6F;&#x74;mail&#x2E;&#99;o&#46;&#x6a;p" />
+		<title>loveemu Compile SPC works manual</title>
+	</head>
+	<body>
+		<div class="page">
+			<h1>loveemu Compile SPC works manual</h1>
+			<div class="content">
+				<div class="section">
+					<h2>目次</h2>
+					<div class="content">
+						<ul>
+							<li><a href="#introduction">はじめに</a></li>
+							<li><a href="#compspc">COMPSPC</a></li>
+							<li><a href="#comments">コメント</a></li>
+							<li><a href="#thanks">サンクス</a></li>
+						</ul>
+					</div>
+				</div>
+				<div class="section" id="introduction">
+					<h2>はじめに</h2>
+					<div class="content">
+						<p>このパッケージは、スーパーファミコンにおけるコンパイルのミュージックエンジンに関する解析資料です。MIDIコンバータやIPSパッチなどがあります。このエンジンを使用しているゲームのタイトルは以下の通りです。</p>
+						<ul>
+							<li>スーパーアレスタ（Super Aleste、Space Megaforce）</li>
+							<li>邪鬼破壊（Jaki Crush）</li>
+							<li>すーぱーぷよぷよ（Super Puyo Puyo）</li>
+							<li>Kirby's Avalanche（Kirby's Ghost Trap）</li>
+							<li>すーぱーぷよぷよ通（Super Puyo Puyo 2）</li>
+							<li>すーぱーぷよぷよ通リミックス（Super Puyo Puyo 2 Remix）</li>
+							<li>魔導物語（Madou Monogatari）</li>
+							<li>すーぱーなぞぷよ（Super Nazo Puyo）</li>
+							<li>すーぱーなぞぷよ通（Super Nazo Puyo 2）</li>
+						</ul>
+						<p>パッケージの中身とは関係ないけれど、Kirby's Avalancheってすーぱーぷよぷよのハックものに見えませんか？</p>
+					</div>
+				</div>
+				<div class="section" id="compspc">
+					<h2>COMPSPC</h2>
+					<div class="content">
+						<p>COMPSPCは音楽データを解析および変換するための簡素なプログラムです。そう、MIDIコンバータなのです。</p>
+						<div class="section">
+							<h3>初心者向けの簡単な使い方</h3>
+							<div class="content">
+								<ol>
+									<li>compspc.exeとallconv.batを目的のファイルがあるディレクトリに入れます</li>
+									<li>allconv.batを実行、すぐにMIDIファイルを得ることができます</li>
+									<li>(ﾟДﾟ)ｳﾏｰ</li>
+								</ol>
+								<p>これはWindows向けの方法です。ほかのプラットフォームは知りません。 <span class="emoticon">:P</span></p>
+							</div>
+						</div>
+						<div class="section">
+							<h3>使い方</h3>
+							<div class="content">
+								<p>COMPSPCはコンソールアプリケーションです。以下に構文を示します。</p>
+								<pre><code>compspc &lt;spc files&gt;</code></pre>
+								<p>ID666から名付けられたMIDIファイルが作成されます。変換ログは標準出力に出力されます。</p>
+							</div>
+						</div>
+						<div class="section">
+							<h3>注釈</h3>
+							<div class="content">
+								<ul>
+									<li>いくつかの理由により<em>SNESmusic.orgのSPCセットを推奨します</em></li>
+									<li>ジングルや効果音はおそらく正常に変換されません</li>
+									<li>変換における問題がいくつかあります</li>
+									<li>研究用途であり、再生用途ではありません</li>
+									<li><abbr title="Public Domain Software">PDS</abbr>としてソースコードを含んでいます</li>
+								</ul>
+								<div class="section">
+									<h4>どうしてSNESmusic.orgのSPCセットなのでしょうか？</h4>
+									<div class="content">
+										<p>お気に入りだからです。あとは以下の理由によります。</p>
+										<ul>
+											<li>ID666のタイマーと<em>タグがセットされている</em></li>
+											<li>それぞれのセットが<em>同一のハックを用いている</em></li>
+										</ul>
+										<p>COMPSPCは、ミュージックエンジンのバージョンをID666から自動的に取得しますし、変換停止のためにID666のタイマーを使います（タイマーがセットされていなければ、180秒分の変換を行います）。また、COMPSPCはNTSC/PAL切り替えのために、ハックされたSPCを対象としています（timer0の周期を読んでいる）。</p>
+									</div>
+								</div>
+								<div class="section">
+									<h4>どうして楽曲のみの対応なのでしょうか？</h4>
+									<div class="content">
+										<p>COMPSPCは音楽テーブルを探し、楽曲01を常に変換します。通常、SPCプレーヤーが再生する曲は楽曲01ですが、ジングルや効果音はそうではありません。私は正しい曲を得る方法がわかりません。再生中の位置を知る方法は知っていますが、使いたくありません（いくつかのイベントがダンプされないかもしれないため）。可能なら修正してみてください。</p>
+									</div>
+								</div>
+								<div class="section">
+									<h4>その他の変換に関する問題</h4>
+									<div class="content">
+										<ul>
+											<li>テンポにおける相違</li>
+											<li>チューニングの問題</li>
+										</ul>
+										<p>ミュージックエンジンはトラックごとに独立した演奏速度を持っていますが、MIDIファイルはそうではありません。この違いは再生に関する問題を引き起こすかもしれません（しかし私はこの状況に遭遇していません）。</p>
+										<p>ミュージックエンジンはチューニングイベントを持っていて、チューニング値はDSPのピッチレジスタに加算されます。RPNチューニングはこれをエミュレートできません。ノートごとにピッチを計算することで、コンバータはこれをエミュレートできますが、私はそれを望みません。</p>
+									</div>
+								</div>
+								<div class="section">
+									<h4>ソースコード</h4>
+									<div class="content">
+										<p>C言語で開発しました。さまざまなプラットフォームでのコンパイルが可能です（たぶん）。ソースコードはパブリックドメインなので、ご自由にお使いください。</p>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="section" id="comments">
+					<h2>コメント</h2>
+					<div class="content">
+						<p>COMPSPCの開発は大変でしたが、マニュアルを書くのはもっと大変でした。以前よりは英語を書くことにも慣れてきましたが、まだまだ困難は多いです。</p>
+						<p>それはさておき、私はコンパイル作品の中ではもちろんぷよぷよが好きですが、魔導物語はもっと好きです。このマニュアルでタイトルを知ったあなた、かわいくてあどけない少女アルル・ナジャと旅をしてみませんか？</p>
+					</div>
+				</div>
+				<div class="section" id="thanks">
+					<h2>サンクス</h2>
+					<div class="content">
+						<dl>
+							<dt><a class="ex-ref" href="http://snesmusic.org/">SNESmusic.org</a></dt><dd>スーパーファミコンの音楽に関するすばらしいアーカイブもしくはデータベース<a class="ex-ref" href="http://snesmusic.org/v2/wiki.php?iRequest=wiki/ViewPage&amp;iPage=Undumpable">Undumpable soundtrack list</a>も便利</dd>
+							<dt><a class="ex-ref" href="http://www.caitsith2.com/">Caitsith2</a></dt><dd><a class="ex-ref" href="http://spcsets.caitsith2.net/">SPCのIPSパッチ</a>を提供、おかげでまたひとつ賢くなれました</dd>
+							<dt>Osaka</dt><dd>SNESmusic.orgでコンパイルの音楽を多数提供</dd>
+							<dt><a class="ex-ref" href="http://www.ssdlabo.jp/win/spcplay/">SNES SPC700 Player</a></dt><dd>とても便利なSPCプレーヤー（Script700をサポートしたSNESAPUを使用）</dd>
+							<dt><a class="ex-ref" href="http://kurohane.net/spc.phtml">黒羽製作所: 特殊なSPCについて</a></dt><dd>Script700のまとめ、ダンプできないサウンドトラックの情報</dd>
+						</dl>
+					</div>
+				</div>
+			</div>
+			<address><a class="ex-ref" href="http://loveemu.yh.land.to/">loveemu labo</a>, <a class="ex-ref" href="m&#97;&#105;l&#x74;&#x6F;&#x3A;&#x6c;&#111;ve&#x65;m&#x75;&#x40;&#x68;&#x6F;&#x74;mail&#x2E;&#99;o&#46;&#x6a;p">Email/MSN Messenger</a></address>
+		</div>
+	</body>
+</html>

@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
+	"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+	<head>
+		<!--[if lt IE 7]><meta http-equiv="Content-Type" content="text/html; charset=UTF-8" /><![endif]-->
+		<meta name="author" content="loveemu" />
+		<link rel="stylesheet" href="css/foo.css" />
+		<link rev="made" href="m&#97;&#105;l&#x74;&#x6F;&#x3A;&#x6c;&#111;ve&#x65;m&#x75;&#x40;&#x68;&#x6F;&#x74;mail&#x2E;&#99;o&#46;&#x6a;p" />
+		<title>loveemu Compile SPC works manual</title>
+	</head>
+	<body>
+		<div class="page">
+			<h1>loveemu Compile SPC works manual</h1>
+			<div class="content">
+				<div class="section">
+					<h2>Contents</h2>
+					<div class="content">
+						<ul>
+							<li><a href="#introduction">Introduction</a></li>
+							<li><a href="#compspc">COMPSPC</a></li>
+							<li><a href="#comments">Comments</a></li>
+							<li><a href="#thanks">Thanks</a></li>
+						</ul>
+					</div>
+				</div>
+				<div class="section" id="introduction">
+					<h2>Introduction</h2>
+					<div class="content">
+						<p>This package is my reverse engineering work of SNES Compile music engine. There are <em>MIDI converter</em>, IPS patches, and so on. I show all titles using this engine.</p>
+						<ul>
+							<li>Super Aleste (<span xml:lang="ja">スーパーアレスタ</span>, Space Megaforce)</li>
+							<li>Jaki Crush (<span xml:lang="ja">邪鬼破壊</span>)</li>
+							<li>Super Puyo Puyo (<span xml:lang="ja">すーぱーぷよぷよ</span>)</li>
+							<li>Kirby's Avalanche (Kirby's Ghost Trap)</li>
+							<li>Super Puyo Puyo 2 (<span xml:lang="ja">すーぱーぷよぷよ通</span>)</li>
+							<li>Super Puyo Puyo 2 Remix (<span xml:lang="ja">すーぱーぷよぷよ通リミックス</span>)</li>
+							<li>Madou Monogatari (<span xml:lang="ja">魔導物語</span>)</li>
+							<li>Super Nazo Puyo (<span xml:lang="ja">すーぱーなぞぷよ</span>)</li>
+							<li>Super Nazo Puyo 2 (<span xml:lang="ja">すーぱーなぞぷよ通</span>)</li>
+						</ul>
+						<p>Do you know <img src="img/puyo.png" alt="Puyo" />? Blob? No, it is Puyo. We Japanese feel that Kirby's Avalanche is a hack of <span xml:lang="ja">すーぱーぷよぷよ</span>. <span class="emoticon">^^;</span></p>
+					</div>
+				</div>
+				<div class="section" id="compspc">
+					<h2>COMPSPC</h2>
+					<div class="content">
+						<p>COMPSPC is a simple program to analyze and convert music. Yes, this is a MIDI converter.</p>
+						<div class="section">
+							<h3>Simple Usage for Beginners</h3>
+							<div class="content">
+								<ol>
+									<li>Put compspc.exe and allconv.bat in target directory</li>
+									<li>Run allconv.bat, then you will get MIDI files soon</li>
+									<li>Have fun! <span class="emoticon">;)</span></li>
+								</ol>
+								<p>This usage is for Windows. I don't know other any platforms. <span class="emoticon">:P</span></p>
+							</div>
+						</div>
+						<div class="section">
+							<h3>Usage</h3>
+							<div class="content">
+								<p>COMPSPC is a console application. I show the syntax to the following.</p>
+								<pre><code>compspc &lt;spc files&gt;</code></pre>
+								<p>MIDI files named from ID666 will be created, and translation logs will be put to standard output.</p>
+							</div>
+						</div>
+						<div class="section">
+							<h3>Notes</h3>
+							<div class="content">
+								<ul>
+									<li><em>SNESmusic.org SPC sets are recommended</em> for some reasons</li>
+									<li>Neither jingles nor sound effects will be converted perhaps</li>
+									<li>Has some conversion issues</li>
+									<li>For research, not for playback</li>
+									<li>Source codes included, in the public domain</li>
+								</ul>
+								<div class="section">
+									<h4>Why SNESmusic.org SPC sets?</h4>
+									<div class="content">
+										<p>Because my favorite, and the following reason.</p>
+										<ul>
+											<li>ID666 timers and <em>tags are set</em></li>
+											<li>Each set <em>uses same hack code</em></li>
+										</ul>
+										<p>COMPSPC obtains the version of the music engine from ID666 automatically, and uses ID666 timers to stop conversion (if no timers, converts 180 seconds). Moreover, COMPSPC is for hacked SPCs because of NTSC/PAL switching (read timer0 latch).</p>
+									</div>
+								</div>
+								<div class="section">
+									<h4>Why supports music only?</h4>
+									<div class="content">
+										<p>COMPSPC searches music table, and converts music 01 always. Usually, music that SPC player plays is 01, but neither jingles nor sound effects are so. I don't know how to get correct song. I know the way to get playing position, but I don't want to use this method (because some events might not be dumped). Fix it if you can.</p>
+									</div>
+								</div>
+								<div class="section">
+									<h4>Other conversion issues</h4>
+									<div class="content">
+										<ul>
+											<li>Difference of tempo</li>
+											<li>Tuning problem</li>
+										</ul>
+										<p>The music engine has independent tempo value of each track, but MIDI file is not so. This difference might cause the problem around playback (I have not seen such cases however).</p>
+										<p>The music engine has tuning event, and tuning value is added to DSP pitch registers. The RPN tuning cannot emulate this. Converter can emulate it by calculating the pitch at each note, but I don't want it.</p>
+									</div>
+								</div>
+								<div class="section">
+									<h4>Source codes</h4>
+									<div class="content">
+										<p>Developed with C, you can compile the source codes with various platforms, perhaps. Source codes are in the public domain, feel free to use.</p>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="section" id="comments">
+					<h2>Comments</h2>
+					<div class="content">
+						<p>The development of COMPSPC was hard, but writing this manual was more hard. Can you understand my English? I have become accustomed to writing English than before. <span class="emoticon">:)</span></p>
+						<p>By the way, I like Madou Monogatari (<span xml:lang="ja">魔導物語</span>) very much. I know that <a class="ex-ref" title="Madou Monogatari" href="http://agtp.romhack.net/madou.html">English translation patch for Madou Monogatari</a> exists. Don't you adventure with a lovely young girl, Arle Nadja?</p>
+					</div>
+				</div>
+				<div class="section" id="thanks">
+					<h2>Thanks</h2>
+					<div class="content">
+						<dl>
+							<dt><a class="ex-ref" href="http://snesmusic.org/">SNESmusic.org</a></dt><dd>One of the nicest archive/database for SNES music, <a class="ex-ref" href="http://snesmusic.org/v2/wiki.php?iRequest=wiki/ViewPage&amp;iPage=Undumpable">Undumpable soundtrack list</a> is also useful</dd>
+							<dt><a class="ex-ref" href="http://www.caitsith2.com/">Caitsith2</a></dt><dd>Contributes <a class="ex-ref" href="http://spcsets.caitsith2.net/">SPC IPS patch</a>, it made me smarter!</dd>
+							<dt>Osaka</dt><dd>Contributes a lot of Compile music at SNESmusic.org</dd>
+							<dt><a class="ex-ref" href="http://www.ssdlabo.jp/win/spcplay/">SNES SPC700 Player</a></dt><dd>Very useful SPC player (using SNESAPU supported Script700)</dd>
+							<dt><a class="ex-ref" href="http://kurohane.net/spc.phtml" xml:lang="ja">黒羽製作所: 特殊なSPCについて</a> (About Special SPC)</dt><dd>Script700 archive, information about undumpable soundtracks</dd>
+						</dl>
+					</div>
+				</div>
+			</div>
+			<address><a class="ex-ref" href="http://loveemu.yh.land.to/">loveemu labo</a>, <a class="ex-ref" href="m&#97;&#105;l&#x74;&#x6F;&#x3A;&#x6c;&#111;ve&#x65;m&#x75;&#x40;&#x68;&#x6F;&#x74;mail&#x2E;&#99;o&#46;&#x6a;p">Email/MSN Messenger</a></address>
+		</div>
+	</body>
+</html>

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
+  "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="ja">
+  <head>
+    <!--[if lt IE 7]><meta http-equiv="Content-Type" content="text/html; charset=UTF-8" /><![endif]-->
+    <meta name="author" content="loveemu" />
+    <link rel="stylesheet" href="base.css" />
+    <link rev="made" href="m&#97;&#105;l&#x74;&#x6F;&#x3A;&#x6c;&#111;ve&#x65;m&#x75;&#x40;&#x68;&#x6F;&#x74;mail&#x2E;&#99;o&#46;&#x6a;p" />
+    <title>Capcom SPC2MIDI</title>
+  </head>
+  <body>
+    <div class="page">
+      <h1>Capcom SPC2MIDI</h1>
+      <div class="content">
+        <p>Capcom SPC2MIDI（capspc）は、カプコン開発のSNESタイトルに対応したMIDIコンバータとその関連資料です。</p>
+        <div class="section" id="toc">
+          <h2>目次</h2>
+          <div class="content">
+            <ul>
+              <li><a href="#about-sound-program">サウンドプログラムについて</a></li>
+              <li><a href="#how-to-use">つかいかた</a></li>
+              <li><a href="#questions-and-answers">Q&amp;A</a></li>
+              <li><a href="#thanks">サンクス</a></li>
+            </ul>
+          </div>
+        </div>
+        <div class="section" id="about-sound-program">
+          <h2>サウンドプログラムについて</h2>
+          <div class="content">
+            <p>カプコンのタイトルにはこの系統のプログラムが使われているようです。「ロックマンX」をはじめとして、いろいろ変換できます。「超魔界村」などの古いバージョンにも対応していますが、こちらは再生中の曲を検索する機能がないので、自力で曲番号を指定しなければならないという難点があります（場合によってはアドレス指定も）。</p>
+            <p>タイもレガートもポルタメントとして扱っている点、音符を「2<sup>n</sup>分音符、付点、三連符」などの情報で表現している点、キーオフする代わりにGAINモードで減衰させる点などが特徴的でした。一通り終えてから気づきましたが、音符の表現は<a class="ex-ref" href="http://www.geocities.co.jp/Playtown-Bingo/2392/rock2m/">ロックマン2の音楽形式</a>とおんなじような感じでした。</p>
+          </div>
+        </div>
+        <div class="section" id="how-to-use">
+          <h2>つかいかた</h2>
+          <div class="content">
+            <pre>capspc --help</pre>
+            <p>これで書式と用意されているオプションの一覧を知ることができます。予告なく仕様を変更するかもしれません。</p>
+          </div>
+        </div>
+        <div class="section" id="questions-and-answers">
+          <h2>Q&amp;A</h2>
+          <div class="content">
+            <p>ツッコミ入れられそうな部分に先回りして答えるコーナー。</p>
+            <dl>
+              <dt>一括変換には対応していないのですか？</dt>
+              <dd>バッチファイルなりシェルスクリプトなり書いてなんとかしてください。あまりコマンドの手打ちは前提にしていません。</dd>
+              <dt>出力されるHTMLに関連付けられたCSSファイルが見つかりません</dt>
+              <dd>docディレクトリにあるはずです。適当に複製・改変して都合のいいデザインにしてください。</dd>
+              <dt>楽器の音を補正できるようなオプションはありますか？</dt>
+              <dd>簡易なものはあります。ただし、補正機能の強化に注力する気はないことをあらかじめお断りしておきます。それゆえ、補正用定義ファイルの書式も互換性を考慮していません。</dd>
+              <dt>Why don't you write a English manual?</dt>
+              <dd>Because it's a bit too difficult for me, also I'm extremely lazy. Anyway, I'm sure that you can use the program easily. It's not complicated at all.</dd>
+              <dt>ダメカナ？</dt>
+              <dd>ダメダヨ♪</dd>
+            </dl>
+          </div>
+        </div>
+        <div class="section" id="thanks">
+          <h2>サンクス</h2>
+          <div class="content">
+            <dl>
+              <dt><a class="ex-ref" href="http://snesmusic.org/">SNESmusic.org</a></dt><dd>スーパーファミコンの音楽に関するすばらしいアーカイブもしくはデータベース。開発元知るのにも一役買った感じ。</dd>
+              <dt><a class="ex-ref" href="http://www.ssdlabo.jp/win/spcplay/">SNES SPC700 Player</a></dt><dd>音質・表示ともに素晴らしいSPCプレーヤー。再生途中の状態をSPCとして再ダンプしたい時あり。</dd>
+              <dt><a class="ex-ref" href="http://kurohane.net/spc/">黒羽製作所: 特殊なSPCについて</a></dt><dd>Script700のまとめ、ダンプできないサウンドトラックの情報。なにはなくとも。</dd>
+            </dl>
+          </div>
+        </div>
+      </div>
+      <address><a class="ex-ref" href="http://loveemu.yh.land.to/">loveemu labo</a>, <a class="ex-ref" href="m&#97;&#105;l&#x74;&#x6F;&#x3A;&#x6c;&#111;ve&#x65;m&#x75;&#x40;&#x68;&#x6F;&#x74;mail&#x2E;&#99;o&#46;&#x6a;p">Email/MSN Messenger</a></address>
+    </div>
+  </body>
+</html>

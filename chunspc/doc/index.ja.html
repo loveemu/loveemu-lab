@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
+  "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="ja">
+  <head>
+    <!--[if lt IE 7]><meta http-equiv="Content-Type" content="text/html; charset=UTF-8" /><![endif]-->
+    <meta name="author" content="loveemu" />
+    <link rel="stylesheet" href="base.css" />
+    <link rev="made" href="m&#97;&#105;l&#x74;&#x6F;&#x3A;&#x6c;&#111;ve&#x65;m&#x75;&#x40;&#x68;&#x6F;&#x74;mail&#x2E;&#99;o&#46;&#x6a;p" />
+    <title>Chunsoft summer/winter SPC2MIDI</title>
+  </head>
+  <body>
+    <div class="page">
+      <h1>Chunsoft summer/winter SPC2MIDI</h1>
+      <div class="content">
+        <p>Chunsoft summer/winter SPC2MIDI（chunspc）は、チュンソフトのサウンドプログラムに対応したMIDIコンバータとその関連資料です。</p>
+        <div class="section" id="toc">
+          <h2>目次</h2>
+          <div class="content">
+            <ul>
+              <li><a href="#about-sound-program">サウンドプログラムについて</a></li>
+              <li><a href="#how-to-use">つかいかた</a></li>
+              <li><a href="#questions-and-answers">Q&amp;A</a></li>
+              <li><a href="#thanks">サンクス</a></li>
+            </ul>
+          </div>
+        </div>
+        <div class="section" id="about-sound-program">
+          <h2>サウンドプログラムについて</h2>
+          <div class="content">
+            <p>変換対象のサウンドプログラムは、弟切草の作曲者として知られる三俣千代子さんが制作したものです。使用タイトルは以下の通りです。</p>
+            <ul>
+              <li>弟切草 (Otogirisou)</li>
+              <li>ドラゴンクエストV 天空の花嫁 (Dragon Quest 5)</li>
+              <li>トルネコの大冒険 不思議のダンジョン (Torneco no Daibouken: Fushigi no Dungeon)</li>
+              <li>かまいたちの夜 (Kamaitachi no Yoru)</li>
+            </ul>
+            <p>ROM/ARAMを覗くと中にsummerやwinterという文字列を見つけることができるため、私はこのプログラムをsummer/winterと呼んでいます。弟切草で使われたのがsummer、後にそれをバージョンアップしたものがwinterです。</p>
+          </div>
+        </div>
+        <div class="section" id="how-to-use">
+          <h2>つかいかた</h2>
+          <div class="content">
+            <p>chunspc --helpで起動するとシンタックスとか出てくるので、テキトーに使ってみてください。</p>
+            <p>もうね、loveemuさん、マニュアルとか書くのめどいです、みたいな。ごめんなさいごめんなさい……！</p>
+          </div>
+        </div>
+        <div class="section" id="questions-and-answers">
+          <h2>Q&amp;A</h2>
+          <div class="content">
+            <p>ツッコミ入れられそうな部分に先回りして答えるコーナー。</p>
+            <dl>
+              <dt>一括変換できないの？バカなの？</dt>
+              <dd>バッチファイルなりシェルスクリプトなり書いてなんとかしてください。</dd>
+              <dt>chunspc.cssってどこにあるんですか？わかりません＞＜</dt>
+              <dd>docディレクトリにあります。適宜、base.cssとセットでコピーして使ってください。</dd>
+              <dt>全然違う曲に変換されちゃいます＞＜</dt>
+              <dd>曲検出テキトーなのでそういうこともあります。とても早い段階で吸い出したSPCファイルはうまく扱えない傾向にあります。曲の途中で吸い出してもchunspcは全然それを気にしないので、完全に曲再生に入ってから吸い出したSPCを使うとよいです。それと、弟切草の曲検出はさらに精度が低めです。そのかわり、弟切草は1つのSPCファイルにすべての曲が入っているので、chunspcのソースが読める人はちょっとした書き換えで変換対象を誘導することができます。テキトーでごめんなさい。だってゆるふわだもの。</dd>
+              <dt>Why don't you write a English manual?</dt>
+              <dd>Because it's a bit too difficult for me, also I'm extremely lazy. Anyway, I'm sure that you can use the program easily. It's not complicated at all.</dd>
+              <dt>「こんにちは三俣千代子と申します」「すぎやまこういちとｒｙ」「J∀$RACのｒｙ」</dt>
+              <dd>ぬわーっ！</dd>
+            </dl>
+          </div>
+        </div>
+        <div class="section" id="thanks">
+          <h2>サンクス</h2>
+          <div class="content">
+            <dl>
+              <dt><a class="ex-ref" href="http://snesmusic.org/">SNESmusic.org</a></dt><dd>スーパーファミコンの音楽に関するすばらしいアーカイブもしくはデータベース。開発元知るのにも一役買った感じ。</dd>
+              <dt><a class="ex-ref" href="http://www.ssdlabo.jp/win/spcplay/">SNES SPC700 Player</a></dt><dd>音質・表示ともに素晴らしいSPCプレーヤー。再生途中の状態をSPCとして再ダンプしたい時あり。</dd>
+              <dt><a class="ex-ref" href="http://kurohane.net/spc/">黒羽製作所: 特殊なSPCについて</a></dt><dd>Script700のまとめ、ダンプできないサウンドトラックの情報。なにはなくとも。</dd>
+            </dl>
+          </div>
+        </div>
+      </div>
+      <address><a class="ex-ref" href="http://loveemu.yh.land.to/">loveemu labo</a>, <a class="ex-ref" href="m&#97;&#105;l&#x74;&#x6F;&#x3A;&#x6c;&#111;ve&#x65;m&#x75;&#x40;&#x68;&#x6F;&#x74;mail&#x2E;&#99;o&#46;&#x6a;p">Email/MSN Messenger</a></address>
+    </div>
+  </body>
+</html>

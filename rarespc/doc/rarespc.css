@@ -1,0 +1,48 @@
+@charset 'UTF-8';
+
+@import 'base.css';
+
+/* mask */
+/*
+table.dump tr.track1 { display: none; }
+table.dump tr.track2 { display: none; }
+table.dump tr.track3 { display: none; }
+table.dump tr.track4 { display: none; }
+table.dump tr.track5 { display: none; }
+table.dump tr.track6 { display: none; }
+table.dump tr.track7 { display: none; }
+table.dump tr.track8 { display: none; }
+table.dump tr.sub    { display: none; }
+*/
+
+/* general */
+#informations .info-tree li
+{ font-family: 'Courier New', monotype; }
+table.dump  td.track
+{ text-align: right; }
+table.dump  td.tick
+{ text-align: right; }
+table.dump  td.address
+{ text-align: right; }
+table.dump  td.hex
+{ font-family: 'Courier New', monospace; }
+
+/* colors a event */
+table.dump tr.unknown td.hex
+{ background: #000000; color: #ff3333; }
+table.dump tr.ev-noteparam td.hex,
+table.dump tr.ev-note td.hex,
+table.dump tr.ev-tie td.hex,
+table.dump tr.ev-rest td.hex
+{ background: #99ddff; }
+table.dump tr.ev-patch td.hex
+{ background: #ff99ff; }
+table.dump tr.ev-call td.hex
+{ background: #ff99ff; }
+
+/*
+table.dump tr.ev-vol td.hex
+{ background: #ff9999; }
+table.dump tr.ev-adsr td.hex,
+{ background: #fff999; }
+*/

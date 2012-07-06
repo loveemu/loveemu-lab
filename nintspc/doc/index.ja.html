@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
+  "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="ja">
+  <head>
+    <!--[if lt IE 7]><meta http-equiv="Content-Type" content="text/html; charset=UTF-8" /><![endif]-->
+    <meta name="author" content="loveemu" />
+    <link rel="stylesheet" href="base.css" />
+    <link rev="made" href="m&#97;&#105;l&#x74;&#x6F;&#x3A;&#x6c;&#111;ve&#x65;m&#x75;&#x40;&#x68;&#x6F;&#x74;mail&#x2E;&#99;o&#46;&#x6a;p" />
+    <title>Nintendo SPC2MIDI</title>
+  </head>
+  <body>
+    <div class="page">
+      <h1>Nintendo SPC2MIDI</h1>
+      <div class="content">
+        <p>Nintendo SPC2MIDI（nintspc）は、任天堂開発のSNESタイトルに対応したMIDIコンバータとその関連資料です。</p>
+        <div class="section" id="toc">
+          <h2>目次</h2>
+          <div class="content">
+            <ul>
+              <li><a href="#about-sound-program">サウンドプログラムについて</a></li>
+              <li><a href="#how-to-use">つかいかた</a></li>
+              <li><a href="#questions-and-answers">Q&amp;A</a></li>
+              <li><a href="#thanks">サンクス</a></li>
+            </ul>
+          </div>
+        </div>
+        <div class="section" id="about-sound-program">
+          <h2>サウンドプログラムについて</h2>
+          <div class="content">
+            <p><a class="ex-ref" href="http://d.hatena.ne.jp/loveemu/20081208/snes_nintendo_music_spec">SNES Nintendo Music Format Spec</a> にまとめておきました。新旧問わず、また任天堂以外のゲームでも、思った以上に幅広く利用されています。同系統のサウンドプログラムを用いているゲームの一例を、変種も含めて示します。</p>
+            <ul>
+              <li>スーパーマリオワールド</li>
+              <li>ゼルダの伝説 神々のトライフォース</li>
+              <li>星のカービィスーパーデラックス</li>
+              <li>スーパーメトロイド</li>
+              <li>マザー2</li>
+              <li>スーパーワギャンランド</li>
+              <li>ドラゴンボールZ 超武闘伝2</li>
+              <li>奇々怪界～謎の黒マント</li>
+              <li>ファイアーエムブレム 紋章の謎</li>
+            </ul>
+            <p>中には演奏データが同じでも、アセンブリの書かれ方が大きくことなる例もありました（超武闘伝2）。SDKかなにかに含まれているプログラムを各メーカーで改変して使っていたのでしょうか。</p>
+          </div>
+        </div>
+        <div class="section" id="how-to-use">
+          <h2>つかいかた</h2>
+          <div class="content">
+            <pre>nintspc --help</pre>
+            <p>これで書式と用意されているオプションの一覧を知ることができます。予告なく仕様を変更するかもしれません。</p>
+            <p>※現在、パーカッション類は超低音ノートとして出力するようになっています。あしからず。</p>
+            <p>おまけ機能として、スーパーマリオワールドの音楽追加ツールである通称「addmusic（Carol氏版）」のための、なんちゃってMMLログ機能がついています。引数に--mmlを渡して起動することで、標準出力にMIDI出力のノリで譜面を書いていきます。鳴っている音を中断してのブロック遷移に対応していなかったり、繰り返しも展開して冗長に出力したり、ループポイントを入れてくれなかったりと、不親切な点は多いです。あくまで手直し前提の半お遊び機能という認識のうえ、興味があれば使ってみてください。</p>
+          </div>
+        </div>
+        <div class="section" id="questions-and-answers">
+          <h2>Q&amp;A</h2>
+          <div class="content">
+            <p>ツッコミ入れられそうな部分に先回りして答えるコーナー。</p>
+            <dl>
+              <dt>一括変換には対応していないのですか？</dt>
+              <dd>バッチファイルなりシェルスクリプトなり書いてなんとかしてください。あまりコマンドの手打ちは前提にしていません。</dd>
+              <dt>出力されるHTMLに関連付けられたCSSファイルが見つかりません</dt>
+              <dd>docディレクトリにあるはずです。適当に複製・改変して都合のいいデザインにしてください。</dd>
+              <dt>出てくる曲が違ったり、頭が欠けていたりします</dt>
+              <dd>自動曲推定機能が誤検出しているようです。--npというオプションをつけてみてください。変換対象の曲番号がわかっている場合、--songで指定して変換することもできます。</dd>
+              <dt>各種テーブルの値を手動で設定して強制変換させることはできますか？</dt>
+              <dd>できるようにしてみました。それらしいオプションを探して使ってみてください。</dd>
+              <dt>楽器の音を補正できるようなオプションはありますか？</dt>
+              <dd>簡易なものはあります。ただし、補正機能の強化に注力する気はないことをあらかじめお断りしておきます。それゆえ、補正用定義ファイルの書式も互換性を考慮していません。</dd>
+              <dt>Why don't you write a English manual?</dt>
+              <dd>Because it's a bit too difficult for me, also I'm extremely lazy. Anyway, I'm sure that you can use the program easily. It's not complicated at all.</dd>
+              <dt>ダメカナ？</dt>
+              <dd>ダメダヨ♪</dd>
+            </dl>
+          </div>
+        </div>
+        <div class="section" id="thanks">
+          <h2>サンクス</h2>
+          <div class="content">
+            <dl>
+              <dt><a class="ex-ref" href="http://snesmusic.org/">SNESmusic.org</a></dt><dd>スーパーファミコンの音楽に関するすばらしいアーカイブもしくはデータベース。開発元知るのにも一役買った感じ。</dd>
+              <dt><a class="ex-ref" href="http://www.ssdlabo.jp/win/spcplay/">SNES SPC700 Player</a></dt><dd>音質・表示ともに素晴らしいSPCプレーヤー。再生途中の状態をSPCとして再ダンプしたい時あり。</dd>
+              <dt><a class="ex-ref" href="http://kurohane.net/spc/">黒羽製作所: 特殊なSPCについて</a></dt><dd>Script700のまとめ、ダンプできないサウンドトラックの情報。なにはなくとも。</dd>
+              <dt><a class="ex-ref" href="http://vip.rgr.jp/sm4wiki/">マリオ４改造wiki＠VIP</a></dt><dd>音楽に関する情報もそろっている、通称「VIPマリオ」で有名なwiki。</dd>
+            </dl>
+          </div>
+        </div>
+      </div>
+      <address><a class="ex-ref" href="http://loveemu.yh.land.to/">loveemu labo</a>, <a class="ex-ref" href="m&#97;&#105;l&#x74;&#x6F;&#x3A;&#x6c;&#111;ve&#x65;m&#x75;&#x40;&#x68;&#x6F;&#x74;mail&#x2E;&#99;o&#46;&#x6a;p">Email/MSN Messenger</a></address>
+    </div>
+  </body>
+</html>

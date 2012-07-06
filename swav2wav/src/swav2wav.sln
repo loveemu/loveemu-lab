@@ -1,0 +1,20 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 10.00
+# Visual Studio 2008
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "swav2wav", "swav2wav.vcproj", "{6EE1A406-6A23-42AB-966B-18FEA96DE76F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{6EE1A406-6A23-42AB-966B-18FEA96DE76F}.Debug|Win32.ActiveCfg = Debug|Win32
+		{6EE1A406-6A23-42AB-966B-18FEA96DE76F}.Debug|Win32.Build.0 = Debug|Win32
+		{6EE1A406-6A23-42AB-966B-18FEA96DE76F}.Release|Win32.ActiveCfg = Release|Win32
+		{6EE1A406-6A23-42AB-966B-18FEA96DE76F}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
