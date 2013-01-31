@@ -237,6 +237,8 @@ static int m4a_getsongtablelength_dumpable(uint8_t *gbarom, size_t gbasize, uint
 	while (is_valid_offset(m4a_songpointer_offset + 8 - 1, gbasize))
 	{
 		uint32_t m4a_songheader_address = read_u32(&gbarom[m4a_songpointer_offset]);
+		uint32_t m4a_songtable_ms = read_u16(&gbarom[m4a_songpointer_offset + 4]);
+		uint32_t m4a_songtable_me = read_u16(&gbarom[m4a_songpointer_offset + 6]);
 
 		// null entry is allowed
 		if (m4a_songheader_address == 0)
@@ -258,11 +260,24 @@ static int m4a_getsongtablelength_dumpable(uint8_t *gbarom, size_t gbasize, uint
 			break;
 		}
 
-		// check song detail (especially for stos)
-		uint8_t m4a_track_count = read_u8(&gbarom[m4a_songheader_offset]);
-		if (m4a_track_count < 1 || m4a_track_count > 16)
+		// music player # ?
+		if (m4a_songtable_ms > 32 || m4a_songtable_me > 32)
 		{
 			break;
+		}
+
+		// check song detail (especially for stos)
+		uint8_t m4a_track_count = read_u8(&gbarom[m4a_songheader_offset]);
+		if (m4a_track_count > 16)
+		{
+			break;
+		}
+		else if (m4a_track_count == 0)
+		{
+			//printf("song> %3d  0x%08X -> 0\n", songentrycount, m4a_songpointer_offset);
+			songentrycount++;
+			m4a_songpointer_offset += 8;
+			continue;
 		}
 		// check track table pointer
 		uint32_t m4a_tracktable_address = read_u32(&gbarom[m4a_songheader_offset + 8]);
@@ -281,7 +296,11 @@ static int m4a_getsongtablelength_dumpable(uint8_t *gbarom, size_t gbasize, uint
 			}
 			uint32_t m4a_track_offset = gba_address_to_offset(m4a_track_address);
 
-			// NYI: usually first byte must be >= 0x80
+			// usually first byte must be >= 0x80
+			if (read_u8(&gbarom[m4a_track_offset]) < 0x80)
+			{
+				break;
+			}
 		}
 
 		// normal song entry
@@ -387,7 +406,7 @@ static bool print_gbaheader(uint8_t *gbarom, size_t gbasize)
 
 	char gbatitle[GBA_ROMTITLE_LENGTH + 1];
 	agb_getromtitle(gbarom, gbasize, gbatitle);
-	printf("gba_header_title\t%s\n", gbatitle);
+	printf("gba_header_romtitle\t%s\n", gbatitle);
 
 	char gbaid[GBA_ROMID_LENGTH + 1];
 	agb_getromid(gbarom, gbasize, gbaid);
@@ -469,7 +488,7 @@ static bool m4a_printinfo(uint8_t *gbarom, size_t gbasize)
 	{
 		m4a_songtable_offset_searched = (long) gba_address_to_offset(read_u32(&gbarom[m4a_songtable_ptr_searched]));
 	}
-	if (m4a_songtable_offset == -1 || m4a_songtable_offset != m4a_songtable_offset_searched)
+	if (m4a_songtable_ptr_searched != -1 && (m4a_songtable_offset == -1 || m4a_songtable_offset != m4a_songtable_offset_searched))
 	{
 		printf("=== Bruteforce Table Search ===\n");
 		printf("Song table pointer candidate is found at 0x%08X\n", m4a_songtable_ptr_searched);
