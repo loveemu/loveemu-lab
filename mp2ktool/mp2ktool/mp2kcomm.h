@@ -13,7 +13,7 @@
 
 #define APP_NAME        "mp2ktool"
 #define APP_NAME_SHORT  "mp2ktool"
-#define APP_VERSION     "[2013-01-30]"
+#define APP_VERSION     "[2013-02-02]"
 #define APP_WEBSITE     "http://code.google.com/p/loveemu/"
 
 #define ArrayLength(a)  (sizeof(a) / sizeof(a[0]))
