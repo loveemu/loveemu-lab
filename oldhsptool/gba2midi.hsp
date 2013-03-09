@@ -1,0 +1,2335 @@
+#uselib "GuruGuruSMF.hpi.dll"
+#func GGSSetDevice "_GGSSetDevice@16" bmscr, int, int, int
+#func GGSLoadFile "_GGSLoadFile@16" var, int, int, int
+#func GGSRead "_GGSRead@16" var, int, int, int
+#func GGSAddList "_GGSAddList@16" var, int, int, int
+#func GGSReadList "_GGSReadList@16" var, int, int, int
+#func GGSFlushList "_GGSFlushList@16" int, int, int, int
+#func GGSDeleteList "_GGSDeleteList@16" int, int, int, int
+#func GGSViewList "_GGSViewList@16" int, int, int, prefstr
+#func GGSPlay "_GGSPlay@16" int, int, int, int
+#func GGSStop "_GGSStop@16" int, int, int, int
+#func GGSPause "_GGSPause@16" int, int, int, int
+#func GGSSendReset "_GGSSendReset@16" int, int, int, int
+#func GGSTempoDepth "_GGSTempoDepth@16" int, int, int, int
+#func GGSPitchDepth "_GGSPitchDepth@16" int, int, int, int
+#func GGSMasterVolume "_GGSMasterVolume@16" int, int, int, int
+#func GGSGetSMFDatas "_GGSGetSMFDatas@16" pexinfo, nullptr, nullptr, nullptr
+#func GGSGetStatus "_GGSGetStatus@16" pexinfo, nullptr, nullptr, nullptr
+#func GGSAddDLS "_GGSAddDLS@16" var, int, int, int
+#func GGSConfigDlg "_GGSConfigDlg@16" bmscr, int, int, int
+#func GGSFree onexit "_GGSFree@16" int, int, int, int
+
+#uselib "z.hpi.dll"
+#func zSetDest "_zSetDest@16" var, int, int, int
+#func zCompress "_zCompress@16" var, int, int, int
+#func zUncompress "_zUncompress@16" var, int, int, int
+#func zOpen "_zOpen@16" var, str, int, int
+#func zRead "_zRead@16" var, int, int, int
+#func zWrite "_zWrite@16" var, int, int, int
+#func zClose "_zClose@16" int, int, int, int
+#func zGetCrc "_zGetCrc@16" var, int, int, prefstr
+
+#uselib "smfw32.dll"
+#cfunc smfwGetVersion "smfwGetVersion"
+#cfunc smfwCreateSmf "smfwCreateSmf" int
+#func smfwDeleteSmf "smfwDeleteSmf" int
+#cfunc smfwCopySmf "smfwCopySmf" int
+#cfunc smfwReadMem "smfwReadMem" var, int
+#cfunc smfwReadFileA "smfwReadFileA" str
+#cfunc smfwGetClipboardData "smfwGetClipboardData"
+#cfunc smfwIsClipboardFormatAvailable "smfwIsClipboardFormatAvailable"
+#cfunc smfwGetSmfSize "smfwGetSmfSize" int, int, int
+#func smfwWriteMem "smfwWriteMem" int, var, int, int, int
+#func smfwWriteFileA "smfwWriteFileA" int, str, int, int, int, int
+#func smfwSetClipboardData "smfwSetClipboardData" int, int, int
+#func smfwSetEndOfTrack "smfwSetEndOfTrack" int, int, int
+#func smfwInsertEvent "smfwInsertEvent" int, int, int, int, var, int
+#func smfwInsertSysex "smfwInsertSysex" int, int, int, int, var, int
+#func smfwInsertMetaEvent "smfwInsertMetaEvent" int, int, int, int, var, int
+#func smfwInsertMetaTextEventA "smfwInsertMetaTextEventA" int, int, int, int, str
+#func smfwEvInsertNoteOff "smfwEvInsertNoteOff" int, int, int, int, int, int
+#func smfwEvInsertNoteOn "smfwEvInsertNoteOn" int, int, int, int, int, int
+#func smfwEvInsertNote "smfwEvInsertNote" int, int, int, int, int, int, int
+#func smfwEvInsertKeyAft "smfwEvInsertKeyAft" int, int, int, int, int, int
+#func smfwEvInsertControl "smfwEvInsertControl" int, int, int, int, int, int
+#func smfwEvInsertPatch "smfwEvInsertPatch" int, int, int, int, int
+#func smfwEvInsertChanAft "smfwEvInsertChanAft" int, int, int, int, int, int
+#func smfwEvInsertWheel "smfwEvInsertWheel" int, int, int, int, int
+#func smfwEvInsertSysexA "smfwEvInsertSysexA" int, int, int, int, str
+#func smfwEvInsertMetaEventA "smfwEvInsertMetaEventA" int, int, int, str
+#func smfwXEvInsertGMSystemOn "smfwXEvInsertGMSystemOn" int, int, int, int
+#func smfwXEvInsertGM2SystemOn "smfwXEvInsertGM2SystemOn" int, int, int, int
+#func smfwXEvInsertGSReset "smfwXEvInsertGSReset" int, int, int, int
+#func smfwXEvInsertXGSystemOn "smfwXEvInsertXGSystemOn" int, int, int, int
+#func smfwXEvInsertMasterVolume "smfwXEvInsertMasterVolume" int, int, int, int, int
+#func smfwMEvInsertChannelPrefix "smfwMEvInsertChannelPrefix" int, int, int, int
+#func smfwMEvInsertSetTempo "smfwMEvInsertSetTempo" int, int, int, int
+#func smfwMEvInsertSetBpmTempo "smfwMEvInsertSetBpmTempo" int, int, int, int
+#func smfwMEvInsertSMPTEOffset "smfwMEvInsertSMPTEOffset" int, int, int, int, int, int, int, int, int
+#func smfwMEvInsertTimeSignature "smfwMEvInsertTimeSignature" int, int, int, int, int, int, int
+#func smfwMEvInsertKeySignature "smfwMEvInsertKeySignature" int, int, int, int, int
+
+#uselib "kernel32.dll"
+#cfunc IsDBCSLeadByte "IsDBCSLeadByte" int
+#func GetTempPathA "GetTempPathA" int, var
+#cfunc LoadLibraryA "LoadLibraryA" str
+#cfunc GetProcAddress "GetProcAddress" int, str
+#func FreeLibrary "FreeLibrary" int
+#cfunc func_6 "IsDBCSLeadByte" int
+#cfunc func_10 "LoadLibraryA" str
+#func func_11 "FreeLibrary" int
+#cfunc func_12 "LoadLibraryA" str
+#cfunc func_13 "GetProcAddress" int, str
+#func func_14 "FreeLibrary" int
+
+#uselib "user32.dll"
+#func EnableWindow "EnableWindow" int, int
+#cfunc IsWindowEnabled "IsWindowEnabled" int
+#func PostMessageA "PostMessageA" int, int, int, int
+#func func_1 "PostMessageA" int, int, int, int
+#func SendMessageA "SendMessageA" int, int, int, int
+#cfunc GetWindowLongA "GetWindowLongA" int, int
+#func SetWindowLongA "SetWindowLongA" int, int, int
+#func func_2 "SendMessageA" int, int, int, int
+#func func_3 "SendMessageA" int, int, int, int
+#cfunc func_4 "GetWindowLongA" int, int
+#func func_5 "SetWindowLongA" int, int, int
+#func CharLowerA "CharLowerA" var
+#func MessageBeep "MessageBeep" int
+#func func_7 "SendMessageA" int, int, int, int
+#func LoadStringA "LoadStringA" int, int, var, int
+#func func_15 "SendMessageA" int, int, int, int
+
+#uselib "ole32.dll"
+#func CoInitialize "CoInitialize" sptr
+#func CoUninitialize "CoUninitialize"
+
+#uselib "shlwapi.dll"
+#func SHAutoComplete "SHAutoComplete" int, int
+#func PathAddBackslashA "PathAddBackslashA" var
+#cfunc PathFindExtensionA "PathFindExtensionA" var
+#func PathRemoveBackslashA "PathRemoveBackslashA" var
+#func PathRemoveFileSpecA "PathRemoveFileSpecA" var
+#func PathStripPathA "PathStripPathA" var
+
+#uselib "comdlg32.dll"
+#cfunc GetOpenFileNameA "GetOpenFileNameA" var
+#cfunc GetSaveFileNameA "GetSaveFileNameA" var
+
+#uselib "shell32.dll"
+#func ShellExecuteA "ShellExecuteA" int, sptr, sptr, sptr, sptr, int
+#func DragAcceptFiles "DragAcceptFiles" int, int
+#func DragQueryFileA "DragQueryFileA" int, int, int, int
+#func DragQueryPoint "DragQueryPoint" int, int
+#func DragFinish "DragFinish" int
+
+#uselib "gba2midi.dll"
+#func func_8 "cnvsign8" sptr, int
+#func func_9 "wavcpy20" sptr, sptr, int
+
+#uselib "stos.dll"
+#func stosFindTable "stosFindTable" var, var, int, var
+
+#uselib "advapi32.dll"
+#func RegCreateKeyExA "RegCreateKeyExA" int, str, int, sptr, int, int, sptr, var, sptr
+#func RegSetValueExA "RegSetValueExA" int, str, int, int, sptr, int
+#func RegQueryValueExA "RegQueryValueExA" int, str, sptr, sptr, var, var
+#func RegCloseKey "RegCloseKey" int
+
+	chdir dirinfo(1)
+	var_0 = 256
+	goto *label_01
+#deffunc mktree str prm_271
+	var_1 = dirinfo(0)
+	var_2 = prm_271
+	var_3 = 0
+	var_4 = 1
+	repeat
+		if ( peek(var_2, var_3) == 0 ) {
+			break
+		}
+		getstr var_5, var_2, var_3, 92
+		var_3 += strsize
+		dirlist var_6, var_5, 5
+		if ( stat == 0 ) {
+			mkdir var_5
+		}
+		chdir var_5 + "\\"
+	loop
+	chdir var_1
+	return var_4
+*label_01
+	var_7 = dirinfo(4)
+	var_8 = 0
+	var_9 = ""
+	if ( var_7 != "" ) {
+		var_10 = 0
+		var_11 = 0
+		var_12 = 0
+		var_13 = 0
+		repeat
+			var_14 = peek(var_7, var_10)
+			if ( var_14 == 0 ) {
+				if ( var_12 < var_11 ) {
+					var_12 = var_11
+				}
+				var_8++
+				break
+			}
+			else {
+				if ( var_14 == 34 ) {
+					var_13 = var_13 == 0
+				}
+				else {
+					if ( var_13 == 0 & (var_14 == 32 | var_14 == 9) ) {
+						if ( var_12 < var_11 ) {
+							var_12 = var_11
+						}
+						var_11 = 0
+						var_8++
+						repeat
+							var_15 = peek(var_7, var_10 + 1)
+							if ( var_15 != 32 & var_15 != 9 ) {
+								break
+							}
+							var_10++
+						loop
+					}
+					else {
+						var_11++
+						if ( IsDBCSLeadByte(var_14) ) {
+							var_10++
+							var_11++
+						}
+					}
+				}
+			}
+			var_10++
+		loop
+		sdim var_9, var_12 + 1, var_8
+		var_10 = 0
+		var_11 = 0
+		var_13 = 0
+		var_16 = 0
+		repeat
+			var_14 = peek(var_7, var_10)
+			if ( var_14 == 0 ) {
+				poke var_9(var_16), var_11, 0
+				break
+			}
+			else {
+				if ( var_14 == 34 ) {
+					var_13 = var_13 == 0
+				}
+				else {
+					if ( var_13 == 0 & (var_14 == 32 | var_14 == 9) ) {
+						var_11 = 0
+						var_16++
+						repeat
+							var_15 = peek(var_7, var_10 + 1)
+							if ( var_15 != 32 & var_15 != 9 ) {
+								break
+							}
+							var_10++
+						loop
+					}
+					else {
+						poke var_9(var_16), var_11, var_14
+						var_11++
+						if ( IsDBCSLeadByte(var_14) ) {
+							var_10++
+							poke var_9(var_16), var_11, peek(var_7, var_10)
+							var_11++
+						}
+					}
+				}
+			}
+			var_10++
+		loop
+	}
+	goto *label_04
+#deffunc xobjenbl int prm_280, int prm_281
+	if ( prm_281 < 0 ) {
+		var_17 = IsWindowEnabled(objinfo(prm_280, 2))
+	}
+	else {
+		EnableWindow prm_280, prm_281
+		var_17 = stat
+	}
+	return var_17
+#deffunc pushbtn int prm_282
+	PostMessageA objinfo(prm_282, 2), 245, 0, 0
+	return
+*label_04
+	goto *label_08
+#deffunc ed_selall int prm_296
+	objsel prm_296
+	SendMessageA objinfo(prm_296, 2), 177, 0, -1
+	return
+#deffunc ed_readonly int prm_297, int prm_298
+	var_18 = objinfo(prm_297, 2)
+	SendMessageA var_18, 207, prm_298, 0
+	return
+#deffunc ed_right int prm_299, int prm_300
+	var_18 = objinfo(prm_299, 2)
+	var_19 = GetWindowLongA(var_18, -20)
+	if ( prm_300 == 0 ) {
+		if ( var_19 & 4096 ) {
+			var_19 = var_19 ^ 4096
+		}
+		if ( var_19 & 8192 ) {
+			var_19 = var_19 ^ 8192
+		}
+		if ( var_19 & 0 ) {
+			var_19 = var_19 ^ 0
+		}
+	}
+	else {
+		var_19 = var_19 | 4096 | 8192 | 0
+	}
+	SetWindowLongA var_18, -20, var_19
+	return
+*label_08
+	goto *label_12
+#deffunc prbput int prm_305, int prm_306, int prm_307
+	if ( prm_307 < prm_306 ) {
+		var_20 = prm_306
+		prm_306 = prm_307
+		prm_307 = var_20
+	}
+	if ( prm_306 == prm_307 ) {
+		prm_307 += 100
+	}
+	winobj "msctls_progress32", "", 512, prm_305 | 1073741824 | 268435456
+	var_21 = stat
+	if ( var_21 != (-1) ) {
+		func_2 objinfo(var_21, 2), 1030, prm_306, prm_307
+	}
+	return var_21
+#deffunc prbprm int prm_308, int prm_309
+	func_2 objinfo(prm_308, 2), 1026, prm_309, 0
+	return 0
+#deffunc prbrng int prm_310, int prm_311, int prm_312
+	func_2 objinfo(prm_310, 2), 1030, prm_311, prm_312
+	return 0
+*label_12
+	goto *label_18
+#deffunc udput int prm_322, int prm_323
+	winobj "msctls_updown32", "", 512, prm_323 | 1073741824 | 268435456 | 2
+	var_22 = stat
+	if ( var_22 != (-1) ) {
+		var_23 = objinfo(prm_322, 2)
+		func_3 objinfo(var_22, 2), 1129, var_23, 0
+		func_5 var_23, -16, func_4(var_23, -16) | 8192
+	}
+	return var_22
+#deffunc udprm int prm_324, int prm_325
+	var_24 = objinfo(prm_324, 2)
+	func_3 var_24, 1137, 0, prm_325
+	return 0
+#deffunc udget int prm_326, var prm_327
+	var_24 = objinfo(prm_326, 2)
+	func_3 var_24, 1138, 0, 0
+	prm_327 = stat
+	return 0
+#deffunc udrng int prm_328, int prm_329, int prm_330, int prm_331
+	var_24 = objinfo(prm_328, 2)
+	func_3 var_24, 1135, prm_329, prm_330
+	if ( prm_331 ) {
+		func_3 var_24, 1130, 0, 0
+		var_23 = stat
+		var_25 = func_4(var_23, -16)
+		if ( prm_331 == 10 ) {
+			var_25 = var_25 | 8192
+		}
+		else {
+			if ( var_25 & 8192 ) {
+				var_25 = var_25 ^ 8192
+			}
+		}
+		func_5 var_23, -16, var_25
+		func_3 var_24, 1133, prm_331, 0
+	}
+	return 0
+#deffunc udspd int prm_332, int prm_333
+	if ( prm_333 == 0 ) {
+		prm_333 = 1
+	}
+	var_26 = 3
+	dim var_27, var_26 * 2
+	var_27 = 0, prm_333, 2, prm_333 * 5, 5, prm_333 * 20
+	func_3 objinfo(prm_332), 1131, var_26, varptr(var_27)
+	return 0
+*label_18
+	goto *label_22
+*label_19
+	CoInitialize 0
+	return
+#deffunc autocomp int prm_337, int prm_338
+	SHAutoComplete objinfo(prm_337, 2), prm_338
+	return
+#deffunc exit__autocomp__ onexit
+	CoUninitialize
+	return
+*label_22
+	gosub *label_19
+	goto *label_27
+#deffunc gettempdir var prm_347
+	sdim var_28, 260
+	GetTempPathA 260, var_28
+	prm_347 = var_28
+	return
+#deffunc addbksl var prm_348
+	var_28 = prm_348
+	PathAddBackslashA var_28
+	prm_348 = var_28
+	return
+#deffunc rmvbksl var prm_349
+	var_28 = prm_349
+	PathRemoveBackslashA var_28
+	prm_349 = var_28
+	return
+#defcfunc getpath@__shlwpath__ str prm_350, int prm_351
+	var_28 = prm_350
+	if ( prm_351 & 3 ) {
+		var_29 = PathFindExtensionA(var_28) - varptr(var_28)
+		if ( prm_351 & 1 ) {
+			var_28 = strmid(var_28, 0, var_29)
+		}
+		if ( prm_351 & 2 ) {
+			getstr var_28, var_28, var_29
+		}
+	}
+	if ( prm_351 & 8 ) {
+		PathStripPathA var_28
+	}
+	if ( prm_351 & 32 ) {
+		PathRemoveFileSpecA var_28
+		PathAddBackslashA var_28
+	}
+	if ( prm_351 & 16 ) {
+		CharLowerA var_28
+	}
+	return var_28
+*label_27
+	goto *label_35
+*label_28
+	var_30 = 4096
+	sdim var_31, var_30
+	sdim var_32, 260
+	sdim var_33, 512 + 1
+	sdim var_34, 4096
+	sdim var_35, 512
+	sdim var_36, 512
+	sdim var_37, 512
+	sdim var_38, 512
+	sdim var_39, 512
+	gettempdir var_37
+	addbksl var_37
+	dirlist var_35, var_37 + "gba2midi", 5
+	if ( stat == 0 ) {
+		mkdir var_37 + "gba2midi"
+	}
+	var_37 += "gba2midi\\"
+	var_40 = LoadLibraryA("UNZIP32.DLL")
+	if ( var_40 != 0 ) {
+		var_41 = 0
+		var_42 = GetProcAddress(var_40, "UnZipCheckArchive")
+		var_41 = var_41 | var_42 == 0
+		var_43 = GetProcAddress(var_40, "UnZipGetFileCount")
+		var_41 = var_41 | var_43 == 0
+		var_44 = GetProcAddress(var_40, "UnZipOpenArchive")
+		var_41 = var_41 | var_44 == 0
+		var_45 = GetProcAddress(var_40, "UnZipCloseArchive")
+		var_41 = var_41 | var_45 == 0
+		var_46 = GetProcAddress(var_40, "UnZipFindFirst")
+		var_41 = var_41 | var_46 == 0
+		var_47 = GetProcAddress(var_40, "UnZipFindNext")
+		var_41 = var_41 | var_47 == 0
+		var_48 = GetProcAddress(var_40, "UnZipExtractMem")
+		var_41 = var_41 | var_48 == 0
+		if ( var_41 ) {
+			FreeLibrary var_40
+			var_40 = 0
+		}
+	}
+	var_49 = LoadLibraryA("UNRAR32.DLL")
+	if ( var_49 != 0 ) {
+		var_41 = 0
+		var_50 = GetProcAddress(var_49, "UnrarCheckArchive")
+		var_41 = var_41 | var_50 == 0
+		var_51 = GetProcAddress(var_49, "UnrarGetFileCount")
+		var_41 = var_41 | var_51 == 0
+		var_52 = GetProcAddress(var_49, "UnrarOpenArchive")
+		var_41 = var_41 | var_52 == 0
+		var_53 = GetProcAddress(var_49, "UnrarCloseArchive")
+		var_41 = var_41 | var_53 == 0
+		var_54 = GetProcAddress(var_49, "UnrarFindFirst")
+		var_41 = var_41 | var_54 == 0
+		var_55 = GetProcAddress(var_49, "UnrarFindNext")
+		var_41 = var_41 | var_55 == 0
+		var_56 = GetProcAddress(var_49, "UnrarExtractMem")
+		var_41 = var_41 | var_56 == 0
+		var_57 = GetProcAddress(var_49, "Unrar")
+		var_41 = var_41 | var_57 == 0
+		if ( var_41 ) {
+			FreeLibrary var_49
+			var_49 = 0
+		}
+	}
+	var_58 = LoadLibraryA("UNLHA32.DLL")
+	if ( var_58 != 0 ) {
+		var_41 = 0
+		var_59 = GetProcAddress(var_58, "UnlhaCheckArchive")
+		var_41 = var_41 | var_59 == 0
+		var_60 = GetProcAddress(var_58, "UnlhaGetFileCount")
+		var_41 = var_41 | var_60 == 0
+		var_61 = GetProcAddress(var_58, "UnlhaOpenArchive")
+		var_41 = var_41 | var_61 == 0
+		var_62 = GetProcAddress(var_58, "UnlhaCloseArchive")
+		var_41 = var_41 | var_62 == 0
+		var_63 = GetProcAddress(var_58, "UnlhaFindFirst")
+		var_41 = var_41 | var_63 == 0
+		var_64 = GetProcAddress(var_58, "UnlhaFindNext")
+		var_41 = var_41 | var_64 == 0
+		var_65 = GetProcAddress(var_58, "UnlhaExtractMem")
+		var_41 = var_41 | var_65 == 0
+		if ( var_41 == 0 ) {
+			FreeLibrary var_58
+			var_58 = 0
+		}
+	}
+	var_66 = LoadLibraryA("TAR32.DLL")
+	if ( var_66 != 0 ) {
+		var_41 = 0
+		var_67 = GetProcAddress(var_66, "TarCheckArchive")
+		var_41 = var_41 | var_67 == 0
+		var_68 = GetProcAddress(var_66, "TarGetFileCount")
+		var_41 = var_41 | var_68 == 0
+		var_69 = GetProcAddress(var_66, "TarOpenArchive")
+		var_41 = var_41 | var_69 == 0
+		var_70 = GetProcAddress(var_66, "TarCloseArchive")
+		var_41 = var_41 | var_70 == 0
+		var_71 = GetProcAddress(var_66, "TarFindFirst")
+		var_41 = var_41 | var_71 == 0
+		var_72 = GetProcAddress(var_66, "TarFindNext")
+		var_41 = var_41 | var_72 == 0
+		var_73 = GetProcAddress(var_66, "TarExtractMem")
+		var_41 = var_41 | var_73 == 0
+		var_74 = GetProcAddress(var_66, "Tar")
+		var_41 = var_41 | var_74 == 0
+		if ( var_41 ) {
+			FreeLibrary var_66
+			var_66 = 0
+		}
+	}
+	var_75 = 0, var_46, var_54, var_63, var_71
+	var_76 = 0, var_47, var_55, var_64, var_72
+	var_77 = 0, var_44, var_52, var_61, var_69
+	var_78 = 0, var_45, var_53, var_62, var_70
+	return
+*label_29
+	var_79 = 0
+	var_80 = varptr(var_32), 0
+	if ( var_40 != 0 ) {
+		if ( callfunc(var_80, var_42, 2) ) {
+			var_81 = callfunc(var_80, var_43, 1)
+			var_79 = 1
+			return
+		}
+	}
+	if ( var_49 != 0 ) {
+		if ( callfunc(var_80, var_50, 2) ) {
+			var_81 = callfunc(var_80, var_51, 1)
+			var_79 = 2
+			return
+		}
+	}
+	if ( var_58 != 0 ) {
+		if ( callfunc(var_80, var_59, 2) ) {
+			var_81 = callfunc(var_80, var_60, 1)
+			var_79 = 3
+			return
+		}
+	}
+	if ( var_66 != 0 ) {
+		if ( callfunc(var_80, var_67, 2) ) {
+			var_81 = callfunc(var_80, var_68, 1)
+			var_79 = 4
+			return
+		}
+	}
+	return
+*label_30
+	exist var_32
+	var_82 = strsize
+	if ( var_82 > 0 ) {
+		gosub *label_29
+		if ( var_79 != 0 ) {
+			dim var_83, 150
+			var_80 = 0, varptr(var_32), 0
+			var_84 = callfunc(var_80, var_77(var_79), 3)
+			if ( var_84 != 0 ) {
+				var_34 = "*"
+				var_80 = var_84, varptr(var_34), varptr(var_83)
+				var_85 = callfunc(var_80, var_75(var_79), 3)
+				var_82 = var_83
+				memcpy var_39, var_83, 512, 0, 26
+				var_36 = getpath@__shlwpath__(var_39, 2)
+				if ( var_36 != ".gba" & var_36 != ".gsflib" ) {
+					var_82 = -1
+					repeat var_81 - 1
+						var_80 = var_84, varptr(var_83)
+						var_85 = callfunc(var_80, var_76(var_79), 2)
+						var_82 = var_83
+						memcpy var_39, var_83, 512, 0, 26
+						var_36 = getpath@__shlwpath__(var_39, 2)
+						if ( var_36 == ".gba" | var_36 == ".gsflib" ) {
+							break
+						}
+						var_82 = -1
+					loop
+				}
+				var_85 = callfunc(var_84, var_78(var_79), 1)
+			}
+			else {
+				var_82 = -1
+			}
+		}
+	}
+	return
+#deffunc arcio_exist str prm_356
+	var_32 = prm_356
+	gosub *label_30
+	return var_82
+#deffunc arcio_bload str prm_357, var prm_358, int prm_359
+	var_32 = prm_357
+	gosub *label_30
+	if ( prm_359 == 0 ) {
+		prm_359 = var_82
+	}
+	var_86 = var_79
+	if ( 0 ) {
+		var_87++
+	}
+	if ( var_86 == 1 | var_87 ) {
+		var_87 = 0
+		var_34 = "--i \"" + var_32 + "\" \"" + var_39 + "\""
+		var_80 = hwnd, varptr(var_34), varptr(prm_358), prm_359, 0, 0, 0
+		var_85 = callfunc(var_80, var_48, 7)
+		goto *label_33
+		var_87++
+	}
+	if ( var_86 == 2 | var_87 ) {
+		var_87 = 0
+		var_34 = "-e -o -q \"" + var_32 + "\" \"" + var_37 + "\" \"" + var_39 + "\""
+		var_80 = hwnd, varptr(var_34), varptr(prm_358), prm_359
+		var_85 = callfunc(var_80, var_57, 4)
+		var_38 = var_37 + var_39
+		bload var_38, prm_358, prm_359
+		delete var_38
+		var_34 = "-q \"" + var_32 + "\" \"" + var_39 + "\""
+		var_80 = hwnd, varptr(var_34), varptr(prm_358), prm_359, 0, 0, 0
+		var_85 = callfunc(var_80, var_56, 7)
+		goto *label_33
+		var_87++
+	}
+	if ( var_86 == 3 | var_87 ) {
+		var_87 = 0
+		var_34 = "-n1 \"" + var_32 + "\" \"" + var_39 + "\""
+		var_80 = hwnd, varptr(var_34), varptr(prm_358), prm_359, 0, 0, 0
+		var_85 = callfunc(var_80, var_65, 7)
+		goto *label_33
+		var_87++
+	}
+	if ( var_86 == 4 | var_87 ) {
+		var_87 = 0
+		var_34 = "-x --display-dialog0 \"" + var_32 + "\" \"" + var_37 + "\" \"" + var_39 + "\""
+		var_80 = hwnd, varptr(var_34), varptr(prm_358), prm_359
+		var_85 = callfunc(var_80, var_74, 4)
+		var_38 = var_37 + var_39
+		bload var_38, prm_358, prm_359, var_88
+		delete var_38
+		goto *label_33
+	}
+	if ( 1 ) {
+		bload prm_357, prm_358, prm_359
+		goto *label_33
+	}
+*label_33
+	return
+#deffunc exit___arcio__ onexit
+	if ( var_40 != 0 ) {
+		FreeLibrary var_40
+	}
+	if ( var_49 != 0 ) {
+		FreeLibrary var_49
+	}
+	if ( var_58 != 0 ) {
+		FreeLibrary var_58
+	}
+	if ( var_66 != 0 ) {
+		FreeLibrary var_66
+	}
+	return
+*label_35
+	gosub *label_28
+	goto *label_39
+#deffunc snglopen str, var
+	var_89 = 0
+	gosub *label_38
+	return
+#deffunc snglsave str prm_365, var prm_366
+	var_89 = 1
+	gosub *label_38
+	return
+*label_38
+	mref var_90, 64
+	mref var_91, 65
+	var_92 = prm_366
+	repeat
+		var_93 = peek(var_92, cnt)
+		if ( var_93 == 0 ) {
+			break
+		}
+		var_94 = func_6(var_93)
+		if ( var_94 ) {
+			continue cnt + 2
+		}
+		if ( var_93 == 124 ) {
+			poke var_92, cnt, 0
+		}
+	loop
+	var_95 = prm_365
+	sdim var_96, 260
+	var_97 = dirinfo(0)
+	dim var_98, 19
+	var_98 = 76
+	var_98(1) = hwnd
+	var_98(2) = hinstance
+	var_98(3) = varptr(var_92)
+	var_98(4) = 0
+	var_98(5) = 0
+	var_98(6) = 0
+	var_98(7) = varptr(var_96)
+	var_98(8) = 260
+	var_98(9) = 0
+	var_98(10) = 0
+	var_98(11) = varptr(var_97)
+	var_98(12) = varptr(var_95)
+	if ( var_89 ) {
+		var_98(13) = 2054
+		var_99 = GetSaveFileNameA(var_98)
+	}
+	else {
+		var_98(13) = 528388
+		var_99 = GetOpenFileNameA(var_98)
+	}
+	var_90 = var_99
+	var_91 = var_96
+	return
+*label_39
+	goto *label_45
+#deffunc bell int prm_383
+	MessageBeep prm_383 * 16
+	return
+#deffunc setreadonly int prm_384
+	func_7 objinfo(prm_384, 2), 207, 1, 0
+	return
+#deffunc __exec str prm_385
+	var_100 = prm_385
+	ShellExecuteA 0, 0, varptr(var_100), 0, 0, 1
+	return
+#deffunc cnvsign8 var prm_386, int prm_387, int prm_388
+	var_101 = dirinfo(0)
+	chdir var_102
+	func_8 varptr(prm_386) + prm_388, prm_387
+	chdir var_101
+	return
+#deffunc wavcpy20 var prm_389, var prm_390, int prm_391, int prm_392, int prm_393
+	var_101 = dirinfo(0)
+	chdir var_102
+	wavcpy20 varptr(prm_389) + prm_392, varptr(prm_390) + prm_393, prm_391
+	chdir var_101
+	return
+*label_45
+	goto *label_50
+*label_46
+	var_103 = func_10("strtbl.dll")
+	if ( var_103 == 0 ) {
+		goto *label_47
+	}
+	return
+*label_47
+	dialog "strtbl runtime error", 0, "strtbl error"
+	end
+#deffunc load_str var prm_400, int prm_401
+	memexpand prm_400, 256
+	LoadStringA var_103, prm_401, prm_400, 256
+	return
+#deffunc exit__strtbl__ onexit
+	func_11 var_103
+	return
+*label_50
+	gosub *label_46
+	goto *label_52
+#deffunc stos var prm_410, var prm_411, int prm_412
+	var_104 = dirinfo(0)
+	chdir var_102
+	var_105 = 0
+	stosFindTable prm_410, prm_411, prm_412, var_105
+	if ( stat == 0 ) {
+		var_105 = -1
+	}
+	chdir var_104
+	return var_105
+*label_52
+	sdim var_106, 256
+	sdim var_107, 64
+	load_str var_107, 1
+	sdim var_108, 64
+	load_str var_108, 2
+	sdim var_109, 64
+	var_109 = "loveemu"
+	sdim var_110, 64
+	load_str var_110, 31
+	sdim var_111, 512
+	sdim var_112, 260
+	sdim var_113, 260
+	sdim var_102, 260
+	var_102 = dirinfo(0) + "\\"
+	sdim var_114, 260
+	var_114 = var_102 + "ofslist.txt"
+	sdim var_115, 512
+	sdim var_116, 512
+	sdim var_117, 512
+	sdim var_118, 64
+	sdim var_119, 512
+	sdim var_120, 260
+	sdim var_121, 260
+	sdim var_122, 260
+	sdim var_123, 260
+	sdim var_124, 260
+	sdim var_125, 260
+	var_123 = var_102 + "xgba2mid.mid"
+	sdim var_126, 9
+	var_126 = "------"
+	sdim var_127, 9
+	var_127 = "0"
+	sdim var_128, 64
+	var_128 = ""
+	dim var_129, 16
+	dim var_130, 128
+	dim var_131, 128, 128
+	dim var_132, 128
+	dim var_133, 49
+	dim var_134, 128
+	sdim var_135, 260
+	sdim var_136, 260
+	sdim var_137, 260
+	sdim var_138, 260
+	sdim var_139, 260
+	dim var_140, 16
+	var_140 = -64, -55, -47, -38, -30, -21, -13, -4, 4, 13, 21, 30, 38, 47, 55, 63
+	sdim var_141, 260
+	sdim var_142, 16384
+	var_133 = 0
+	var_133(1) = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
+	var_133(17) = 17, 18, 19, 20, 21, 22, 23, 24, 28, 30, 32, 36, 40, 42, 44, 48
+	var_133(33) = 52, 54, 56, 60, 64, 66, 68, 72, 76, 78, 80, 84, 88, 90, 92, 96
+	var_143 = 0
+	var_144 = 0
+	RegCreateKeyExA -2147483647, "Software\\loveemu\\gba2midi\\0.x", 0, 0, 0, 983103, 0, var_145, 0
+	sdim var_146, 16
+	sdim var_147, 32
+	dim var_148, 1
+	sdim var_149, 8
+	sdim var_150, 128
+	sdim var_151, 128
+	gosub *label_68
+	gosub *label_70
+	onkey gosub *label_54
+	onexit goto *label_55
+	gosub *label_73
+	if ( var_8 ) {
+		var_120 = var_9(0)
+		objprm 4, var_120
+		gosub *label_74
+		ed_selall 4
+	}
+	GGSSetDevice -1
+	if ( stat == 1 ) {
+		load_str var_106, 3
+		dialog var_106, 0, var_107
+	}
+*label_53
+	wait 1
+	gosub *label_56
+	goto *label_53
+*label_54
+	if ( iparam == 13 ) {
+		pushbtn 0
+	}
+	return
+*label_55
+	gosub *label_69
+	RegCloseKey var_145
+	chdir var_102
+	end
+*label_56
+	exist var_114
+	var_152 = strsize
+	if ( var_152 != var_153 ) {
+		gosub *label_73
+	}
+	return
+*label_57
+	if ( var_123 == "" ) {
+		load_str var_106, 4
+		dialog var_106, 0, var_107
+		goto *label_53
+	}
+	if ( var_144 == 0 ) {
+		load_str var_106, 24
+		dialog var_106 + " [" + var_122 + "]", 0, var_107
+		goto *label_53
+	}
+	onkey 0
+	var_154 = 0
+	gosub *label_72
+	var_155 = 1
+	var_143 = 1
+	gosub *label_63
+	udget 17, var_156
+	var_157 = var_156
+*label_58
+	var_158 = (var_156 << 3) + var_148
+	if ( var_158 + 4 >= var_159 ) {
+		var_115 = strf("%x", var_158 + 4)
+		load_str var_106, 5
+		objprm 16, "[!] " + var_106 + " [" + var_115 + "]"
+		goto *label_59
+	}
+	gosub *label_77
+	if ( var_160 == 0 ) {
+		var_156++
+		if ( var_156 >= var_161 ) {
+			goto *label_59
+		}
+		goto *label_58
+	}
+	if ( var_157 != var_156 ) {
+		udprm 17, var_156
+	}
+	gosub *label_78
+	if ( var_160 == 0 ) {
+		goto *label_59
+	}
+	if ( var_162 ) {
+		gosub *label_84
+	}
+	load_str var_106, 6
+	objprm 16, "" + var_106 + " [" + var_163 + "/" + var_164 + "]"
+	goto *label_60
+*label_59
+	bell 1
+	goto *label_61
+*label_60
+	GGSLoadFile var_123
+	if ( var_165 ) {
+		var_143 = 0
+		gosub *label_63
+	}
+*label_61
+	var_154 = 1
+	gosub *label_72
+	onkey 1
+	objsel 8
+	goto *label_53
+*label_62
+	if ( var_143 == 0 ) {
+		var_143 = 2
+	}
+	else {
+		var_143 = 0
+	}
+	gosub *label_63
+	goto *label_53
+*label_63
+	if ( var_143 == 0 ) {
+		if ( var_155 ) {
+			var_155 = 0
+			if ( var_166 ) {
+				GGSSendReset 1
+				wait 15
+				GGSSendReset 20
+				wait 5
+				GGSPlay 1
+			}
+			else {
+				GGSPlay
+			}
+		}
+		else {
+			GGSPause
+		}
+	}
+	else {
+		if ( var_143 == 2 ) {
+			GGSPause
+		}
+		else {
+			GGSStop
+		}
+	}
+	return
+*label_64
+	__exec var_102 + "index.en.html"
+	goto *label_53
+*label_65
+	if ( var_112 != "" ) {
+		dirlist var_167, var_112, 5
+		if ( stat != 0 ) {
+			chdir var_112
+		}
+	}
+	load_str var_106, 35
+	load_str var_111, 36
+	snglopen var_106, var_111
+	var_112 = dirinfo(0)
+	if ( stat ) {
+		var_120 = refstr
+		objprm 4, var_120
+		gosub *label_74
+		ed_selall 4
+	}
+	goto *label_53
+*label_66
+	if ( var_113 != "" ) {
+		dirlist var_167, var_113, 5
+		if ( stat != 0 ) {
+			chdir var_113
+		}
+	}
+	load_str var_106, 37
+	load_str var_111, 38
+	snglsave var_106, var_111
+	var_113 = dirinfo(0)
+	if ( stat ) {
+		var_123 = refstr
+		var_115 = getpath@__shlwpath__(var_123, 2)
+		if ( var_115 == "" ) {
+			var_123 += ".mid"
+		}
+		objprm 6, var_123
+		ed_selall 6
+	}
+	goto *label_53
+*label_67
+	exist var_114
+	if ( strsize < 0 ) {
+		load_str var_106, 7
+		dialog "" + var_106 + " [" + "ofslist.txt" + "]", 0, var_107
+	}
+	else {
+		__exec var_114
+	}
+	goto *label_53
+*label_68
+	var_168 = 260
+	RegQueryValueExA var_145, "MRU_Open", 0, 0, var_112, var_168
+	var_168 = 260
+	RegQueryValueExA var_145, "MRU_Save", 0, 0, var_113, var_168
+	var_168 = 4
+	RegQueryValueExA var_145, "PlayAtOnce", 0, 0, var_165, var_168
+	var_168 = 4
+	RegQueryValueExA var_145, "RipInstruments", 0, 0, var_162, var_168
+	var_168 = 4
+	RegQueryValueExA var_145, "FilterForXg", 0, 0, var_169, var_168
+	var_168 = 4
+	RegQueryValueExA var_145, "RipSequence", 0, 0, var_170, var_168
+	var_168 = 4
+	RegQueryValueExA var_145, "SimplyRip", 0, 0, var_171, var_168
+	return
+*label_69
+	RegSetValueExA var_145, "MRU_Open", 0, 1, varptr(var_112), strlen(var_112) + 1
+	RegSetValueExA var_145, "MRU_Save", 0, 1, varptr(var_113), strlen(var_113) + 1
+	RegSetValueExA var_145, "PlayAtOnce", 0, 4, varptr(var_165), 4
+	RegSetValueExA var_145, "RipInstruments", 0, 4, varptr(var_162), 4
+	RegSetValueExA var_145, "FilterForXg", 0, 4, varptr(var_169), 4
+	RegSetValueExA var_145, "RipSequence", 0, 4, varptr(var_170), 4
+	RegSetValueExA var_145, "SimplyRip", 0, 4, varptr(var_171), 4
+	return
+*label_70
+	screen 0, 320, 276, 4, ginfo(20) - 320 >> 1, ginfo(21) - 276 >> 1
+	gsel 0, 1
+	cls
+	title var_107 + " " + var_108
+	redraw 2
+	syscolor 15
+	boxf
+	syscolor 18
+	font "MS UI Gothic", 12
+	pos 12, 16
+	mes "ROM:"
+	pos 12, 44
+	mes "MIDI:"
+	pos 12, 72
+	mes "OFS:"
+	pos 118, 72
+	mes "@"
+	pos 202, 72
+	mes "h"
+	redraw 1
+	objmode 2, 1
+	objsize 88, 20
+	load_str var_106, 8
+	pos 220, 96
+	button var_106, *label_57
+	load_str var_106, 9
+	pos 220, 120
+	button var_106, *label_55
+	load_str var_106, 10
+	pos 220, 144
+	button var_106, *label_62
+	load_str var_106, 11
+	pos 220, 168
+	button var_106, *label_64
+	func_15 objinfo(0, 2), 244, 1, 1
+	objsize 160, 20
+	pos 48, 12
+	input var_120
+	autocomp 4, 16
+	setreadonly 4
+	objsize 88, 20
+	load_str var_106, 12
+	pos 220, 12
+	button var_106, *label_65
+	objsize 160, 20
+	pos 48, 40
+	input var_123
+	autocomp 6, 16
+	objsize 88, 20
+	load_str var_106, 13
+	pos 220, 40
+	button var_106, *label_66
+	objsize 66, 20
+	pos 48, 68
+	input var_127, , , 6
+	ed_right 8, 1
+	objsize 68, 20
+	pos 130, 68
+	input var_126
+	ed_readonly 9, 1
+	ed_right 9, 1
+	objsize 88, 20
+	load_str var_106, 14
+	pos 220, 68
+	button var_106, *label_67
+	objsize 196, 16
+	load_str var_106, 15
+	pos 12, 98
+	chkbox var_106, var_165
+	load_str var_106, 16
+	pos 12, 122
+	chkbox var_106, var_162
+	load_str var_106, 17
+	pos 12, 146
+	chkbox var_106, var_169
+	load_str var_106, 18
+	pos 12, 170
+	chkbox var_106, var_170
+	load_str var_106, 34
+	pos 12, 194
+	chkbox var_106, var_171
+	pos 12, 222
+	input var_128, 296, 16
+	ed_readonly 16, 1
+	var_115 = var_127
+	udput 8, 165
+	udrng 17, 0, 512
+	objprm 8, var_115
+	objsize 296, 20
+	pos 12, 242
+	prbput 0, 0, 1000
+	oncmd gosub *label_71, 563
+	DragAcceptFiles hwnd, 1
+	return
+*label_71
+	var_172 = wparam
+	DragQueryFileA var_172, -1, 0, 0
+	var_173 = stat
+	DragQueryFileA var_172, 0, varptr(var_120), 260
+	objprm 4, var_120
+	gosub *label_74
+	ed_selall 4
+	DragFinish var_172
+	return
+*label_72
+	xobjenbl 17, var_154
+	repeat 16
+		xobjenbl cnt, var_154
+	loop
+	return
+*label_73
+	onkey 0
+	var_154 = 0
+	gosub *label_72
+	await
+	var_174 = 0
+	chdir var_102
+	exist var_114
+	var_152 = strsize
+	var_153 = strsize
+	if ( var_152 < 0 ) {
+		var_174 = 0
+	}
+	else {
+		load_str var_106, 7
+		objprm 16, "" + 19 + " [" + "ofslist.txt" + "]"
+		await
+		sdim var_118, var_152 + 1
+		bload var_114, var_118
+		notesel var_118
+		var_175 = noteinfo(0)
+		dim var_176, var_175
+		dim var_177, var_175
+		sdim var_178, 8, var_175
+		sdim var_179, 128, var_175
+		sdim var_180, 128, var_175
+		load_str var_106, 20
+		objprm 16, var_106
+		await
+		var_181 = -1
+		var_182 = 0
+		var_183 = 0
+		repeat var_175
+			if ( (cnt & 2047) == 0 ) {
+				load_str var_106, 20
+				var_168 = cnt + 1
+				objprm 16, "" + var_106 + " [" + var_168 + " / " + var_175 + "]"
+				await
+			}
+			if ( cnt <= 2147483 ) {
+				var_184 = (cnt + 1) * 1000 / var_175
+			}
+			else {
+				var_184 = (cnt + 1) / (var_175 / 1000)
+			}
+			if ( var_184 != var_181 ) {
+				prbprm 18, var_184
+				var_181 = var_184
+			}
+			getstr var_119, var_118, var_182
+			var_182 += strsize
+			var_168 = peek(var_119, 0)
+			var_115 = strmid(var_119, 0, 2)
+			if ( var_168 == 0 | var_168 == 59 | var_115 == "//" ) {
+				continue
+			}
+			if ( var_115 == "/*" | var_115 == "*/" ) {
+				var_183 = var_183 ^ 1
+				continue
+			}
+			if ( var_183 ) {
+				continue
+			}
+			var_185 = 0
+			getstr var_115, var_119, var_185, 44
+			var_185 += strsize
+			var_168 = strlen(var_115)
+			if ( var_168 != 4 ) {
+				var_168 = cnt + 1
+				load_str var_106, 21
+				dialog "" + var_106 + " - at line " + var_168, 0, var_107
+				goto *label_55
+			}
+			var_178(var_174) = var_115
+			getstr var_115, var_119, var_185, 44
+			var_185 += strsize
+			var_176(var_174) = int(var_115)
+			getstr var_115, var_119, var_185, 44
+			var_185 += strsize
+			var_177(var_174) = int(var_115)
+			var_168 = peek(var_119, var_185)
+			if ( var_168 != 34 ) {
+				getstr var_179(var_174), var_119, var_185, 44
+				var_185 += strsize
+			}
+			else {
+				getstr var_179(var_174), var_119, var_185 + 1, 34
+				var_185 += strsize + 2
+			}
+			var_168 = peek(var_119, var_185)
+			if ( var_168 != 34 ) {
+				getstr var_180(var_174), var_119, var_185, 44
+				var_185 += strsize
+			}
+			else {
+				getstr var_180(var_174), var_119, var_185 + 1, 34
+				var_185 += strsize + 2
+			}
+			var_174++
+		loop
+		prbprm 18, 1000
+		sdim var_118, 64
+	}
+	objprm 16, var_107 + " " + var_108 + ", Copyright (C) 2004-2005 " + var_109
+	prbprm 18, 0
+	var_154 = 1
+	gosub *label_72
+	onkey 1
+	return
+*label_74
+	var_144 = 0
+	var_186 = "----"
+	var_121 = getpath@__shlwpath__(var_120, 32)
+	var_122 = getpath@__shlwpath__(var_120, 8)
+	gosub *label_75
+	if ( var_159 < 0 ) {
+		load_str var_106, 23
+		dialog "" + var_106 + " [" + var_122 + "]", 0, var_107
+		var_160 = 0
+		return
+	}
+	if ( var_159 < 192 ) {
+		load_str var_106, 24
+		dialog "" + var_106 + " [" + var_122 + "]", 0, var_107
+		var_160 = 0
+		return
+	}
+	var_186 = strmid(var_187, 172, 4)
+	if ( var_186 == "" ) {
+		var_186 = "????"
+	}
+	onkey 0
+	var_154 = 0
+	gosub *label_72
+	await
+	var_188 = -1
+	var_181 = -1
+	repeat var_174
+		if ( var_178(cnt) == var_186 ) {
+			var_188 = cnt
+			break
+		}
+		if ( (cnt & 2047) == 0 ) {
+			load_str var_106, 25
+			var_168 = cnt + 1
+			objprm 16, "" + var_106 + " [" + var_168 + " / " + var_175 + "]"
+			await
+		}
+		if ( cnt <= 2147483 ) {
+			var_184 = (cnt + 1) * 1000 / var_174
+		}
+		else {
+			var_184 = (cnt + 1) / (var_174 / 1000)
+		}
+		if ( var_184 != var_181 ) {
+			prbprm 18, var_184
+		}
+	loop
+	prbprm 18, 0
+	var_154 = 1
+	gosub *label_72
+	onkey 1
+	var_148 = -1
+	if ( var_188 < 0 ) {
+		load_str var_106, 39
+		objprm 16, var_106
+		stos var_160, var_187, var_159
+		if ( stat >= 0 ) {
+			var_148 = var_160
+			var_149 = var_186
+			var_150 = strmid(var_187, 160, 12)
+			var_151 = ""
+			var_161 = stat
+		}
+	}
+	else {
+		var_148 = var_176(var_188)
+		var_149 = var_178(var_188)
+		var_150 = var_179(var_188)
+		var_151 = var_180(var_188)
+		var_161 = var_177(var_188)
+	}
+	if ( var_148 < 0 ) {
+		var_126 = "------"
+		objprm 9, var_126
+		load_str var_106, 26
+		objprm 16, "" + var_106 + " [" + var_186 + "]"
+		load_str var_106, 26
+		dialog "" + var_106 + " [" + var_186 + "]", 0, var_107
+		var_160 = 0
+	}
+	else {
+		if ( var_161 >= 512 ) {
+			udrng 17, 0, var_161 - 1
+		}
+		var_126 = strf("%x", var_148)
+		objprm 9, var_126
+		load_str var_106, 27
+		objprm 16, "" + var_106 + " [" + var_186 + "]"
+		var_160 = 1
+		var_144 = 1
+	}
+	return
+*label_75
+	var_189 = 0
+	load_str var_106, 28
+	objprm 16, var_106 + " [" + var_122 + "]"
+	arcio_exist var_120
+	var_159 = stat
+	if ( var_159 < 0 ) {
+		return
+	}
+	sdim var_187, var_159
+	arcio_bload var_120, var_187, var_159
+	gosub *label_76
+	return
+*label_76
+	var_115 = strmid(var_187, 0, 3)
+	var_168 = peek(var_187, 3)
+	if ( var_115 == "PSF" & var_168 == 34 ) {
+		var_190 = lpeek(var_187, 4)
+		var_191 = lpeek(var_187, 8)
+		var_192 = lpeek(var_187, 12)
+		var_193 = 16
+		var_194 = var_193 + var_190
+		sdim var_195, var_191
+		memcpy var_195, var_187, var_191, 0, var_194
+		chdir var_102
+		sdim var_196, 33554444
+		zSetDest var_196, 33554444
+		zUncompress var_195, var_191
+		var_159 = lpeek(var_196, 8)
+		sdim var_187, var_159
+		memcpy var_187, var_196, var_159, 0, 12
+		sdim var_195, 64
+		sdim var_196, 64
+	}
+	return
+*label_77
+	var_160 = 0
+	var_124 = getpath@__shlwpath__(var_123, 32)
+	var_125 = getpath@__shlwpath__(var_123, 8)
+	load_str var_106, 19
+	objprm 16, "" + var_106 + " [" + var_122 + "]"
+	var_197 = lpeek(var_187, var_158)
+	var_168 = var_197 >> 24 & 254
+	var_197 = var_197 & 33554431
+	if ( var_168 != 8 | var_197 < 0 | var_197 >= var_159 ) {
+		var_115 = strf("%x", var_158)
+		load_str var_106, 5
+		objprm 16, "[!] " + var_106 + " [@" + var_115 + "]"
+		return
+	}
+	var_198 = peek(var_187, var_197)
+	if ( var_198 == 0 ) {
+		load_str var_106, 29
+		objprm 16, "[!] " + var_106
+		return
+	}
+	if ( var_198 > 16 ) {
+		load_str var_106, 30
+		objprm 16, "[!] " + var_106 + " [" + var_198 + "]"
+		return
+	}
+	var_199 = lpeek(var_187, var_197 + 4)
+	var_168 = var_199 >> 24 & 254
+	var_199 = var_199 & 33554431
+	if ( var_168 != 8 | var_199 < 0 | 12 * 128 + var_199 >= var_159 ) {
+		var_115 = strf("%x", var_197 + 4)
+		load_str var_106, 5
+		objprm 16, "[!] " + var_106 + " [@" + var_115 + "]"
+		return
+	}
+	var_200 = var_197 + 8
+	var_160 = 1
+	repeat var_198
+		var_129(cnt) = lpeek(var_187, var_200)
+		var_200 += 4
+		var_168 = var_129(cnt) >> 24 & 254
+		var_129(cnt) = var_129(cnt) & 33554431
+		if ( var_168 != 8 | var_129(cnt) < 0 | var_129(cnt) >= var_159 ) {
+			var_115 = strf("%x", var_200)
+			load_str var_106, 5
+			objprm 16, "[!] " + var_106 + " [@" + var_115 + "]"
+			var_160 = 0
+			break
+		}
+	loop
+	if ( var_160 == 0 ) {
+		return
+	}
+	var_160 = 1
+	return
+*label_78
+	var_201 = 1
+	gosub *label_79
+	var_202 = smfwCreateSmf(24)
+	if ( var_202 == 0 ) {
+		dialog "Error: smfwCreateSmf failed"
+		end
+	}
+	prbrng 18, 0, var_198
+	repeat var_198
+		var_203 = 0
+		var_204 = cnt
+		var_205 = cnt
+		if ( var_205 == 0 ) {
+			if ( var_171 == 0 ) {
+				if ( var_151 != "" ) {
+					smfwInsertMetaTextEventA var_202, 0, var_205, 2, "(C) " + var_151
+				}
+				smfwInsertMetaTextEventA var_202, 0, var_205, 3, var_149 + " - " + var_150 + " @ " + strf("%x", var_158)
+				smfwInsertMetaTextEventA var_202, 0, var_205, 3, "Track " + (var_205 + 1) + " @ " + strf("%x", var_129(var_204))
+				smfwInsertMetaTextEventA var_202, 0, var_205, 1, "Converted by " + var_107 + " ver." + var_108
+				smfwInsertMetaTextEventA var_202, 0, var_205, 1, "Inst: " + strf("%x", var_199)
+			}
+			smfwXEvInsertGMSystemOn var_202, 0, 0, var_205
+			if ( var_169 ) {
+				smfwXEvInsertXGSystemOn var_202, 0, 0, var_205
+			}
+		}
+		else {
+			if ( var_171 == 0 ) {
+				smfwInsertMetaTextEventA var_202, 0, var_205, 3, "Track " + (var_205 + 1) + " @ " + strf("%x", var_129(var_204))
+			}
+		}
+		objprm 16, "" + var_110 + " " + var_205 + " / " + var_198
+		prbprm 18, cnt
+		gosub *label_80
+		var_206 = var_129(var_204)
+		var_207 = var_206
+		repeat
+			if ( (cnt & 2047) == 0 ) {
+				await
+			}
+			var_208 = peek(var_187, var_206)
+			if ( 128 <= var_208 & var_208 <= 176 ) {
+				var_168 = var_208 - 128
+				var_203 += var_133(var_168)
+				var_206++
+			}
+			else {
+				if ( 0 <= var_208 & var_208 <= 127 ) {
+					var_208 = var_209
+				}
+				else {
+					var_206++
+					var_210 = 0
+				}
+				gosub *label_81
+				if ( var_201 == 0 | var_211 != 0 ) {
+					break
+				}
+			}
+		loop
+		if ( var_201 == 0 ) {
+			break
+		}
+		smfwSetEndOfTrack var_202, var_205, var_203
+		var_212 = var_206
+		var_213 = var_212 - var_207
+		if ( var_170 ) {
+			if ( var_214 ) {
+				var_214 = 0
+				var_135 = getpath@__shlwpath__(var_123, 32)
+				var_115 = dirinfo(0)
+				chdir var_135
+				var_116 = "sap"
+				repeat
+					exist var_116
+					if ( strsize < 0 ) {
+						break
+					}
+					var_116 = "_" + var_116
+				loop
+				dirlist var_117, var_116, 5
+				if ( stat == 0 ) {
+					mkdir var_116
+				}
+				var_135 += "" + var_116
+				chdir var_115
+			}
+			var_136 = getpath@__shlwpath__(var_123, 9)
+			var_136 += "_" + (var_205 + 1) + ".sap"
+			var_137 = var_135 + "\\" + var_136
+			sdim var_215, var_213
+			memcpy var_215, var_187, var_213, 0, var_207
+			bsave var_137, var_215, var_213
+			sdim var_215, 64
+		}
+	loop
+	prbrng 18, 0, 1000
+	prbprm 18, 1000
+	if ( var_201 ) {
+		smfwWriteFileA var_202, var_123, 1, 0, 2, 128
+	}
+	prbprm 18, 0
+	var_160 = var_201
+	return
+*label_79
+	var_166 = 0
+	var_214 = 1
+	var_163 = 0
+	var_164 = 0
+	var_216 = 0
+	repeat 128
+		var_130(cnt) = 0
+	loop
+	repeat 128
+		var_168 = cnt
+		repeat 128
+			var_131(var_168, cnt) = 0
+		loop
+	loop
+	return
+*label_80
+	var_217 = 0
+	var_211 = 0
+	var_218 = 1
+	var_219 = 0
+	var_209 = 0
+	var_220 = 0
+	var_221 = 0
+	var_210 = 0
+	var_222 = 0
+	var_223 = 0
+	return
+*label_81
+	var_224 = 0
+	if ( var_208 == 177 ) {
+		var_211 = 1
+	}
+	else {
+		if ( var_208 == 178 ) {
+			if ( var_171 == 0 ) {
+				smfwInsertMetaTextEventA var_202, var_203, var_205, 1, "Jump"
+			}
+			var_168 = lpeek(var_187, var_206)
+			var_200 = var_168 >> 24 & 254
+			var_168 = var_168 & 33554431
+			if ( var_200 != 8 | var_168 + 4 >= var_159 ) {
+				var_115 = strf("%x", var_206)
+				smfwInsertMetaTextEventA var_202, var_203, var_205, 1, "Error: Invaild address " + " [@" + var_115 + "]"
+				load_str var_106, 5
+				objprm 16, "[!] " + var_106 + " [@" + var_115 + "]"
+				var_201 = 0
+			}
+			if ( var_206 >= var_168 ) {
+				var_166 = 1
+				if ( var_218 < 2 ) {
+					if ( var_218 == 1 ) {
+						smfwEvInsertControl var_202, var_203, var_204, var_205, 111, 0
+					}
+					var_206 = var_168
+					var_218++
+				}
+				else {
+					var_206 += 4
+					var_211 = 1
+				}
+			}
+			else {
+				var_206 = var_168
+			}
+		}
+		else {
+			if ( var_208 == 179 ) {
+				if ( var_171 == 0 ) {
+					smfwInsertMetaTextEventA var_202, var_203, var_205, 1, "Subroutine Jump"
+				}
+				var_168 = lpeek(var_187, var_206)
+				var_200 = var_168 >> 24 & 254
+				var_168 = var_168 & 33554431
+				if ( var_200 != 8 | var_168 + 4 >= var_159 ) {
+					var_115 = strf("%x", var_206)
+					smfwInsertMetaTextEventA var_202, var_203, var_205, 1, "Error: Invaild address " + " [@" + var_115 + "]"
+					load_str var_106, 5
+					objprm 16, "[!] " + var_106 + " [@" + var_115 + "]"
+					var_201 = 0
+				}
+				var_222 = var_206 + 4
+				var_206 = var_168
+			}
+			else {
+				if ( var_208 == 180 ) {
+					if ( var_222 != 0 ) {
+						var_206 = var_222
+						var_222 = 0
+						if ( var_171 == 0 ) {
+							smfwInsertMetaTextEventA var_202, var_203, var_205, 1, "Exit Subroutine"
+						}
+						else {
+						}
+					}
+				}
+				else {
+					if ( var_208 == 181 ) {
+						var_225 = peek(var_187, var_206)
+						var_206++
+						if ( var_171 == 0 ) {
+							smfwInsertMetaTextEventA var_202, var_203, var_205, 1, "Repeat [" + var_216 + "/" + var_225 + "]"
+						}
+						var_168 = lpeek(var_187, var_206)
+						var_200 = var_168 >> 24 & 254
+						var_168 = var_168 & 33554431
+						if ( var_200 != 8 | var_168 + 4 >= var_159 ) {
+							var_115 = strf("%x", var_206)
+							smfwInsertMetaTextEventA var_202, var_203, var_205, 1, "Error: Invaild address " + " [@" + var_115 + "]"
+							load_str var_106, 5
+							objprm 16, "[!] " + var_106 + " [@" + var_115 + "]"
+							var_201 = 0
+						}
+						if ( var_225 == 0 | var_216 + 1 < var_225 ) {
+							var_216++
+							var_206 = var_168
+						}
+						else {
+							var_216 = 0
+							var_206 += 4
+						}
+					}
+					else {
+						if ( var_208 == 182 ) {
+							if ( var_171 == 0 ) {
+								smfwInsertMetaTextEventA var_202, var_203, var_205, 1, "End of Track (B6h)"
+							}
+						}
+						else {
+							if ( var_208 == 185 ) {
+								var_115 = ""
+								repeat 3
+									if ( cnt != 0 ) {
+										var_115 += " "
+									}
+									var_115 += strf("%02X", peek(var_187, var_206))
+									var_206++
+								loop
+								if ( var_171 == 0 ) {
+									smfwInsertMetaTextEventA var_202, var_203, var_205, 1, "Special Event (" + var_115 + ")"
+								}
+								var_164++
+							}
+							else {
+								if ( var_208 == 186 ) {
+									var_168 = peek(var_187, var_206)
+									var_206++
+									if ( var_171 == 0 ) {
+										smfwInsertMetaTextEventA var_202, var_203, var_205, 1, "Priority (" + var_168 + ")"
+									}
+								}
+								else {
+									if ( var_208 == 187 ) {
+										var_168 = peek(var_187, var_206)
+										var_206++
+										smfwMEvInsertSetBpmTempo var_202, var_203, var_205, var_168 * 2
+									}
+									else {
+										if ( var_208 == 188 ) {
+											var_219 = peek(var_187, var_206)
+											var_206++
+											if ( var_219 & 128 ) {
+												var_219 = var_219 & ((-1) ^ 255)
+											}
+											var_115 = ""
+											if ( var_219 >= 0 ) {
+												var_115 = "+"
+											}
+											var_115 += var_219
+											if ( var_171 == 0 ) {
+												smfwInsertMetaTextEventA var_202, var_203, var_205, 1, "Key " + var_219
+											}
+										}
+										else {
+											if ( var_208 == 189 ) {
+												var_209 = var_208
+												var_223 = peek(var_187, var_206)
+												var_206++
+												var_130(var_223) = 1
+												var_226 = var_199 + 12 * var_223
+												var_227 = peek(var_187, var_226)
+												var_168 = var_227 & 7
+												if ( var_168 == 1 | var_168 == 2 ) {
+													var_228 = peek(var_187, var_226 + 4)
+												}
+												var_217 = 0
+												if ( var_169 ) {
+													if ( var_168 == 1 | var_168 == 2 ) {
+														if ( var_228 == 0 ) {
+															smfwEvInsertControl var_202, var_203, var_204, var_205, 0, 0
+															smfwEvInsertControl var_202, var_203, var_204, var_205, 32, 40
+															smfwEvInsertPatch var_202, var_203, var_204, var_205, 81
+														}
+														else {
+															if ( var_228 == 1 | var_228 == 3 ) {
+																smfwEvInsertControl var_202, var_203, var_204, var_205, 0, 0
+																smfwEvInsertControl var_202, var_203, var_204, var_205, 32, 6
+																smfwEvInsertPatch var_202, var_203, var_204, var_205, 80
+																var_217 = 1
+															}
+															else {
+																smfwEvInsertControl var_202, var_203, var_204, var_205, 0, 0
+																smfwEvInsertControl var_202, var_203, var_204, var_205, 32, 6
+																smfwEvInsertPatch var_202, var_203, var_204, var_205, 80
+															}
+														}
+													}
+													else {
+														if ( var_227 == 128 ) {
+															var_204 = 9
+															smfwEvInsertControl var_202, var_203, var_204, var_205, 0, 127
+															smfwEvInsertControl var_202, var_203, var_204, var_205, 32, 0
+															smfwEvInsertPatch var_202, var_203, var_204, var_205, 0
+														}
+														else {
+															smfwEvInsertControl var_202, var_203, var_204, var_205, 0, 0
+															smfwEvInsertControl var_202, var_203, var_204, var_205, 32, 0
+															smfwEvInsertPatch var_202, var_203, var_204, var_205, var_223
+														}
+													}
+												}
+												else {
+													smfwEvInsertPatch var_202, var_203, var_204, var_205, var_223
+												}
+												gosub *label_82
+												gosub *label_83
+											}
+											else {
+												if ( var_208 == 190 ) {
+													var_209 = var_208
+													var_168 = peek(var_187, var_206)
+													var_206++
+													smfwEvInsertControl var_202, var_203, var_204, var_205, 7, var_168
+												}
+												else {
+													if ( var_208 == 191 ) {
+														var_209 = var_208
+														var_168 = peek(var_187, var_206)
+														var_206++
+														smfwEvInsertControl var_202, var_203, var_204, var_205, 10, var_168
+													}
+													else {
+														if ( var_208 == 192 ) {
+															var_209 = var_208
+															var_168 = peek(var_187, var_206)
+															var_206++
+															smfwEvInsertWheel var_202, var_203, var_204, var_205, (var_168 << 7) - 8192
+														}
+														else {
+															if ( var_208 == 193 ) {
+																var_209 = var_208
+																var_168 = peek(var_187, var_206)
+																var_206++
+																smfwEvInsertControl var_202, var_203, var_204, var_205, 101, 0
+																smfwEvInsertControl var_202, var_203, var_204, var_205, 100, 0
+																smfwEvInsertControl var_202, var_203, var_204, var_205, 6, var_168
+															}
+															else {
+																if ( var_208 == 194 ) {
+																	var_209 = var_208
+																	var_168 = peek(var_187, var_206)
+																	var_206++
+																	if ( var_171 == 0 ) {
+																		smfwInsertMetaTextEventA var_202, var_203, var_205, 1, "Vibrato Rate = " + var_168
+																	}
+																}
+																else {
+																	if ( var_208 == 195 ) {
+																		var_209 = var_208
+																		var_168 = peek(var_187, var_206)
+																		var_206++
+																		if ( var_171 == 0 ) {
+																			smfwInsertMetaTextEventA var_202, var_203, var_205, 1, "Vibrato Delay = " + var_168
+																		}
+																	}
+																	else {
+																		if ( var_208 == 196 ) {
+																			var_209 = var_208
+																			var_168 = peek(var_187, var_206)
+																			var_206++
+																			if ( var_171 == 0 ) {
+																				smfwInsertMetaTextEventA var_202, var_203, var_205, 1, "Vibrato Depth = " + var_168
+																			}
+																		}
+																		else {
+																			if ( var_208 == 197 ) {
+																				var_209 = var_208
+																				var_168 = peek(var_187, var_206)
+																				var_206++
+																				if ( var_171 == 0 ) {
+																					smfwInsertMetaTextEventA var_202, var_203, var_205, 1, "Vibrato Type = " + var_168
+																				}
+																			}
+																			else {
+																				if ( var_208 == 200 ) {
+																					var_209 = var_208
+																					var_168 = peek(var_187, var_206)
+																					var_206++
+																					smfwEvInsertControl var_202, var_203, var_204, var_205, 101, 0
+																					smfwEvInsertControl var_202, var_203, var_204, var_205, 100, 1
+																					smfwEvInsertControl var_202, var_203, var_204, var_205, 6, var_168
+																				}
+																				else {
+																					if ( var_208 == 205 ) {
+																						var_209 = var_208
+																						var_115 = ""
+																						repeat
+																							var_168 = peek(var_187, var_206)
+																							if ( var_168 >= 128 ) {
+																								break
+																							}
+																							var_206++
+																							if ( cnt != 0 ) {
+																								var_115 += " "
+																							}
+																							var_115 += strf("%02X", var_168)
+																						loop
+																						if ( var_171 == 0 ) {
+																							smfwInsertMetaTextEventA var_202, var_203, var_205, 1, "Sysex? (" + var_115 + ")"
+																						}
+																						var_164++
+																					}
+																					else {
+																						if ( var_208 == 206 ) {
+																							var_209 = var_208
+																							var_168 = peek(var_187, var_206)
+																							if ( 0 <= var_168 & var_168 <= 127 ) {
+																								var_168 += var_219
+																								var_206++
+																							}
+																							else {
+																								var_168 = var_220 + var_219
+																							}
+																							smfwEvInsertNoteOn var_202, var_203, var_204, var_205, var_168, 0
+																							if ( var_132(var_168) ) {
+																								smfwEvInsertNoteOn var_202, var_203, var_204, var_205, var_168 + 12, 0
+																								var_132(var_168) = 0
+																							}
+																						}
+																						else {
+																							if ( var_208 == 207 ) {
+																								var_209 = var_208
+																								var_168 = peek(var_187, var_206)
+																								if ( 0 <= var_168 & var_168 <= 127 ) {
+																									var_206++
+																									var_220 = var_168
+																								}
+																								var_168 = peek(var_187, var_206)
+																								if ( 0 <= var_168 & var_168 <= 127 ) {
+																									var_206++
+																									var_221 = var_168
+																								}
+																								var_168 = var_220 + var_219
+																								var_132(var_168) = var_217
+																								smfwEvInsertNoteOn var_202, var_203, var_204, var_205, var_168, var_221
+																								if ( var_217 ) {
+																									var_200 = var_221 * 215 >> 8
+																									if ( var_200 == 0 ) {
+																										var_200 = 1
+																									}
+																									smfwEvInsertNoteOn var_202, var_203, var_204, var_205, var_168 + 12, var_200
+																								}
+																								var_131(var_223, var_220) = 1
+																							}
+																							else {
+																								if ( 208 <= var_208 & var_208 <= 255 ) {
+																									var_209 = var_208
+																									var_168 = peek(var_187, var_206)
+																									if ( 0 <= var_168 & var_168 <= 127 ) {
+																										var_206++
+																										var_220 = var_168
+																									}
+																									var_168 = peek(var_187, var_206)
+																									if ( 0 <= var_168 & var_168 <= 127 ) {
+																										var_206++
+																										var_221 = var_168
+																									}
+																									var_168 = peek(var_187, var_206)
+																									if ( 0 <= var_168 & var_168 <= 127 ) {
+																										var_206++
+																										var_210 = var_168
+																									}
+																									var_168 = var_220 + var_219
+																									var_200 = var_208 - 208
+																									var_200 = var_133(var_200) + var_210 + 1
+																									smfwEvInsertNote var_202, var_203, var_204, var_205, var_168, var_221, var_200
+																									if ( var_217 ) {
+																										var_229 = var_221 * 215 >> 8
+																										if ( var_229 == 0 ) {
+																											var_229 = 1
+																										}
+																										smfwEvInsertNote var_202, var_203, var_204, var_205, var_168 + 12, var_229, var_200
+																									}
+																									var_131(var_223, var_220) = 1
+																								}
+																							}
+																						}
+																					}
+																				}
+																			}
+																		}
+																	}
+																}
+															}
+														}
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	if ( var_224 ) {
+		var_209 = var_208
+		var_115 = strf("%02X", var_208)
+		var_115 += " (" + strf("%02X", peek(var_187, var_206)) + ")"
+		var_206++
+		smfwInsertMetaTextEventA var_202, var_203, var_205, 1, "Error: Unseen Event::" + var_115
+		var_163++
+		var_164++
+	}
+	return
+*label_82
+	var_168 = var_227 & 7
+	var_115 = "CHAN = "
+	var_116 = strf("%02X", var_227)
+	var_115 += var_116 + " -> "
+	if ( var_168 == 1 ) {
+		var_115 += "SQ1"
+	}
+	else {
+		if ( var_168 == 2 ) {
+			var_115 += "SQ2"
+		}
+		else {
+			if ( var_168 == 3 ) {
+				var_115 += "RAM"
+			}
+			else {
+				if ( var_168 == 4 ) {
+					var_115 += "NOI"
+				}
+				else {
+					if ( var_168 == 0 ) {
+						if ( var_227 == 128 ) {
+							var_115 += "DIR (RHYTHM)"
+						}
+						else {
+							if ( var_227 == 0 | var_227 == 8 | var_227 == 32 ) {
+								var_115 += "DIR (MELODY)"
+							}
+							else {
+								var_115 += "DIR?"
+							}
+						}
+					}
+					else {
+						var_115 += "???"
+					}
+				}
+			}
+		}
+	}
+	if ( var_171 == 0 ) {
+		smfwInsertMetaTextEventA var_202, var_203, var_205, 1, var_115
+	}
+	if ( var_168 == 0 ) {
+		var_168 = peek(var_187, var_226 + 8)
+		if ( var_171 == 0 ) {
+			smfwInsertMetaTextEventA var_202, var_203, var_205, 1, "AR = " + var_168
+		}
+		var_168 = peek(var_187, var_226 + 9)
+		if ( var_171 == 0 ) {
+			smfwInsertMetaTextEventA var_202, var_203, var_205, 1, "DR = " + var_168
+		}
+		var_168 = peek(var_187, var_226 + 10)
+		if ( var_171 == 0 ) {
+			smfwInsertMetaTextEventA var_202, var_203, var_205, 1, "SR = " + var_168
+		}
+		var_168 = peek(var_187, var_226 + 11)
+		if ( var_171 == 0 ) {
+			smfwInsertMetaTextEventA var_202, var_203, var_205, 1, "RR = " + var_168
+		}
+	}
+	else {
+		if ( var_168 == 1 | var_168 == 2 ) {
+			var_115 = "DUTY = "
+			if ( var_228 == 0 ) {
+				var_115 += "12.5%"
+			}
+			else {
+				if ( var_228 == 1 ) {
+					var_115 += "25%"
+				}
+				else {
+					if ( var_228 == 2 ) {
+						var_115 += "50%"
+					}
+					else {
+						if ( var_228 == 3 ) {
+							var_115 += "75%"
+						}
+						else {
+							var_115 += "???"
+						}
+					}
+				}
+			}
+			if ( var_171 == 0 ) {
+				smfwInsertMetaTextEventA var_202, var_203, var_205, 1, var_115
+			}
+		}
+	}
+	return
+*label_83
+	var_115 = strf("%x", var_226)
+	var_115 = "Inst header (" + var_115 + "):"
+	repeat 12
+		var_115 += " " + strf("%02X", peek(var_187, var_226 + cnt))
+	loop
+	if ( var_171 == 0 ) {
+		smfwInsertMetaTextEventA var_202, var_203, var_205, 1, var_115
+	}
+	var_200 = lpeek(var_187, var_226 + 4)
+	var_115 = strf("%x", var_200 & 33554431)
+	var_115 = "Wave header (" + var_115 + "):"
+	if ( (var_200 >> 24 & 254) != 8 ) {
+		var_200 = -1
+	}
+	else {
+		var_200 = var_200 & 33554431
+	}
+	if ( 0 <= var_200 & var_200 + 4 < var_159 ) {
+		repeat 16
+			var_115 += " " + strf("%02X", peek(var_187, var_200 + cnt))
+		loop
+		if ( var_171 == 0 ) {
+			smfwInsertMetaTextEventA var_202, var_203, var_205, 1, var_115
+		}
+	}
+	return
+*label_84
+	var_115 = var_124
+	addbksl var_115
+	chdir var_115
+	var_115 += var_125 + ".files"
+	exist var_115
+	if ( strsize >= 0 ) {
+		repeat
+			exist var_115 + cnt
+			if ( strsize < 0 ) {
+				var_115 += "" + cnt
+				break
+			}
+		loop
+	}
+	addbksl var_115
+	mktree var_115
+	chdir var_115
+	prbrng 18, 0, 128
+	repeat 128
+		prbprm 18, cnt
+		if ( var_130(cnt) == 0 ) {
+			continue
+		}
+		var_223 = cnt
+		var_226 = var_223 * 12 + var_199
+		var_227 = peek(var_187, var_226)
+		var_200 = var_227 & 7
+		var_168 = var_223 + 1
+		if ( var_200 == 0 ) {
+			var_138 = "" + var_168
+			if ( var_227 & 128 ) {
+				var_230 = lpeek(var_187, var_226 + 4)
+				var_168 = var_230 >> 24 & 254
+				var_230 = var_230 & 33554431
+				if ( var_168 == 8 & var_230 < var_159 ) {
+					var_139 = var_138
+					repeat 128
+						if ( var_131(var_223, cnt) == 0 ) {
+							continue
+						}
+						var_226 = cnt * 12 + var_230
+						var_227 = peek(var_187, var_226)
+						var_231 = var_226
+						var_200 = var_227 & 7
+						if ( var_200 == 0 ) {
+							var_138 = var_139 + "@" + cnt + ".wav"
+							gosub *label_85
+						}
+						var_226 = var_231
+						var_141 = var_139 + "@" + cnt + ".txt"
+						var_232 = strf("%06x", var_226)
+						var_142 = "Inst Header: " + var_232 + "h\n"
+						var_168 = peek(var_187, var_226 + 3)
+						if ( (var_168 & 128) == 0 ) {
+							var_142 += "Pan:0"
+						}
+						else {
+							var_200 = (var_168 & 120) >> 3
+							var_142 += " Pan:" + var_200 + "/15"
+							var_142 += "(near equal " + var_140(var_200) + " in SMF)"
+						}
+						var_200 = (var_168 & 7) - 4
+						var_142 += " Pitch:" + var_200
+						var_168 = strlen(var_142)
+						bsave var_141, var_142, var_168
+					loop
+				}
+			}
+			else {
+				if ( var_227 & 64 ) {
+					var_139 = "" + var_168
+					var_230 = lpeek(var_187, var_226 + 4)
+					var_168 = var_230 >> 24 & 254
+					var_230 = var_230 & 33554431
+					if ( var_168 != 8 ) {
+						continue
+					}
+					var_233 = lpeek(var_187, var_226 + 8)
+					var_168 = var_233 >> 24 & 254
+					var_233 = var_233 & 33554431
+					if ( var_168 != 8 ) {
+						continue
+					}
+					memcpy var_115, var_187, 128, 0, var_233
+					var_168 = var_223 + 1
+					bsave "" + var_168 + ".bin", var_115, 128
+					repeat 128
+						var_134(cnt) = 0
+					loop
+					repeat 128
+						var_168 = peek(var_187, var_233 + cnt)
+						if ( var_168 & 128 ) {
+							var_168 = (var_168 ^ 255 + 1) * (-1)
+						}
+						if ( var_134(cnt) == 0 ) {
+							var_134(cnt) = 1
+							var_200 = var_168
+							var_138 = var_139 + "@" + var_200 + ".wav"
+							var_226 = var_168 * 12 + var_230
+							gosub *label_85
+						}
+					loop
+				}
+				else {
+					var_138 += ".wav"
+					gosub *label_85
+				}
+			}
+		}
+		else {
+			if ( var_200 == 3 ) {
+				var_138 = "" + var_168
+				var_234 = lpeek(var_187, var_226 + 4)
+				var_168 = var_234 >> 24 & 254
+				var_234 = var_234 & 33554431
+				if ( var_168 != 8 | var_234 + 16 >= var_159 ) {
+					continue
+				}
+				memcpy var_146, var_187, 16, 0, var_234
+				bsave var_138 + ".bin", var_146, 16
+				var_138 += ".wav"
+				gosub *label_85
+			}
+		}
+	loop
+	prbrng 18, 0, 1000
+	prbprm 18, 0
+	return
+*label_85
+	if ( var_226 + 12 >= var_159 ) {
+		return
+	}
+	var_234 = lpeek(var_187, var_226 + 4)
+	var_168 = var_234 >> 24 & 254
+	var_234 = var_234 & 33554431
+	if ( var_168 != 8 | var_234 + 15 >= var_159 ) {
+		return
+	}
+	var_227 = peek(var_187, var_226)
+	var_168 = var_227 & 7
+	if ( var_168 != 0 & var_168 != 3 ) {
+		return
+	}
+	if ( var_168 == 0 ) {
+		if ( var_227 & 8 ) {
+			var_235 = wpeek(var_187, var_234 + 5)
+		}
+		else {
+			var_235 = lpeek(var_187, var_234 + 5)
+			var_235 = var_235 & 16777215
+		}
+		var_235 = var_235 >> 2
+		if ( var_235 == 0 ) {
+			return
+		}
+		var_236 = wpeek(var_187, var_234 + 12)
+		var_168 = peek(var_187, var_234 + 14)
+		var_236 += var_168 << 16
+		if ( var_227 & 32 ) {
+			var_168 = peek(var_187, var_234)
+			if ( var_168 == 1 ) {
+				var_168 = var_236
+				var_236 = var_236 - ((var_236 >> 6) + 1)
+				sdim var_237, var_236
+				wavcpy20 var_237, var_187, var_168, 0, var_234 + 16
+			}
+			else {
+				sdim var_237, var_236
+				memcpy var_237, var_187, var_236, 0, var_234 + 16
+			}
+		}
+		else {
+			sdim var_237, var_236
+			memcpy var_237, var_187, var_236, 0, var_234 + 16
+		}
+		cnvsign8 var_237, var_236, 0
+	}
+	else {
+		if ( var_168 == 3 ) {
+			memcpy var_146, var_187, 16, 0, var_234
+			repeat 32
+				var_168 = peek(var_146, cnt >> 1)
+				if ( cnt & 1 ) {
+					var_168 = var_168 & 15
+				}
+				else {
+					var_168 = var_168 >> 4
+				}
+				poke var_147, cnt, (var_168 << 2) + 98
+			loop
+			var_236 = 32 * 7 * 440
+			sdim var_237, var_236
+			repeat 440
+				var_200 = cnt
+				repeat 32
+					var_168 = peek(var_147, cnt)
+					memset var_237, var_168, 7, (var_200 * 32 + cnt) * 7
+				loop
+			loop
+			var_235 = 32 * 7 * 440
+		}
+	}
+	dim var_238, 11
+	var_238 = 1179011410, 0, 1163280727, 544501094
+	var_238(4) = 16, 65537, 0, 0
+	var_238(8) = 524289, 1635017060, 0
+	lpoke var_238, 4, 44 + var_236 - 8
+	lpoke var_238, 24, var_235
+	lpoke var_238, 28, var_235
+	lpoke var_238, 40, var_236
+	bsave var_138, var_238, 44
+	bsave var_138, var_237, var_236, 44
+	sdim var_237, 64
+	return
