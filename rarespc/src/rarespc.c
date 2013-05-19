@@ -122,7 +122,7 @@ struct TagRareSpcSeqStat {
     int transpose;              // global transpose
     int looped;                 // how many times the song looped (internal)
     bool active;                // if the seq is still active
-    byte a27;
+    byte tempoScale;            // tempo scalar (DKC1=$27, DKC2=$1f)
     byte a2a;
     RareSpcVerInfo ver;         // game version info
     RareSpcTrackStat track[SPC_TRACK_MAX]; // status of each tracks
@@ -256,10 +256,19 @@ static void rareSpcResetParam (RareSpcSeqStat *seq)
 
     seq->tick = 0;
     seq->time = 0;
-    seq->timerFreq = 0x3c;
     seq->transpose = 0;
     seq->looped = 0;
     seq->active = true;
+
+    switch(seq->ver.id)
+    {
+    case SPC_VER_DKC1:
+        seq->timerFreq = 0x3c;
+        break;
+    case SPC_VER_DKC2:
+        seq->timerFreq = 0x64;
+        break;
+    }
 
     // reset each track as well
     for (track = 0; track < SPC_TRACK_MAX; track++) {
@@ -343,7 +352,7 @@ static bool rareSpcDetectSeq (RareSpcSeqStat *seq)
         seq->track[tr].active = true;
         result = true;
     }
-    seq->a27 = mget2l(&aRAM[seqHeaderAddr + 0x10]);
+    seq->tempoScale = mget2l(&aRAM[seqHeaderAddr + 0x10]);
     seq->a2a = mget2l(&aRAM[seqHeaderAddr + 0x11]);
     rareSpcResetParam(seq);
     return result;
@@ -420,7 +429,7 @@ static void printHtmlInfoListMore (RareSpcSeqStat *seq)
         myprintf(" %d:$%04X", track + 1, seq->track[track].active ? seq->track[track].pos : 0x0000);
     }
     myprintf("</li>\n");
-    myprintf("          <li>More 2 Bytes: %02x %02x</li>\n", seq->a27, seq->a2a);
+    myprintf("          <li>More 2 Bytes: %02x %02x</li>\n", seq->tempoScale, seq->a2a);
 }
 
 /** output other seq detail for valid seq. */
@@ -480,8 +489,8 @@ static void printEventTableFooter (RareSpcSeqStat *seq)
 /** convert SPC tempo into bpm. */
 static double rareSpcTempo (RareSpcSeqStat *seq)
 {
-    return (double) 60000000 / (seq->timebase * (125 * seq->timerFreq)) * ((double) seq->a27 / 256); // 1tick = (timer0) (125*t) us
-//    return (double) 60000000 / (seq->timebase * (125 * seq->timerFreq)); // 1tick = (timer0) (125*t) us
+    return (double) 60000000 / (seq->timebase * (125 * seq->timerFreq)) * ((double) seq->tempoScale / 256); // 1tick = (timer0) (125*t) us
+//  return (double) 60000000 / (seq->timebase * (125 * seq->timerFreq)); // 1tick = (timer0) (125*t) us
 }
 
 /** insert volume/panpot from current volume L/R. */
@@ -795,6 +804,36 @@ static void rareSpcEventUnknown4 (RareSpcSeqStat *seq, SeqEventReport *ev)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
+/** vcmd: unknown event (7 byte args). */
+static void rareSpcEventUnknown7 (RareSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2, arg3, arg4, arg5, arg6, arg7;
+    RareSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    ev->size += 7;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+    arg3 = seq->aRAM[*p];
+    (*p)++;
+    arg4 = seq->aRAM[*p];
+    (*p)++;
+    arg5 = seq->aRAM[*p];
+    (*p)++;
+    arg6 = seq->aRAM[*p];
+    (*p)++;
+    arg7 = seq->aRAM[*p];
+    (*p)++;
+
+    rareSpcEventUnknownInline(seq, ev);
+    sprintf(argDumpStr, ", arg1 = %d, arg2 = %d, arg3 = %d, arg4 = %d, arg5 = %d, arg6 = %d, arg7 = %d", arg1, arg2, arg3, arg4, arg5, arg6, arg7);
+    strcat(ev->note, argDumpStr);
+    if (!rareSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
 /** vcmd 00: end of track. */
 static void rareSpcEventEndOfTrack (RareSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -843,6 +882,30 @@ static void rareSpcVolumeLR (RareSpcSeqStat *seq, SeqEventReport *ev)
     tr->volL = arg1;
     tr->volR = arg2;
     rareSpcInsertVolPan(seq, ev->track);
+}
+
+/** vcmd 02: set L/R volume. (DKC2) */
+static void rareSpcVolumeLR2 (RareSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    RareSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Event %02X (Volume+Note?), L = %d, R = %d", ev->code, arg1, arg2);
+    strcat(ev->classStr, " ev-vol2");
+
+    tr->volL = arg1;
+    tr->volR = arg2;
+    rareSpcInsertVolPan(seq, ev->track);
+
+    if (!rareSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmd 03: jump. */
@@ -970,8 +1033,8 @@ static void rareSpcEventDefDurOff (RareSpcSeqStat *seq, SeqEventReport *ev)
     tr->note.defDur = 0;
 }
 
-/** vcmd 08: ?. */
-static void rareSpcEvent08PitchUp (RareSpcSeqStat *seq, SeqEventReport *ev)
+/** vcmd 08: pitch slide up. */
+static void rareSpcEventPitchSlideUp (RareSpcSeqStat *seq, SeqEventReport *ev)
 {
     int arg1, arg2, arg3, arg4, arg5;
     RareSpcTrackStat *tr = &seq->track[ev->track];
@@ -989,15 +1052,15 @@ static void rareSpcEvent08PitchUp (RareSpcSeqStat *seq, SeqEventReport *ev)
     arg5 = seq->aRAM[*p];
     (*p)++;
 
-    rareSpcEventUnknownInline(seq, ev);
-    sprintf(argDumpStr, " (Pitch Slide Up), arg1 = %d, arg2 = %d, arg3 = %d, arg4 = %d, arg5 = %d", arg1, arg2, arg3, arg4, arg5);
-    strcat(ev->note, argDumpStr);
+    sprintf(ev->note, "Pitch Slide Up, arg1 = %d, arg2 = %d, arg3 = %d, arg4 = %d, arg5 = %d", arg1, arg2, arg3, arg4, arg5);
+    strcat(ev->classStr, " ev-pitchslideup");
+
     if (!rareSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
-/** vcmd 09: ?. */
-static void rareSpcEvent09PitchDown (RareSpcSeqStat *seq, SeqEventReport *ev)
+/** vcmd 09: pitch slide down. */
+static void rareSpcEventPitchSlideDown (RareSpcSeqStat *seq, SeqEventReport *ev)
 {
     int arg1, arg2, arg3, arg4, arg5;
     RareSpcTrackStat *tr = &seq->track[ev->track];
@@ -1015,27 +1078,27 @@ static void rareSpcEvent09PitchDown (RareSpcSeqStat *seq, SeqEventReport *ev)
     arg5 = seq->aRAM[*p];
     (*p)++;
 
-    rareSpcEventUnknownInline(seq, ev);
-    sprintf(argDumpStr, " (Pitch Slide Down), arg1 = %d, arg2 = %d, arg3 = %d, arg4 = %d, arg5 = %d", arg1, arg2, arg3, arg4, arg5);
-    strcat(ev->note, argDumpStr);
+    sprintf(ev->note, "Pitch Slide Down, arg1 = %d, arg2 = %d, arg3 = %d, arg4 = %d, arg5 = %d", arg1, arg2, arg3, arg4, arg5);
+    strcat(ev->classStr, " ev-pitchslidedown");
+
     if (!rareSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
-/** vcmd 0a: ?. */
-static void rareSpcEvent0APitchNone (RareSpcSeqStat *seq, SeqEventReport *ev)
+/** vcmd 0a: pitch slide off. */
+static void rareSpcEventPitchSlideOff (RareSpcSeqStat *seq, SeqEventReport *ev)
 {
     RareSpcTrackStat *tr = &seq->track[ev->track];
 
-    sprintf(ev->note, "Unknown Event %02X (No Pitch Slide)", ev->code);
-    strcat(ev->classStr, " unknown");
+    sprintf(ev->note, "Pitch Slide Off");
+    strcat(ev->classStr, " ev-pitchslideoff");
+
     if (!rareSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
-    fprintf(stderr, "Warning: Skipped unknown event %02X [Track %d]\n", ev->code, ev->track + 1);
 }
 
-/** vcmd 0b: ?. */
-static void rareSpcEvent0B (RareSpcSeqStat *seq, SeqEventReport *ev)
+/** vcmd 0b: set tempo. */
+static void rareSpcEventSetTempo (RareSpcSeqStat *seq, SeqEventReport *ev)
 {
     RareSpcTrackStat *tr = &seq->track[ev->track];
     int arg1;
@@ -1045,18 +1108,17 @@ static void rareSpcEvent0B (RareSpcSeqStat *seq, SeqEventReport *ev)
     arg1 = seq->aRAM[*p];
     (*p)++;
 
-    sprintf(ev->note, "Unknown Event %02X (Tempo Up), arg1 = %d", ev->code, arg1);
-    strcat(ev->classStr, " unknown");
+    sprintf(ev->note, "Set Tempo, scale = %d / 256", ev->code, arg1);
+    strcat(ev->classStr, " ev-settempo");
     if (!rareSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
-    fprintf(stderr, "Warning: Skipped unknown event %02X [Track %d]\n", ev->code, ev->track + 1);
 
-    seq->a27 = arg1;
+    seq->tempoScale = arg1;
     smfInsertTempoBPM(seq->smf, ev->tick, 0, rareSpcTempo(seq));
 }
 
-/** vcmd 0c: ?. */
-static void rareSpcEvent0C (RareSpcSeqStat *seq, SeqEventReport *ev)
+/** vcmd 0c: add tempo. */
+static void rareSpcEventAddTempo (RareSpcSeqStat *seq, SeqEventReport *ev)
 {
     RareSpcTrackStat *tr = &seq->track[ev->track];
     int arg1;
@@ -1066,19 +1128,18 @@ static void rareSpcEvent0C (RareSpcSeqStat *seq, SeqEventReport *ev)
     arg1 = utos1(seq->aRAM[*p]);
     (*p)++;
 
-    sprintf(ev->note, "Unknown Event %02X (Tempo Down), arg1 = %d", ev->code, arg1);
-    strcat(ev->classStr, " unknown");
+    sprintf(ev->note, "Add Tempo, scale = %d / 256", ev->code, arg1);
+    strcat(ev->classStr, " ev-addtempo");
     if (!rareSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
-    fprintf(stderr, "Warning: Skipped unknown event %02X [Track %d]\n", ev->code, ev->track + 1);
 
-    seq->a27 += arg1;
-    seq->a27 &= 0xff;
+    seq->tempoScale += arg1;
+    seq->tempoScale &= 0xff;
     smfInsertTempoBPM(seq->smf, ev->tick, 0, rareSpcTempo(seq));
 }
 
-/** vcmd 0e: ?. */
-static void rareSpcEvent0E (RareSpcSeqStat *seq, SeqEventReport *ev)
+/** vcmd 0e: vibrato off. */
+static void rareSpcEvent0EVibratoOff (RareSpcSeqStat *seq, SeqEventReport *ev)
 {
     RareSpcTrackStat *tr = &seq->track[ev->track];
 
@@ -1089,8 +1150,8 @@ static void rareSpcEvent0E (RareSpcSeqStat *seq, SeqEventReport *ev)
     fprintf(stderr, "Warning: Skipped unknown event %02X [Track %d]\n", ev->code, ev->track + 1);
 }
 
-/** vcmd 0f: ?. */
-static void rareSpcEvent0F (RareSpcSeqStat *seq, SeqEventReport *ev)
+/** vcmd 0f: set vibrato. */
+static void rareSpcEvent0FVibrato (RareSpcSeqStat *seq, SeqEventReport *ev)
 {
     int arg1, arg2, arg3, arg4;
     RareSpcTrackStat *tr = &seq->track[ev->track];
@@ -1504,19 +1565,19 @@ static void rareSpcSetEventList (RareSpcSeqStat *seq)
     case SPC_VER_DKC1:
         event[0x00] = (RareSpcEvent) rareSpcEventEndOfTrack;
         event[0x01] = (RareSpcEvent) rareSpcEventInstrument;
-        event[0x02] = (RareSpcEvent) rareSpcVolumeLR;
+        event[0x02] = (RareSpcEvent) rareSpcVolumeLR2;
         event[0x03] = (RareSpcEvent) rareSpcEventJump;
         event[0x04] = (RareSpcEvent) rareSpcEventSubroutine;
         event[0x05] = (RareSpcEvent) rareSpcEventEndSubroutine;
         event[0x06] = (RareSpcEvent) rareSpcEventDefDurOn;
         event[0x07] = (RareSpcEvent) rareSpcEventDefDurOff;
-        event[0x08] = (RareSpcEvent) rareSpcEvent08PitchUp;
-        event[0x09] = (RareSpcEvent) rareSpcEvent09PitchDown;
-        event[0x0a] = (RareSpcEvent) rareSpcEvent0APitchNone;
-        event[0x0b] = (RareSpcEvent) rareSpcEvent0B;
-        event[0x0c] = (RareSpcEvent) rareSpcEvent0C;
-        event[0x0e] = (RareSpcEvent) rareSpcEvent0E;
-        event[0x0f] = (RareSpcEvent) rareSpcEvent0F;
+        event[0x08] = (RareSpcEvent) rareSpcEventPitchSlideUp;
+        event[0x09] = (RareSpcEvent) rareSpcEventPitchSlideDown;
+        event[0x0a] = (RareSpcEvent) rareSpcEventPitchSlideOff;
+        event[0x0b] = (RareSpcEvent) rareSpcEventSetTempo;
+        event[0x0c] = (RareSpcEvent) rareSpcEventAddTempo;
+        event[0x0e] = (RareSpcEvent) rareSpcEvent0EVibratoOff;
+        event[0x0f] = (RareSpcEvent) rareSpcEvent0FVibrato;
         event[0x10] = (RareSpcEvent) rareSpcEventADSR;
         event[0x11] = (RareSpcEvent) rareSpcEventMasterVolume;
         event[0x12] = (RareSpcEvent) rareSpcEvent12;
@@ -1540,20 +1601,22 @@ static void rareSpcSetEventList (RareSpcSeqStat *seq)
         }
     case SPC_VER_DKC2:
         event[0x00] = (RareSpcEvent) rareSpcEventEndOfTrack;
-        //event[0x01] = (RareSpcEvent) rareSpcEventInstrument;
-        event[0x01] = (RareSpcEvent) rareSpcEventUnknown1;
+        event[0x01] = (RareSpcEvent) rareSpcEventInstrument;
+        //event[0x01] = (RareSpcEvent) rareSpcEventUnknown1;
+        event[0x02] = (RareSpcEvent) rareSpcVolumeLR; // and reuse the last note?
         //event[0x02] = (RareSpcEvent) rareSpcEventUnknown2;
-        event[0x02] = (RareSpcEvent) rareSpcVolumeLR;
         event[0x03] = (RareSpcEvent) rareSpcEventJump;
         event[0x04] = (RareSpcEvent) rareSpcEventSubroutine;
         event[0x05] = (RareSpcEvent) rareSpcEventEndSubroutine;
         event[0x06] = (RareSpcEvent) rareSpcEventDefDurOn;
         event[0x07] = (RareSpcEvent) rareSpcEventDefDurOff;
-        event[0x08] = (RareSpcEvent) rareSpcEvent08PitchUp;
-        event[0x09] = (RareSpcEvent) rareSpcEvent09PitchDown;
-        event[0x0a] = (RareSpcEvent) rareSpcEvent0APitchNone;
-        //event[0x09] = (RareSpcEvent) rareSpcEventUnknown5;
-        event[0x0b] = (RareSpcEvent) rareSpcEventUnknown1;
+        event[0x08] = (RareSpcEvent) rareSpcEventPitchSlideUp;
+        event[0x09] = (RareSpcEvent) rareSpcEventPitchSlideDown;
+        event[0x0a] = (RareSpcEvent) rareSpcEventPitchSlideOff;
+        event[0x0b] = (RareSpcEvent) rareSpcEventSetTempo;
+        event[0x0c] = (RareSpcEvent) rareSpcEventAddTempo;
+        event[0x0d] = (RareSpcEvent) rareSpcEventUnknown3;
+        event[0x0e] = (RareSpcEvent) rareSpcEventUnknown0;
         event[0x0f] = (RareSpcEvent) rareSpcEventUnknown4;
         event[0x10] = (RareSpcEvent) rareSpcEventUnknown2;
         event[0x11] = (RareSpcEvent) rareSpcEventUnidentified; // null
@@ -1566,21 +1629,22 @@ static void rareSpcSetEventList (RareSpcSeqStat *seq)
         event[0x18] = (RareSpcEvent) rareSpcEventEchoFIR;
         event[0x19] = (RareSpcEvent) rareSpcEventUnknown1;
         event[0x1a] = (RareSpcEvent) rareSpcEventUnknown0;
+        event[0x1b] = (RareSpcEvent) rareSpcEventUnknown0;
         event[0x1c] = (RareSpcEvent) rareSpcEventUnknown1;
         event[0x1d] = (RareSpcEvent) rareSpcEventUnknown1;
         event[0x1e] = (RareSpcEvent) rareSpcEventUnknown4;
         event[0x1f] = (RareSpcEvent) rareSpcEventEchoDelay;
         event[0x20] = (RareSpcEvent) rareSpcEventUnknown0;
         event[0x21] = (RareSpcEvent) rareSpcEventSubroutineOnce;
-        //event[0x22] = (RareSpcEvent) rareSpcEventUnknown8;
+        event[0x22] = (RareSpcEvent) rareSpcEventUnknown7;
         event[0x23] = (RareSpcEvent) rareSpcEventUnknown1;
         event[0x24] = (RareSpcEvent) rareSpcEventUnknown1;
         event[0x25] = (RareSpcEvent) rareSpcEventUnidentified; // null
+        event[0x26] = (RareSpcEvent) rareSpcEventUnknown4;
+        event[0x27] = (RareSpcEvent) rareSpcEventUnknown4;
         event[0x28] = (RareSpcEvent) rareSpcEventUnidentified; // null
         event[0x29] = (RareSpcEvent) rareSpcEventUnidentified; // null
         event[0x2a] = (RareSpcEvent) rareSpcEventUnidentified; // null
-        //event[0x2b] = (RareSpcEvent) rareSpcEventUnknown0;
-        //event[0x2c] = (RareSpcEvent) rareSpcEventUnknown0;
         event[0x2b] = (RareSpcEvent) rareSpcEventLongDurOn;
         event[0x2c] = (RareSpcEvent) rareSpcEventLongDurOff;
         event[0x2d] = (RareSpcEvent) rareSpcEventUnidentified; // null

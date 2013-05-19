@@ -738,7 +738,7 @@
 0b72: 3f 64 0b  call  $0b64
 0b75: 3f 8b 0b  call  $0b8b
 0b78: 8f 02 00  mov   $00,#$02
-0b7b: 8f 00 01  mov   $01,#$00          ; $00/1 = 2
+0b7b: 8f 00 01  mov   $01,#$00
 ; add $00/1 to reading ptr
 0b7e: f4 44     mov   a,$44+x
 0b80: fb 54     mov   y,$54+x
