@@ -740,7 +740,7 @@
 0bca: d5 30 01  mov   $0130+x,a
 0bcd: 5f 44 0c  jmp   $0c44
 
-; vcmd 08
+; vcmd 08 - pitch slide up
 0bd0: ce        pop   x
 0bd1: f5 50 01  mov   a,$0150+x
 0bd4: 08 01     or    a,#$01
@@ -766,7 +766,7 @@
 0bfe: 8f 06 01  mov   $01,#$06
 0c01: 5f ce 0a  jmp   $0ace
 
-; vcmd 09
+; vcmd 09 - pitch slide down
 0c04: ce        pop   x
 0c05: f5 50 01  mov   a,$0150+x
 0c08: 08 01     or    a,#$01
@@ -794,7 +794,7 @@
 0c35: 8f 06 01  mov   $01,#$06
 0c38: 5f ce 0a  jmp   $0ace
 
-; vcmd 0a
+; vcmd 0a - pitch slide off
 0c3b: ce        pop   x
 0c3c: f5 50 01  mov   a,$0150+x
 0c3f: 28 fe     and   a,#$fe
@@ -933,7 +933,7 @@
 0d3a: 8f 02 01  mov   $01,#$02
 0d3d: 5f ce 0a  jmp   $0ace
 
-; vcmd 13
+; vcmd 13 - transpose
 0d40: ce        pop   x
 0d41: 8d 01     mov   y,#$01
 0d43: db 3c     mov   $3c+x,y
@@ -944,7 +944,7 @@
 0d4e: 8f 02 01  mov   $01,#$02
 0d51: 5f ce 0a  jmp   $0ace
 
-; vcmd 14
+; vcmd 14 - transpose (rel)
 0d54: ce        pop   x
 0d55: 8d 01     mov   y,#$01
 0d57: db 3c     mov   $3c+x,y
@@ -1333,9 +1333,9 @@
 1019: dw $0b59  ; 05 - end subroutine
 101b: dw $0b9f  ; 06 - default duration on
 101d: dw $0bc4  ; 07 - default duration off
-101f: dw $0bd0  ; 08
-1021: dw $0c04  ; 09
-1023: dw $0c3b  ; 0a
+101f: dw $0bd0  ; 08 - pitch slide up
+1021: dw $0c04  ; 09 - pitch slide down
+1023: dw $0c3b  ; 0a - pitch slide off
 1025: dw $0c51  ; 0b
 1027: dw $0c66  ; 0c
 1029: dw $0c73  ; 0d
@@ -1344,8 +1344,8 @@
 102f: dw $0cda  ; 10 - set ADSR envelope
 1031: dw $0cf4  ; 11 - master volume
 1033: dw $0d2d  ; 12
-1035: dw $0d40  ; 13
-1037: dw $0d54  ; 14
+1035: dw $0d40  ; 13 - transpose
+1037: dw $0d54  ; 14 - transpose (rel)
 1039: dw $0d6c  ; 15 - echo param
 103b: dw $0d9b  ; 16 - voice echo on
 103d: dw $0db6  ; 17 - voice echo off
