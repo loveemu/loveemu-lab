@@ -353,9 +353,9 @@
 ; dispatch note (80-ff) and continue
 0862: 3f 67 08  call  $0867
 0865: 2f e3     bra   $084a
-; vcmd 80-ff - note
 0867: 68 80     cmp   a,#$80
 0869: d0 20     bne   $088b
+; vcmd 80 - rest
 086b: f5 e0 01  mov   a,$01e0+x
 086e: d0 18     bne   $0888
 0870: f5 95 0f  mov   a,$0f95+x
@@ -372,13 +372,14 @@
 0886: c4 f3     mov   $f3,a
 0888: 5f 83 09  jmp   $0983
 
+; vcmd 81-ff - note
 088b: 68 e0     cmp   a,#$e0
-088d: 30 0a     bmi   $0899
+088d: 30 0a     bmi   $0899             ; 81-df - normal note
 088f: 68 e1     cmp   a,#$e1
 0891: f0 04     beq   $0897
-0893: f4 0c     mov   a,$0c+x
+0893: f4 0c     mov   a,$0c+x           ; e0,e2-ff - note by vcmd 1c
 0895: 2f 02     bra   $0899
-0897: f4 14     mov   a,$14+x
+0897: f4 14     mov   a,$14+x           ; e1 - note by vcmd 1d
 0899: 60        clrc
 089a: 88 24     adc   a,#$24
 089c: 95 40 01  adc   a,$0140+x

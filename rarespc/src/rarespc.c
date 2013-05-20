@@ -16,7 +16,7 @@
 
 #define APPNAME         "Rare SPC2MIDI"
 #define APPSHORTNAME    "rarespc"
-#define VERSION         "[2013-05-20]"
+#define VERSION         "[2013-05-21]"
 #define AUTHOR          "loveemu"
 #define WEBSITE         "http://loveemu.yh.land.to/"
 
@@ -124,6 +124,8 @@ struct TagRareSpcSeqStat {
     bool active;                // if the seq is still active
     byte tempoScale;            // tempo scalar (DKC1=$27, DKC2=$1f)
     byte a2a;
+    byte altNoteByte1;
+    byte altNoteByte2;
     RareSpcVerInfo ver;         // game version info
     RareSpcTrackStat track[SPC_TRACK_MAX]; // status of each tracks
 };
@@ -1361,6 +1363,40 @@ static void rareSpcEventNoiseOff (RareSpcSeqStat *seq, SeqEventReport *ev)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
+/** vcmd 1c: set alt note 1. (DKC2) */
+static void rareSpcEventSetAltNote1 (RareSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    RareSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    ev->size += 1;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Set Alt Note, note = $%02X", arg1);
+    strcat(ev->classStr, " ev-altnote1");
+
+    seq->altNoteByte1 = (byte) arg1;
+}
+
+/** vcmd 1d: set alt note 2. (DKC2) */
+static void rareSpcEventSetAltNote2 (RareSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    RareSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    ev->size += 1;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Set Alt Note 2, note = $%02X", arg1);
+    strcat(ev->classStr, " ev-altnote2");
+
+    seq->altNoteByte2 = (byte) arg1;
+}
+
 /** vcmd 1f: set echo delay. (DKC2) */
 static void rareSpcEventEchoDelay (RareSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -1503,10 +1539,26 @@ static void rareSpcEventTremoloOff (RareSpcSeqStat *seq, SeqEventReport *ev)
 /** vcmd 80-ff: note. */
 static void rareSpcEventNote (RareSpcSeqStat *seq, SeqEventReport *ev)
 {
-    int note = (ev->code - 0x81);
-    bool rest = (ev->code == 0x80);
     RareSpcTrackStat *tr = &seq->track[ev->track];
     int *p = &tr->pos;
+    byte noteByte = ev->code;
+    int note;
+    bool rest;
+
+    if (seq->ver.id == SPC_VER_DKC2)
+    {
+        if (ev->code == 0xe1)
+        {
+            noteByte = seq->altNoteByte2;
+        }
+        else if (ev->code >= 0xe0)
+        {
+            noteByte = seq->altNoteByte1;
+        }
+    }
+
+    note = (noteByte - 0x81);
+    rest = (noteByte == 0x80);
 
     if (!tr->note.defDur) {
         if (tr->longDur) {
@@ -1533,27 +1585,6 @@ static void rareSpcEventNote (RareSpcSeqStat *seq, SeqEventReport *ev)
         sprintf(argDumpStr, ", len = %d", tr->note.dur);
         strcat(ev->note, argDumpStr);
         strcat(ev->classStr, " ev-note");
-    }
-
-    if (seq->ver.id == SPC_VER_DKC2)
-    {
-        if (ev->code == 0xe1)
-        {
-            char stemp[256];
-            sprintf(stemp, "Unknown Event %02X", ev->code);
-            smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, stemp);
-        }
-        else if (ev->code >= 0xe0)
-        {
-            char stemp[256];
-            sprintf(stemp, "Unknown Event %02X", ev->code);
-            smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, stemp);
-        }
-        else
-        {
-            //if (!rareSpcLessTextInSMF)
-            //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
-        }
     }
 
     // outputput old note first
@@ -1672,8 +1703,8 @@ static void rareSpcSetEventList (RareSpcSeqStat *seq)
         event[0x19] = (RareSpcEvent) rareSpcEventUnknown1;
         event[0x1a] = (RareSpcEvent) rareSpcEventUnknown0;
         event[0x1b] = (RareSpcEvent) rareSpcEventUnknown0;
-        event[0x1c] = (RareSpcEvent) rareSpcEventUnknown1; // reuse note
-        event[0x1d] = (RareSpcEvent) rareSpcEventUnknown1;
+        event[0x1c] = (RareSpcEvent) rareSpcEventSetAltNote1;
+        event[0x1d] = (RareSpcEvent) rareSpcEventSetAltNote2;
         event[0x1e] = (RareSpcEvent) rareSpcEventUnknown4;
         event[0x1f] = (RareSpcEvent) rareSpcEventEchoDelay;
         event[0x20] = (RareSpcEvent) rareSpcEventUnknown0;
