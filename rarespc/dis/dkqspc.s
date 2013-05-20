@@ -685,7 +685,7 @@
 0b14: d5 d4 02  mov   $02d4+x,a
 0b17: 6f        ret
 
-; vcmd 00
+; vcmd 00 - end of track
 0b18: ce        pop   x
 0b19: e8 00     mov   a,#$00
 0b1b: d5 10 01  mov   $0110+x,a
@@ -734,7 +734,7 @@
 0b6f: d4 24     mov   $24+x,a
 0b71: 6f        ret
 
-; vcmd 01
+; vcmd 01 - set instrument
 0b72: 3f 64 0b  call  $0b64
 0b75: 3f 8b 0b  call  $0b8b
 0b78: 8f 02 00  mov   $00,#$02
@@ -766,27 +766,28 @@
 0ba4: f7 00     mov   a,($00)+y
 0ba6: d4 64     mov   $64+x,a
 0ba8: fc        inc   y
-0ba9: 3f c2 0b  call  $0bc2
+0ba9: 3f c2 0b  call  $0bc2             ; set L/R volume
 0bac: fc        inc   y
 0bad: 3f 4e 0e  call  $0e4e
 0bb0: 8f 08 00  mov   $00,#$08
 0bb3: 5f 7b 0b  jmp   $0b7b
 
-; vcmd 02
+; vcmd 02 - set L/R volume
 0bb6: 3f 64 0b  call  $0b64
 0bb9: 3f c2 0b  call  $0bc2
 0bbc: 8f 03 00  mov   $00,#$03
 0bbf: 5f 7b 0b  jmp   $0b7b
-
+; set volume - stereo or mono?
 0bc2: e4 1d     mov   a,$1d
 0bc4: d0 0c     bne   $0bd2
+; stereo
 0bc6: f7 00     mov   a,($00)+y
-0bc8: d5 54 02  mov   $0254+x,a
+0bc8: d5 54 02  mov   $0254+x,a         ; set left volume
 0bcb: fc        inc   y
 0bcc: f7 00     mov   a,($00)+y
-0bce: d5 64 02  mov   $0264+x,a
+0bce: d5 64 02  mov   $0264+x,a         ; set right volume
 0bd1: 6f        ret
-
+; mono (L+R)/2
 0bd2: f7 00     mov   a,($00)+y
 0bd4: 10 03     bpl   $0bd9
 0bd6: 48 ff     eor   a,#$ff
@@ -806,7 +807,7 @@
 0bec: d5 64 02  mov   $0264+x,a
 0bef: 6f        ret
 
-; vcmd 23
+; vcmd 23 - set L/R volume (center)
 0bf0: 3f 64 0b  call  $0b64
 0bf3: d5 54 02  mov   $0254+x,a
 0bf6: 3f cc 0b  call  $0bcc
@@ -1080,7 +1081,7 @@
 0de6: d4 24     mov   $24+x,a
 0de8: 5f 7b 0b  jmp   $0b7b
 
-; vcmd 0b
+; vcmd 0b - set tempo
 0deb: ce        pop   x
 0dec: 8d 01     mov   y,#$01
 0dee: f7 00     mov   a,($00)+y
@@ -1088,7 +1089,7 @@
 0df2: 3f 69 0b  call  $0b69
 0df5: 5f 78 0b  jmp   $0b78
 
-; vcmd 0c
+; vcmd 0c - add tempo
 0df8: ce        pop   x
 0df9: 8d 01     mov   y,#$01
 0dfb: f7 00     mov   a,($00)+y
@@ -1097,7 +1098,7 @@
 0e00: c4 1f     mov   $1f,a
 0e02: 5f f2 0d  jmp   $0df2
 
-; vcmd 0e
+; vcmd 0e - vibrato off
 0e05: ce        pop   x
 0e06: f5 50 01  mov   a,$0150+x
 0e09: 28 fd     and   a,#$fd
@@ -1110,7 +1111,7 @@
 0e14: 3f 25 0e  call  $0e25
 0e17: 5f 6a 0d  jmp   $0d6a
 
-; vcmd 0f
+; vcmd 0f - vibrato
 0e1a: ce        pop   x
 0e1b: 8d 04     mov   y,#$04
 0e1d: f7 00     mov   a,($00)+y
@@ -1132,7 +1133,7 @@
 0e41: d5 34 02  mov   $0234+x,a
 0e44: 6f        ret
 
-; vcmd 10
+; vcmd 10 - set ADSR envelope
 0e45: 3f 64 0b  call  $0b64
 0e48: 3f 4e 0e  call  $0e4e
 0e4b: 5f bc 0b  jmp   $0bbc
@@ -1172,7 +1173,7 @@
 0e82: d5 40 01  mov   $0140+x,a
 0e85: 5f 78 0b  jmp   $0b78
 
-; vcmd 14 - transpose (rel)
+; vcmd 14 - transpose (relative)
 0e88: 3f 64 0b  call  $0b64
 0e8b: f7 00     mov   a,($00)+y
 0e8d: 60        clrc
@@ -1202,7 +1203,7 @@
 0ebf: c4 f3     mov   $f3,a
 0ec1: 5f 6a 0d  jmp   $0d6a
 
-; vcmd 16
+; vcmd 16 - voice echo on
 0ec4: 3f 64 0b  call  $0b64
 0ec7: 8f 4d f2  mov   $f2,#$4d
 0eca: f5 95 0f  mov   a,$0f95+x
@@ -1213,7 +1214,7 @@
 0ed6: 8f 01 00  mov   $00,#$01
 0ed9: 5f 7b 0b  jmp   $0b7b
 
-; vcmd 17,30,32
+; vcmd 17,30,32 - voice echo off
 0edc: ce        pop   x
 0edd: 8f 4d f2  mov   $f2,#$4d
 0ee0: f5 95 0f  mov   a,$0f95+x
@@ -1313,9 +1314,9 @@
 0f95: db $01,$02,$04,$08,$10,$20,$40,$80
 0f9d: db $01,$02,$04,$08,$10,$20,$40,$80
 
-0fa5: dw $0b18  ; 00
-0fa7: dw $0b72  ; 01
-0fa9: dw $0bb6  ; 02
+0fa5: dw $0b18  ; 00 - end of track
+0fa7: dw $0b72  ; 01 - set instrument
+0fa9: dw $0bb6  ; 02 - set L/R volume
 0fab: dw $0cd7  ; 03 - goto
 0fad: dw $0ce6  ; 04 - call subroutine
 0faf: dw $0d34  ; 05 - end subroutine
@@ -1324,19 +1325,19 @@
 0fb5: dw $0d9b  ; 08 - pitch slide up
 0fb7: dw $0da2  ; 09 - pitch slide down
 0fb9: dw $0dd6  ; 0a - pitch slide off
-0fbb: dw $0deb  ; 0b
-0fbd: dw $0df8  ; 0c
+0fbb: dw $0deb  ; 0b - set tempo
+0fbd: dw $0df8  ; 0c - add tempo
 0fbf: dw $0e11  ; 0d
-0fc1: dw $0e05  ; 0e
-0fc3: dw $0e1a  ; 0f
-0fc5: dw $0e45  ; 10
+0fc1: dw $0e05  ; 0e - vibrato off
+0fc3: dw $0e1a  ; 0f - vibrato
+0fc5: dw $0e45  ; 10 - set ADSR envelope
 0fc7: dw $0000  ; 11
 0fc9: dw $0e71  ; 12
 0fcb: dw $0e7b  ; 13 - transpose
-0fcd: dw $0e88  ; 14 - transpose (rel)
+0fcd: dw $0e88  ; 14 - transpose (relative)
 0fcf: dw $0e97  ; 15 - echo param
-0fd1: dw $0ec4  ; 16
-0fd3: dw $0edc  ; 17
+0fd1: dw $0ec4  ; 16 - voice echo on
+0fd3: dw $0edc  ; 17 - voice echo off
 0fd4: dw $0ef6  ; 18 - set echo filter
 0fd7: dw $0f10  ; 19
 0fd9: dw $0f23  ; 1a
@@ -1348,7 +1349,7 @@
 0fe5: dw $0c02  ; 20
 0fe7: dw $0cff  ; 21 - call subroutine (once)
 0fe9: dw $0b97  ; 22
-0feb: dw $0bf0  ; 23
+0feb: dw $0bf0  ; 23 - set L/R volume (center)
 0fed: dw $0c4e  ; 24
 0fef: dw $0000  ; 25
 0ff1: dw $0f44  ; 26

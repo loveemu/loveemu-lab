@@ -806,7 +806,7 @@
 0c4c: d4 2c     mov   $2c+x,a
 0c4e: 5f ce 0a  jmp   $0ace
 
-; vcmd 0b
+; vcmd 0b - set tempo
 0c51: ce        pop   x
 0c52: 8d 01     mov   y,#$01
 0c54: f7 01     mov   a,($01)+y
@@ -818,7 +818,7 @@
 0c60: 8f 02 01  mov   $01,#$02
 0c63: 5f ce 0a  jmp   $0ace
 
-; vcmd 0c
+; vcmd 0c - add tempo
 0c66: ce        pop   x
 0c67: 8d 01     mov   y,#$01
 0c69: f7 01     mov   a,($01)+y
@@ -849,14 +849,14 @@
 0c9a: 8f 04 01  mov   $01,#$04
 0c9d: 5f ce 0a  jmp   $0ace
 
-; vcmd 0e
+; vcmd 0e - vibrato off
 0ca0: ce        pop   x
 0ca1: f5 50 01  mov   a,$0150+x
 0ca4: 28 fd     and   a,#$fd
 0ca6: d5 50 01  mov   $0150+x,a
 0ca9: 5f 44 0c  jmp   $0c44
 
-; vcmd 0f
+; vcmd 0f - vibrato
 0cac: ce        pop   x
 0cad: f5 50 01  mov   a,$0150+x
 0cb0: 08 02     or    a,#$02
@@ -944,7 +944,7 @@
 0d4e: 8f 02 01  mov   $01,#$02
 0d51: 5f ce 0a  jmp   $0ace
 
-; vcmd 14 - transpose (rel)
+; vcmd 14 - transpose (relative)
 0d54: ce        pop   x
 0d55: 8d 01     mov   y,#$01
 0d57: db 3c     mov   $3c+x,y
@@ -1336,16 +1336,16 @@
 101f: dw $0bd0  ; 08 - pitch slide up
 1021: dw $0c04  ; 09 - pitch slide down
 1023: dw $0c3b  ; 0a - pitch slide off
-1025: dw $0c51  ; 0b
-1027: dw $0c66  ; 0c
+1025: dw $0c51  ; 0b - set tempo
+1027: dw $0c66  ; 0c - add tempo
 1029: dw $0c73  ; 0d
-102b: dw $0ca0  ; 0e
-102d: dw $0cac  ; 0f
+102b: dw $0ca0  ; 0e - vibrato off
+102d: dw $0cac  ; 0f - vibrato
 102f: dw $0cda  ; 10 - set ADSR envelope
 1031: dw $0cf4  ; 11 - master volume
 1033: dw $0d2d  ; 12
 1035: dw $0d40  ; 13 - transpose
-1037: dw $0d54  ; 14 - transpose (rel)
+1037: dw $0d54  ; 14 - transpose (relative)
 1039: dw $0d6c  ; 15 - echo param
 103b: dw $0d9b  ; 16 - voice echo on
 103d: dw $0db6  ; 17 - voice echo off
