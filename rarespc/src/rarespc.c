@@ -55,7 +55,7 @@ static const char *mycssfile = APPSHORTNAME ".css";
 enum {
     SPC_VER_UNKNOWN = 0,
     SPC_VER_DKC1,            // Donkey Kong Country
-    SPC_VER_DKC2,            // Donkey Kong Country 2
+    SPC_VER_DKC2,            // Donkey Kong Country 2 (and DKC3)
 };
 
 // MIDI/SMF limitations
