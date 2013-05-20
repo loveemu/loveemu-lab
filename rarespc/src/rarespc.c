@@ -1197,8 +1197,8 @@ static void rareSpcEventADSR (RareSpcSeqStat *seq, SeqEventReport *ev)
     strcat(ev->classStr, " ev-adsr");
 }
 
-/** vcmd 11: master volume. */
-static void rareSpcEventMasterVolume (RareSpcSeqStat *seq, SeqEventReport *ev)
+/** vcmd 11: master volume. (L/R) */
+static void rareSpcEventMasterVolumeLR (RareSpcSeqStat *seq, SeqEventReport *ev)
 {
     RareSpcTrackStat *tr = &seq->track[ev->track];
     int arg1, arg2;
@@ -1210,14 +1210,31 @@ static void rareSpcEventMasterVolume (RareSpcSeqStat *seq, SeqEventReport *ev)
     arg2 = seq->aRAM[*p];
     (*p)++;
 
-    sprintf(ev->note, "Master Volume, L = %d, R = %d", arg1, arg2);
+    sprintf(ev->note, "Master Volume L/R, L = %d, R = %d", arg1, arg2);
+    if (!rareSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+    strcat(ev->classStr, " ev-mastervolLR");
+}
+
+/** vcmd 24: master volume. */
+static void rareSpcEventMasterVolume (RareSpcSeqStat *seq, SeqEventReport *ev)
+{
+    RareSpcTrackStat *tr = &seq->track[ev->track];
+    int arg1;
+    int *p = &tr->pos;
+
+    ev->size += 1;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Master Volume, vol = %d", arg1);
     if (!rareSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
     strcat(ev->classStr, " ev-mastervol");
 }
 
-/** vcmd 12: ?. */
-static void rareSpcEvent12Microtune (RareSpcSeqStat *seq, SeqEventReport *ev)
+/** vcmd 12: detune. */
+static void rareSpcEventMicrotune (RareSpcSeqStat *seq, SeqEventReport *ev)
 {
     int arg1;
     RareSpcTrackStat *tr = &seq->track[ev->track];
@@ -1227,11 +1244,15 @@ static void rareSpcEvent12Microtune (RareSpcSeqStat *seq, SeqEventReport *ev)
     arg1 = utos1(seq->aRAM[*p]);
     (*p)++;
 
-    rareSpcEventUnknownInline(seq, ev);
-    sprintf(argDumpStr, " (Tuning?), arg1 = %d", arg1);
-    strcat(ev->note, argDumpStr);
-    if (!rareSpcLessTextInSMF)
-        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+    sprintf(ev->note, "Detune, key = %d / 128", arg1);
+    strcat(ev->classStr, " ev-detune");
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNM, 0);
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNL, 2);
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_DATAENTRYM, (arg1 / 2) + 64);
+
+    //if (!rareSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmd 13: fine tuning. */
@@ -1637,8 +1658,8 @@ static void rareSpcSetEventList (RareSpcSeqStat *seq)
         event[0x0e] = (RareSpcEvent) rareSpcEventVibratoOff;
         event[0x0f] = (RareSpcEvent) rareSpcEventVibrato;
         event[0x10] = (RareSpcEvent) rareSpcEventADSR;
-        event[0x11] = (RareSpcEvent) rareSpcEventMasterVolume;
-        event[0x12] = (RareSpcEvent) rareSpcEvent12Microtune;
+        event[0x11] = (RareSpcEvent) rareSpcEventMasterVolumeLR;
+        event[0x12] = (RareSpcEvent) rareSpcEventMicrotune;
         event[0x13] = (RareSpcEvent) rareSpcEventFineTuning;
         event[0x14] = (RareSpcEvent) rareSpcEventTransposeRel;
         event[0x15] = (RareSpcEvent) rareSpcEventEchoParam;
@@ -1711,7 +1732,7 @@ static void rareSpcSetEventList (RareSpcSeqStat *seq)
         event[0x21] = (RareSpcEvent) rareSpcEventSubroutineOnce;
         event[0x22] = (RareSpcEvent) rareSpcEventUnknown7;
         event[0x23] = (RareSpcEvent) rareSpcVolumeCenter;
-        event[0x24] = (RareSpcEvent) rareSpcEventUnknown1;
+        event[0x24] = (RareSpcEvent) rareSpcEventMasterVolume;
         event[0x25] = (RareSpcEvent) rareSpcEventUnidentified; // null
         event[0x26] = (RareSpcEvent) rareSpcEventUnknown4;
         event[0x27] = (RareSpcEvent) rareSpcEventUnknown4;

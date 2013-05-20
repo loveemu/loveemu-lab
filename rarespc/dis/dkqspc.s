@@ -853,7 +853,7 @@
 0c48: d5 64 02  mov   $0264+x,a
 0c4b: 5f d6 0e  jmp   $0ed6
 
-; vcmd 24
+; vcmd 24 - master volume
 0c4e: 3f 64 0b  call  $0b64
 0c51: f7 00     mov   a,($00)+y
 0c53: c5 b6 04  mov   $04b6,a
@@ -1161,7 +1161,7 @@
 0e6b: 3f 69 0b  call  $0b69
 0e6e: 5f 78 0b  jmp   $0b78
 
-; vcmd 12
+; vcmd 12 - detune
 0e71: 3f 64 0b  call  $0b64
 0e74: f7 00     mov   a,($00)+y
 0e76: d4 64     mov   $64+x,a
@@ -1333,7 +1333,7 @@
 0fc3: dw $0e1a  ; 0f - vibrato
 0fc5: dw $0e45  ; 10 - set ADSR envelope
 0fc7: dw $0000  ; 11
-0fc9: dw $0e71  ; 12
+0fc9: dw $0e71  ; 12 - detune
 0fcb: dw $0e7b  ; 13 - transpose
 0fcd: dw $0e88  ; 14 - transpose (relative)
 0fcf: dw $0e97  ; 15 - echo param
@@ -1351,7 +1351,7 @@
 0fe7: dw $0cff  ; 21 - call subroutine (once)
 0fe9: dw $0b97  ; 22
 0feb: dw $0bf0  ; 23 - set L/R volume (center)
-0fed: dw $0c4e  ; 24
+0fed: dw $0c4e  ; 24 - master volume
 0fef: dw $0000  ; 25
 0ff1: dw $0f44  ; 26
 0ff3: dw $0f4e  ; 27

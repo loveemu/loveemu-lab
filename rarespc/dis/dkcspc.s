@@ -893,7 +893,7 @@
 0cee: 8f 03 01  mov   $01,#$03
 0cf1: 5f ce 0a  jmp   $0ace
 
-; vcmd 11 - master volume
+; vcmd 11 - master volume L/R
 0cf4: ce        pop   x
 0cf5: 8f 0c f2  mov   $f2,#$0c
 0cf8: 8d 01     mov   y,#$01
@@ -922,7 +922,7 @@
 0d27: 8f 03 01  mov   $01,#$03
 0d2a: 5f ce 0a  jmp   $0ace
 
-; vcmd 12
+; vcmd 12 - detune
 0d2d: ce        pop   x
 0d2e: 8d 01     mov   y,#$01
 0d30: db 3c     mov   $3c+x,y
@@ -1342,8 +1342,8 @@
 102b: dw $0ca0  ; 0e - vibrato off
 102d: dw $0cac  ; 0f - vibrato
 102f: dw $0cda  ; 10 - set ADSR envelope
-1031: dw $0cf4  ; 11 - master volume
-1033: dw $0d2d  ; 12
+1031: dw $0cf4  ; 11 - master volume L/R
+1033: dw $0d2d  ; 12 - detune
 1035: dw $0d40  ; 13 - transpose
 1037: dw $0d54  ; 14 - transpose (relative)
 1039: dw $0d6c  ; 15 - echo param
