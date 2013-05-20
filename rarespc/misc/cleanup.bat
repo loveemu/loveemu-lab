@@ -1,1 +1,1 @@
-@del *.mid *.html *.spc stderr.txt
+@del *.mid *.html stderr.txt
