@@ -757,7 +757,7 @@
 0b93: d5 44 02  mov   $0244+x,a
 0b96: 6f        ret
 
-; vcmd 22
+; vcmd 22 - set voice params
 0b97: 3f 64 0b  call  $0b64
 0b9a: 3f 8b 0b  call  $0b8b             ; instrument
 0b9d: fc        inc   y
@@ -816,7 +816,7 @@
 0bfc: d5 54 02  mov   $0254+x,a
 0bff: 5f 78 0b  jmp   $0b78
 
-; vcmd 20
+; vcmd 20 - set volume from preset 1
 0c02: 3f 64 0b  call  $0b64
 0c05: e5 b8 04  mov   a,$04b8
 0c08: d5 54 02  mov   $0254+x,a
@@ -826,7 +826,7 @@
 0c13: d0 19     bne   $0c2e
 0c15: 5f d6 0e  jmp   $0ed6
 
-; vcmd 31
+; vcmd 31 - set volume from preset 2
 0c18: 3f 64 0b  call  $0b64
 0c1b: e5 ba 04  mov   a,$04ba
 0c1e: d5 54 02  mov   $0254+x,a
@@ -887,19 +887,19 @@
 0c81: ce        pop   x
 0c82: 6f        ret
 
-; vcmd 1e
+; vcmd 1e - set volume preset
 0c83: 3f 64 0b  call  $0b64
 0c86: f7 00     mov   a,($00)+y
-0c88: c5 b8 04  mov   $04b8,a
+0c88: c5 b8 04  mov   $04b8,a           ; volume preset 1 L
 0c8b: fc        inc   y
 0c8c: f7 00     mov   a,($00)+y
-0c8e: c5 b9 04  mov   $04b9,a
+0c8e: c5 b9 04  mov   $04b9,a           ; volume preset 1 R
 0c91: fc        inc   y
 0c92: f7 00     mov   a,($00)+y
-0c94: c5 ba 04  mov   $04ba,a
+0c94: c5 ba 04  mov   $04ba,a           ; volume preset 2 L
 0c97: fc        inc   y
 0c98: f7 00     mov   a,($00)+y
-0c9a: c5 bb 04  mov   $04bb,a
+0c9a: c5 bb 04  mov   $04bb,a           ; volume preset 1 R
 0c9d: 5f 76 0f  jmp   $0f76
 
 ; vcmd 1f - echo delay
@@ -1345,11 +1345,11 @@
 0fdb: dw $0f34  ; 1b
 0fdd: dw $0e5a  ; 1c
 0fdf: dw $0e64  ; 1d
-0fe1: dw $0c83  ; 1e
+0fe1: dw $0c83  ; 1e - set volume preset
 0fe3: dw $0ca0  ; 1f - echo delay
-0fe5: dw $0c02  ; 20
+0fe5: dw $0c02  ; 20 - set volume from preset 1
 0fe7: dw $0cff  ; 21 - call subroutine (once)
-0fe9: dw $0b97  ; 22
+0fe9: dw $0b97  ; 22 - set voice params
 0feb: dw $0bf0  ; 23 - set L/R volume (center)
 0fed: dw $0c4e  ; 24 - master volume
 0fef: dw $0000  ; 25
@@ -1363,9 +1363,9 @@
 0fff: dw $0000  ; 2d
 1001: dw $0000  ; 2e
 1003: dw $0000  ; 2f
-1005: dw $0edc  ; 30
-1007: dw $0c18  ; 31
-1009: dw $0edc  ; 32
+1005: dw $0edc  ; 30 - voice echo off (alias, probably not used?)
+1007: dw $0c18  ; 31 - set volume from preset 2
+1009: dw $0edc  ; 32 - voice echo off (alias, probably not used?)
 
 100b: e8 00     mov   a,#$00
 100d: c4 ec     mov   $ec,a

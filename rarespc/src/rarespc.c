@@ -16,7 +16,7 @@
 
 #define APPNAME         "Rare SPC2MIDI"
 #define APPSHORTNAME    "rarespc"
-#define VERSION         "[2013-05-22]"
+#define VERSION         "[2013-05-23]"
 #define AUTHOR          "loveemu"
 #define WEBSITE         "http://loveemu.yh.land.to/"
 
@@ -126,6 +126,10 @@ struct TagRareSpcSeqStat {
     byte a2a;
     byte altNoteByte1;
     byte altNoteByte2;
+    byte volPresetL1;
+    byte volPresetR1;
+    byte volPresetL2;
+    byte volPresetR2;
     RareSpcVerInfo ver;         // game version info
     RareSpcTrackStat track[SPC_TRACK_MAX]; // status of each tracks
 };
@@ -789,7 +793,7 @@ static void rareSpcEventUnknown4 (RareSpcSeqStat *seq, SeqEventReport *ev)
     RareSpcTrackStat *tr = &seq->track[ev->track];
     int *p = &tr->pos;
 
-    ev->size += 3;
+    ev->size += 4;
     arg1 = seq->aRAM[*p];
     (*p)++;
     arg2 = seq->aRAM[*p];
@@ -1273,8 +1277,8 @@ static void rareSpcEventMicrotune (RareSpcSeqStat *seq, SeqEventReport *ev)
     //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
-/** vcmd 13: fine tuning. */
-static void rareSpcEventFineTuning (RareSpcSeqStat *seq, SeqEventReport *ev)
+/** vcmd 13: transpose (absolute). */
+static void rareSpcEventTransposeAbs (RareSpcSeqStat *seq, SeqEventReport *ev)
 {
     int arg1;
     RareSpcTrackStat *tr = &seq->track[ev->track];
@@ -1284,8 +1288,8 @@ static void rareSpcEventFineTuning (RareSpcSeqStat *seq, SeqEventReport *ev)
     arg1 = utos1(seq->aRAM[*p]);
     (*p)++;
 
-    sprintf(ev->note, "Fine Tuning, key = %d", arg1);
-    strcat(ev->classStr, " ev-finetune");
+    sprintf(ev->note, "Key Shift, key = %d", arg1);
+    strcat(ev->classStr, " ev-keyshiftabs");
 
     if (rareSpcDoFineTuning)
         tr->note.transpose = arg1;
@@ -1298,7 +1302,7 @@ static void rareSpcEventFineTuning (RareSpcSeqStat *seq, SeqEventReport *ev)
     }
 }
 
-/** vcmd 14: relative transpose */
+/** vcmd 14: transpose (relative) */
 static void rareSpcEventTransposeRel (RareSpcSeqStat *seq, SeqEventReport *ev)
 {
     int arg1;
@@ -1309,8 +1313,8 @@ static void rareSpcEventTransposeRel (RareSpcSeqStat *seq, SeqEventReport *ev)
     arg1 = utos1(seq->aRAM[*p]);
     (*p)++;
 
-    sprintf(ev->note, "Relative Transpose, key = %d", arg1);
-    strcat(ev->classStr, " ev-noteshift");
+    sprintf(ev->note, "Key Shift, key += %d", arg1);
+    strcat(ev->classStr, " ev-keyshiftrel");
 
     tr->note.transpose += arg1;
 }
@@ -1451,6 +1455,69 @@ static void rareSpcEventEchoDelay (RareSpcSeqStat *seq, SeqEventReport *ev)
     if (!rareSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
     strcat(ev->classStr, " ev-echodelay");
+}
+
+/** vcmd 1e: set volume preset. */
+static void rareSpcEventSetVolumePreset (RareSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2, arg3, arg4;
+    RareSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    ev->size += 4;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+    arg3 = seq->aRAM[*p];
+    (*p)++;
+    arg4 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Set Volume Preset, L1 = %d, R1 = %d, L2 = %d, R2 = %d", arg1, arg2, arg3, arg4);
+    strcat(ev->classStr, " ev-volumepreset");
+
+    seq->volPresetL1 = arg1;
+    seq->volPresetR1 = arg2;
+    seq->volPresetL2 = arg3;
+    seq->volPresetR2 = arg4;
+
+    if (!rareSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd 20: set volume from preset 1. */
+static void rareSpcEventVolumeFromPreset1 (RareSpcSeqStat *seq, SeqEventReport *ev)
+{
+    RareSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    sprintf(ev->note, "Volume From Preset 1, L = %d, R = %d", seq->volPresetL1, seq->volPresetR1);
+    strcat(ev->classStr, " ev-volumefrompreset");
+
+    tr->volL = seq->volPresetL1;
+    tr->volR = seq->volPresetR1;
+    rareSpcInsertVolPan(seq, ev->track);
+
+    //if (!rareSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd 20: set volume from preset 2. */
+static void rareSpcEventVolumeFromPreset2 (RareSpcSeqStat *seq, SeqEventReport *ev)
+{
+    RareSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    sprintf(ev->note, "Volume From Preset 2, L = %d, R = %d", seq->volPresetL2, seq->volPresetR2);
+    strcat(ev->classStr, " ev-volumefrompreset");
+
+    tr->volL = seq->volPresetL2;
+    tr->volR = seq->volPresetR2;
+    rareSpcInsertVolPan(seq, ev->track);
+
+    //if (!rareSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmd 22: set voice params. */
@@ -1738,7 +1805,7 @@ static void rareSpcSetEventList (RareSpcSeqStat *seq)
         event[0x10] = (RareSpcEvent) rareSpcEventADSR;
         event[0x11] = (RareSpcEvent) rareSpcEventMasterVolumeLR;
         event[0x12] = (RareSpcEvent) rareSpcEventMicrotune;
-        event[0x13] = (RareSpcEvent) rareSpcEventFineTuning;
+        event[0x13] = (RareSpcEvent) rareSpcEventTransposeAbs;
         event[0x14] = (RareSpcEvent) rareSpcEventTransposeRel;
         event[0x15] = (RareSpcEvent) rareSpcEventEchoParam;
         event[0x16] = (RareSpcEvent) rareSpcEventEchoOn;
@@ -1793,7 +1860,7 @@ static void rareSpcSetEventList (RareSpcSeqStat *seq)
         event[0x10] = (RareSpcEvent) rareSpcEventADSR;
         event[0x11] = (RareSpcEvent) rareSpcEventUnidentified; // null
         event[0x12] = (RareSpcEvent) rareSpcEventMicrotune;
-        event[0x13] = (RareSpcEvent) rareSpcEventFineTuning;
+        event[0x13] = (RareSpcEvent) rareSpcEventTransposeAbs;
         event[0x14] = (RareSpcEvent) rareSpcEventTransposeRel;
         event[0x15] = (RareSpcEvent) rareSpcEventEchoParam;
         event[0x16] = (RareSpcEvent) rareSpcEventEchoOn;
@@ -1804,9 +1871,9 @@ static void rareSpcSetEventList (RareSpcSeqStat *seq)
         event[0x1b] = (RareSpcEvent) rareSpcEventUnknown0;
         event[0x1c] = (RareSpcEvent) rareSpcEventSetAltNote1;
         event[0x1d] = (RareSpcEvent) rareSpcEventSetAltNote2;
-        event[0x1e] = (RareSpcEvent) rareSpcEventUnknown4;
+        event[0x1e] = (RareSpcEvent) rareSpcEventSetVolumePreset;
         event[0x1f] = (RareSpcEvent) rareSpcEventEchoDelay;
-        event[0x20] = (RareSpcEvent) rareSpcEventUnknown0;
+        event[0x20] = (RareSpcEvent) rareSpcEventVolumeFromPreset1;
         event[0x21] = (RareSpcEvent) rareSpcEventSubroutineOnce;
         event[0x22] = (RareSpcEvent) rareSpcEventSetVoiceParams;
         event[0x23] = (RareSpcEvent) rareSpcVolumeCenter;
@@ -1823,7 +1890,7 @@ static void rareSpcSetEventList (RareSpcSeqStat *seq)
         event[0x2e] = (RareSpcEvent) rareSpcEventUnidentified; // null
         event[0x2f] = (RareSpcEvent) rareSpcEventUnidentified; // null
         event[0x30] = event[0x17];
-        event[0x31] = (RareSpcEvent) rareSpcEventUnknown0;
+        event[0x31] = (RareSpcEvent) rareSpcEventVolumeFromPreset2;
         event[0x32] = event[0x17];
         for (code = 0x80; code <= 0xff; code++) {
             event[code] = (RareSpcEvent) rareSpcEventNote;
