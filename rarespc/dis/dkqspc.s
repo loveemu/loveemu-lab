@@ -759,17 +759,17 @@
 
 ; vcmd 22
 0b97: 3f 64 0b  call  $0b64
-0b9a: 3f 8b 0b  call  $0b8b
+0b9a: 3f 8b 0b  call  $0b8b             ; instrument
 0b9d: fc        inc   y
 0b9e: f7 00     mov   a,($00)+y
-0ba0: d5 40 01  mov   $0140+x,a
+0ba0: d5 40 01  mov   $0140+x,a         ; transpose
 0ba3: fc        inc   y
 0ba4: f7 00     mov   a,($00)+y
-0ba6: d4 64     mov   $64+x,a
+0ba6: d4 64     mov   $64+x,a           ; detune
 0ba8: fc        inc   y
 0ba9: 3f c2 0b  call  $0bc2             ; set L/R volume
 0bac: fc        inc   y
-0bad: 3f 4e 0e  call  $0e4e
+0bad: 3f 4e 0e  call  $0e4e             ; ADSR envelope
 0bb0: 8f 08 00  mov   $00,#$08
 0bb3: 5f 7b 0b  jmp   $0b7b
 
@@ -1050,23 +1050,23 @@
 0da5: f7 00     mov   a,($00)+y
 0da7: 48 ff     eor   a,#$ff
 0da9: bc        inc   a
-0daa: d5 b0 01  mov   $01b0+x,a
+0daa: d5 b0 01  mov   $01b0+x,a         ; arg4 (delta, signed)
 0dad: f5 50 01  mov   a,$0150+x
 0db0: 08 01     or    a,#$01
 0db2: d5 50 01  mov   $0150+x,a
 0db5: 3f 69 0b  call  $0b69
 0db8: f7 00     mov   a,($00)+y
-0dba: d5 60 01  mov   $0160+x,a
+0dba: d5 60 01  mov   $0160+x,a         ; arg1 (delay)
 0dbd: fc        inc   y
 0dbe: f7 00     mov   a,($00)+y
-0dc0: d5 70 01  mov   $0170+x,a
+0dc0: d5 70 01  mov   $0170+x,a         ; arg2 (interval)
 0dc3: fc        inc   y
 0dc4: f7 00     mov   a,($00)+y
-0dc6: d5 80 01  mov   $0180+x,a
+0dc6: d5 80 01  mov   $0180+x,a         ; arg3 (times)
 0dc9: fc        inc   y
 0dca: fc        inc   y
 0dcb: f7 00     mov   a,($00)+y
-0dcd: d5 90 01  mov   $0190+x,a
+0dcd: d5 90 01  mov   $0190+x,a         ; arg5 (times-reverse)
 0dd0: 8f 06 00  mov   $00,#$06
 0dd3: 5f 7b 0b  jmp   $0b7b
 
@@ -1269,32 +1269,32 @@
 0f3f: c4 f3     mov   $f3,a
 0f41: 5f 2e 0f  jmp   $0f2e
 
-; vcmd 26
+; vcmd 26 - pitch slide down (simpler)
 0f44: ce        pop   x
 0f45: 8d 04     mov   y,#$04
 0f47: f7 00     mov   a,($00)+y
 0f49: 48 ff     eor   a,#$ff
 0f4b: bc        inc   a
 0f4c: 2f 05     bra   $0f53
-; vcmd 27
+; vcmd 27 - pitch slide up (simpler)
 0f4e: ce        pop   x
 0f4f: 8d 04     mov   y,#$04
-0f51: f7 00     mov   a,($00)+y
+0f51: f7 00     mov   a,($00)+y         ; arg4 (pitch slide delta, signed)
 0f53: d5 b0 01  mov   $01b0+x,a
 0f56: f5 50 01  mov   a,$0150+x
 0f59: 08 01     or    a,#$01
 0f5b: d5 50 01  mov   $0150+x,a
 0f5e: 3f 69 0b  call  $0b69
 0f61: f7 00     mov   a,($00)+y
-0f63: d5 60 01  mov   $0160+x,a
+0f63: d5 60 01  mov   $0160+x,a         ; arg1 (pitch slide delay)
 0f66: fc        inc   y
 0f67: f7 00     mov   a,($00)+y
-0f69: d5 70 01  mov   $0170+x,a
+0f69: d5 70 01  mov   $0170+x,a         ; arg2 (pitch slide interval)
 0f6c: fc        inc   y
 0f6d: f7 00     mov   a,($00)+y
-0f6f: d5 90 01  mov   $0190+x,a
+0f6f: d5 90 01  mov   $0190+x,a         ; arg3 (pitch slide times-inverse)
 0f72: 1c        asl   a
-0f73: d5 80 01  mov   $0180+x,a
+0f73: d5 80 01  mov   $0180+x,a         ; arg3 * 2 (pitch slide times)
 0f76: 8f 05 00  mov   $00,#$05
 0f79: 5f 7b 0b  jmp   $0b7b
 
@@ -1353,8 +1353,8 @@
 0feb: dw $0bf0  ; 23 - set L/R volume (center)
 0fed: dw $0c4e  ; 24 - master volume
 0fef: dw $0000  ; 25
-0ff1: dw $0f44  ; 26
-0ff3: dw $0f4e  ; 27
+0ff1: dw $0f44  ; 26 - pitch slide down (simpler)
+0ff3: dw $0f4e  ; 27 - pitch slide up (simpler)
 0ff5: dw $0000  ; 28
 0ff7: dw $0000  ; 29
 0ff9: dw $0000  ; 2a

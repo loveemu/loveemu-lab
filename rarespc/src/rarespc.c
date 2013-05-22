@@ -16,7 +16,7 @@
 
 #define APPNAME         "Rare SPC2MIDI"
 #define APPSHORTNAME    "rarespc"
-#define VERSION         "[2013-05-21]"
+#define VERSION         "[2013-05-22]"
 #define AUTHOR          "loveemu"
 #define WEBSITE         "http://loveemu.yh.land.to/"
 
@@ -806,36 +806,6 @@ static void rareSpcEventUnknown4 (RareSpcSeqStat *seq, SeqEventReport *ev)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
-/** vcmd: unknown event (7 byte args). */
-static void rareSpcEventUnknown7 (RareSpcSeqStat *seq, SeqEventReport *ev)
-{
-    int arg1, arg2, arg3, arg4, arg5, arg6, arg7;
-    RareSpcTrackStat *tr = &seq->track[ev->track];
-    int *p = &tr->pos;
-
-    ev->size += 7;
-    arg1 = seq->aRAM[*p];
-    (*p)++;
-    arg2 = seq->aRAM[*p];
-    (*p)++;
-    arg3 = seq->aRAM[*p];
-    (*p)++;
-    arg4 = seq->aRAM[*p];
-    (*p)++;
-    arg5 = seq->aRAM[*p];
-    (*p)++;
-    arg6 = seq->aRAM[*p];
-    (*p)++;
-    arg7 = seq->aRAM[*p];
-    (*p)++;
-
-    rareSpcEventUnknownInline(seq, ev);
-    sprintf(argDumpStr, ", arg1 = %d, arg2 = %d, arg3 = %d, arg4 = %d, arg5 = %d, arg6 = %d, arg7 = %d", arg1, arg2, arg3, arg4, arg5, arg6, arg7);
-    strcat(ev->note, argDumpStr);
-    if (!rareSpcLessTextInSMF)
-        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
-}
-
 /** vcmd 00: end of track. */
 static void rareSpcEventEndOfTrack (RareSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -1037,19 +1007,19 @@ static void rareSpcEventPitchSlideUp (RareSpcSeqStat *seq, SeqEventReport *ev)
     RareSpcTrackStat *tr = &seq->track[ev->track];
     int *p = &tr->pos;
 
-    ev->size += 3;
+    ev->size += 5;
     arg1 = seq->aRAM[*p];
     (*p)++;
     arg2 = seq->aRAM[*p];
     (*p)++;
     arg3 = seq->aRAM[*p];
     (*p)++;
-    arg4 = seq->aRAM[*p];
+    arg4 = utos1(seq->aRAM[*p]);
     (*p)++;
     arg5 = seq->aRAM[*p];
     (*p)++;
 
-    sprintf(ev->note, "Pitch Slide Up, arg1 = %d, arg2 = %d, arg3 = %d, arg4 = %d, arg5 = %d", arg1, arg2, arg3, arg4, arg5);
+    sprintf(ev->note, "Pitch Slide On (Up), delay = %d (%.1f ms), interval = %d (%.1f ms), times = %d, delta = %d, times-reverse = %d", arg1, arg1 * (0.125 * seq->timerFreq), arg2, arg2 * (0.125 * seq->timerFreq), arg3, arg4, arg5);
     strcat(ev->classStr, " ev-pitchslideup");
 
     if (!rareSpcLessTextInSMF)
@@ -1063,20 +1033,68 @@ static void rareSpcEventPitchSlideDown (RareSpcSeqStat *seq, SeqEventReport *ev)
     RareSpcTrackStat *tr = &seq->track[ev->track];
     int *p = &tr->pos;
 
-    ev->size += 3;
+    ev->size += 5;
     arg1 = seq->aRAM[*p];
     (*p)++;
     arg2 = seq->aRAM[*p];
     (*p)++;
     arg3 = seq->aRAM[*p];
     (*p)++;
-    arg4 = seq->aRAM[*p];
+    arg4 = utos1(seq->aRAM[*p]);
     (*p)++;
     arg5 = seq->aRAM[*p];
     (*p)++;
 
-    sprintf(ev->note, "Pitch Slide Down, arg1 = %d, arg2 = %d, arg3 = %d, arg4 = %d, arg5 = %d", arg1, arg2, arg3, arg4, arg5);
+    sprintf(ev->note, "Pitch Slide On (Down), delay = %d (%.1f ms), interval = %d (%.1f ms), times = %d, delta = %d, times-reverse = %d", arg1, arg1 * (0.125 * seq->timerFreq), arg2, arg2 * (0.125 * seq->timerFreq), arg3, arg4, arg5);
     strcat(ev->classStr, " ev-pitchslidedown");
+
+    if (!rareSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd 26: pitch slide down (simpler). */
+static void rareSpcEventPitchSlideDownSimpler (RareSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2, arg3, arg4;
+    RareSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    ev->size += 4;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+    arg3 = seq->aRAM[*p];
+    (*p)++;
+    arg4 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    sprintf(ev->note, "Pitch Slide On (Down), delay = %d (%.1f ms), interval = %d (%.1f ms), times = %d, delta = %d, times-reverse = %d", arg1, arg1 * (0.125 * seq->timerFreq), arg2, arg2 * (0.125 * seq->timerFreq), arg3 * 2, arg4, arg3);
+    strcat(ev->classStr, " ev-pitchslidedown");
+
+    if (!rareSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd 27: pitch slide up (simpler). */
+static void rareSpcEventPitchSlideUpSimpler (RareSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2, arg3, arg4;
+    RareSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    ev->size += 4;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+    arg3 = seq->aRAM[*p];
+    (*p)++;
+    arg4 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    sprintf(ev->note, "Pitch Slide On (Up), delay = %d (%.1f ms), interval = %d (%.1f ms), times = %d, delta = %d, times-reverse = %d", arg1, arg1 * (0.125 * seq->timerFreq), arg2, arg2 * (0.125 * seq->timerFreq), arg3 * 2, arg4, arg3);
+    strcat(ev->classStr, " ev-pitchslideup");
 
     if (!rareSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
@@ -1248,7 +1266,7 @@ static void rareSpcEventMicrotune (RareSpcSeqStat *seq, SeqEventReport *ev)
     strcat(ev->classStr, " ev-detune");
 
     smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNM, 0);
-    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNL, 2);
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNL, 1);
     smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_DATAENTRYM, (arg1 / 2) + 64);
 
     //if (!rareSpcLessTextInSMF)
@@ -1435,6 +1453,66 @@ static void rareSpcEventEchoDelay (RareSpcSeqStat *seq, SeqEventReport *ev)
     strcat(ev->classStr, " ev-echodelay");
 }
 
+/** vcmd 22: set voice params. */
+static void rareSpcEventSetVoiceParams (RareSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2, arg3, arg4, arg5, adsr;
+    int ar, dr, sl, sr;
+    RareSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    ev->size += 7;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = utos1(seq->aRAM[*p]);
+    (*p)++;
+    arg3 = utos1(seq->aRAM[*p]);
+    (*p)++;
+    arg4 = seq->aRAM[*p];
+    (*p)++;
+    arg5 = seq->aRAM[*p];
+    (*p)++;
+    adsr = mget2b(&seq->aRAM[*p]);
+    (*p) += 2;
+
+    ar = (adsr & 0x0f00) >> 8;
+    dr = (adsr & 0x7000) >> 12;
+    sl = (adsr & 0x00e0) >> 5;
+    sr = (adsr & 0x001f);
+
+    sprintf(ev->note, "Set Voice Params, patch = %d, transpose = %d, detune = %d / 128, L Vol = %d, R Vol = %d, ADSR1/2 = $%04X, AR = %d (%.1f%s), DR = %d (%.1f%s), SL = %d (%d/8), SR = %d (%.1f%s)", arg1, arg2, arg3, arg4, arg5, adsr,
+        ar, (spcARTable[ar] >= 1) ? spcARTable[ar] : spcARTable[ar] * 1000, (spcARTable[ar] >= 1) ? "s" : "ms",
+        dr, (spcARTable[dr] >= 1) ? spcDRTable[dr] : spcDRTable[dr] * 1000, (spcDRTable[dr] >= 1) ? "s" : "ms",
+        sl, sl + 1,
+        sr, (spcSRTable[sr] >= 1) ? spcSRTable[sr] : spcSRTable[sr] * 1000, (spcSRTable[sr] >= 1) ? "s" : "ms");
+    strcat(ev->classStr, " ev-voiceparams");
+
+    if (!rareSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    // patch
+    tr->note.patch = arg1;
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_BANKSELM, seq->ver.patchFix[arg1].bankSelM);
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_BANKSELL, seq->ver.patchFix[arg1].bankSelL);
+    smfInsertProgram(seq->smf, ev->tick, ev->track, ev->track, seq->ver.patchFix[arg1].patchNo);
+    // transpose
+    if (rareSpcDoFineTuning)
+        tr->note.transpose = arg2;
+    else {
+        //tr->note.transpose = (arg1 / 12) * 12;
+        tr->note.transpose = 0;
+    }
+    // detune
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNM, 0);
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNL, 1);
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_DATAENTRYM, (arg1 / 2) + 64);
+    // volume
+    tr->volL = arg1;
+    tr->volR = arg2;
+    rareSpcInsertVolPan(seq, ev->track);
+    // ADSR (nothing)
+}
+
 /** vcmd 28: set instrument and volume. */
 static void rareSpcEventInstVol (RareSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -1566,20 +1644,21 @@ static void rareSpcEventNote (RareSpcSeqStat *seq, SeqEventReport *ev)
     int note;
     bool rest;
 
+    rest = (noteByte == 0x80);
     if (seq->ver.id == SPC_VER_DKC2)
     {
         if (ev->code == 0xe1)
         {
             noteByte = seq->altNoteByte2;
+            //rest = false;
         }
         else if (ev->code >= 0xe0)
         {
             noteByte = seq->altNoteByte1;
+            //rest = false;
         }
     }
-
     note = (noteByte - 0x81);
-    rest = (noteByte == 0x80);
 
     if (!tr->note.defDur) {
         if (tr->longDur) {
@@ -1613,7 +1692,6 @@ static void rareSpcEventNote (RareSpcSeqStat *seq, SeqEventReport *ev)
 
     // set new note
     if (!rest) {
-        // FIXME: 
         tr->lastNote.tick = ev->tick;
         tr->lastNote.dur = tr->note.dur;
         tr->lastNote.key = note;
@@ -1714,7 +1792,7 @@ static void rareSpcSetEventList (RareSpcSeqStat *seq)
         event[0x0f] = (RareSpcEvent) rareSpcEventVibrato;
         event[0x10] = (RareSpcEvent) rareSpcEventADSR;
         event[0x11] = (RareSpcEvent) rareSpcEventUnidentified; // null
-        event[0x12] = (RareSpcEvent) rareSpcEventUnknown1;
+        event[0x12] = (RareSpcEvent) rareSpcEventMicrotune;
         event[0x13] = (RareSpcEvent) rareSpcEventFineTuning;
         event[0x14] = (RareSpcEvent) rareSpcEventTransposeRel;
         event[0x15] = (RareSpcEvent) rareSpcEventEchoParam;
@@ -1730,12 +1808,12 @@ static void rareSpcSetEventList (RareSpcSeqStat *seq)
         event[0x1f] = (RareSpcEvent) rareSpcEventEchoDelay;
         event[0x20] = (RareSpcEvent) rareSpcEventUnknown0;
         event[0x21] = (RareSpcEvent) rareSpcEventSubroutineOnce;
-        event[0x22] = (RareSpcEvent) rareSpcEventUnknown7;
+        event[0x22] = (RareSpcEvent) rareSpcEventSetVoiceParams;
         event[0x23] = (RareSpcEvent) rareSpcVolumeCenter;
         event[0x24] = (RareSpcEvent) rareSpcEventMasterVolume;
         event[0x25] = (RareSpcEvent) rareSpcEventUnidentified; // null
-        event[0x26] = (RareSpcEvent) rareSpcEventUnknown4;
-        event[0x27] = (RareSpcEvent) rareSpcEventUnknown4;
+        event[0x26] = (RareSpcEvent) rareSpcEventPitchSlideDownSimpler;
+        event[0x27] = (RareSpcEvent) rareSpcEventPitchSlideUpSimpler;
         event[0x28] = (RareSpcEvent) rareSpcEventUnidentified; // null
         event[0x29] = (RareSpcEvent) rareSpcEventUnidentified; // null
         event[0x2a] = (RareSpcEvent) rareSpcEventUnidentified; // null
