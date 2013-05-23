@@ -782,6 +782,7 @@ static void hudsonSpcEventNote (HudsonSpcSeqStat *seq, SeqEventReport *ev)
     else {
         ev->size++;
         len = mget1(&seq->aRAM[*p]);
+        len *= 4; // POOR HACK
         (*p)++;
     }
 
