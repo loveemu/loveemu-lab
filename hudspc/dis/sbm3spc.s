@@ -1577,8 +1577,8 @@
 14e1: dw $17b2  ; e8 - transpose (relative)
 14e3: dw $17c0  ; e9
 14e5: dw $17eb  ; ea
-14e7: dw $17f6  ; eb
-14e8: dw $1805  ; ec
+14e7: dw $17f6  ; eb - overwrite song start position
+14e8: dw $1805  ; ec - goto song start position
 14ea: dw $1814  ; ed
 14ed: dw $182f  ; ee - set volume (from table)
 14ef: dw $1843  ; ef
@@ -2016,7 +2016,7 @@
 17f1: d4 ac     mov   $ac+x,a
 17f3: 5f 9e 14  jmp   $149e
 
-; vcmd eb
+; vcmd eb - overwrite song start position
 17f6: f8 40     mov   x,$40
 17f8: e4 03     mov   a,$03
 17fa: d5 52 02  mov   $0252+x,a
@@ -2024,7 +2024,7 @@
 17ff: d5 5a 02  mov   $025a+x,a
 1802: 5f 9e 14  jmp   $149e
 
-; vcmd ec
+; vcmd ec - goto song start position
 1805: f8 40     mov   x,$40
 1807: f5 52 02  mov   a,$0252+x
 180a: c4 03     mov   $03,a

@@ -86,6 +86,7 @@ struct TagHudsonSpcTrackStat {
     bool active;            // if the channel is still active
     bool used;              // if the channel used once or not
     int pos;                // current address on ARAM
+    int startPos;           // song start address on ARAM
     int tick;               // timing (must be synchronized with seq)
     int prevTick;           // previous timing (for pitch slide)
     HudsonSpcNoteParam note;     // current note param
@@ -336,6 +337,7 @@ static bool hudsonSpcDetectSeq (HudsonSpcSeqStat *seq)
         // if active, read more info
         if ((trActiveBits & (1 << tr)) != 0) {
             seq->track[tr].pos = mget2l(&aRAM[seqHeaderAddr + trHeaderOffset]);
+            seq->track[tr].startPos = seq->track[tr].pos;
             trHeaderOffset += 2;
 
             seq->track[tr].active = true;
@@ -1231,6 +1233,40 @@ static void hudsonSpcEventJump (HudsonSpcSeqStat *seq, SeqEventReport *ev)
     //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
+/** vcmd eb: overwrite song start position. */
+static void hudsonSpcEventSetSongStart (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    sprintf(ev->note, "Set Song Start, dest = $%04X", *p);
+    strcat(ev->classStr, " ev-setsongstart");
+
+    tr->startPos = *p;
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd ec: goto song start position. */
+static void hudsonSpcEventJumpToSongStart (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    sprintf(ev->note, "Jump To Song Start, dest = $%04X", tr->startPos);
+    strcat(ev->classStr, " ev-gotosongstart");
+
+    // assumes backjump = loop
+    if (tr->startPos < *p) {
+        hudsonSpcAddTrackLoopCount(seq, ev->track, 1);
+    }
+    *p = tr->startPos;
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
 /** vcmd e4: set echo volume. */
 static void hudsonSpcEventEchoVolume (HudsonSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -1344,8 +1380,8 @@ static void hudsonSpcSetEventList (HudsonSpcSeqStat *seq)
     event[0xe8] = (HudsonSpcEvent) hudsonSpcEventTransposeRel;
     event[0xe9] = (HudsonSpcEvent) hudsonSpcEventUnknown3;
     event[0xea] = (HudsonSpcEvent) hudsonSpcEventUnknown0;
-    event[0xeb] = (HudsonSpcEvent) hudsonSpcEventUnknown0;
-    event[0xec] = (HudsonSpcEvent) hudsonSpcEventUnknown0;
+    event[0xeb] = (HudsonSpcEvent) hudsonSpcEventSetSongStart;
+    event[0xec] = (HudsonSpcEvent) hudsonSpcEventJumpToSongStart;
     event[0xed] = (HudsonSpcEvent) hudsonSpcEventUnknown0;
     event[0xee] = (HudsonSpcEvent) hudsonSpcEventVolumeFromTable;
     event[0xef] = (HudsonSpcEvent) hudsonSpcEventUnknown2;
