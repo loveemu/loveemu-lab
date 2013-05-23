@@ -61,15 +61,15 @@ typedef struct TagHudsonSpcVerInfo {
     PatchFixInfo patchFix[256];
 } HudsonSpcVerInfo;
 
-typedef struct TagHudsonNoteParam {
+typedef struct TagHudsonSpcNoteParam {
     bool active;        // if the following params are used or not
     int tick;           // timing (tick)
-    int len;            // total length (tick)
+    int dur;            // total length (tick)
     bool tied;          // if the note tied
     int key;            // key
     int transpose;      // transpose
     int patch;          // instrument
-} HudsonNoteParam;
+} HudsonSpcNoteParam;
 
 struct TagHudsonSpcTrackStat {
     bool active;            // if the channel is still active
@@ -77,8 +77,9 @@ struct TagHudsonSpcTrackStat {
     int pos;                // current address on ARAM
     int tick;               // timing (must be synchronized with seq)
     int prevTick;           // previous timing (for pitch slide)
-    HudsonNoteParam note;     // current note param
-    HudsonNoteParam lastNote; // note params for last note
+    HudsonSpcNoteParam note;     // current note param
+    HudsonSpcNoteParam lastNote; // note params for last note
+    int looped;             // how many times looped (internal)
     byte quantize;          // quantize (0-8: qN, 9-: @qN)
     byte octave;            // octave
     int patch;              // patch number (for pitch fix)
@@ -161,12 +162,12 @@ static void hudsonSpcResetTrackParam (HudsonSpcSeqStat *seq, int track)
 
     tr->used = false;
     tr->prevTick = tr->tick;
+    tr->looped = 0;
     tr->octave = 2;
     tr->quantize = 8;
     tr->lastNote.active = false;
     tr->callStackPtr = 0;
     tr->callStackSize = 0x10; // Super Bomberman 3
-//    tr->loopCount = 0;
 }
 
 /** reset before play/convert song. */
@@ -452,43 +453,18 @@ static Smf *hudsonSpcCreateSmf (HudsonSpcSeqStat *seq)
 
 static char argDumpStr[512];
 
-/** returns note name from vbyte. */
-/*
-void hudsonSpcNoteNameFromVbyte (char *buf, int vbyte, int keyFix)
-{
-    int key = (vbyte & 0x7f) + SPC_NOTE_KEYSHIFT + keyFix;
-
-    if (key >= 0x00 && key <= 0x7f)
-        getNoteName(buf, key);
-    else
-        sprintf(buf, "Note %d", key);
-}
-*/
-
-/** read duration rate from table. */
-//static int hudsonSpcDurRateOf (HudsonSpcSeqStat *seq, int index)
-//{
-//    return mget1(&seq->aRAM[seq->ver.durTableAddr + index]);
-//}
-
-/** read velocity from table. */
-//static int hudsonSpcVelRateOf (HudsonSpcSeqStat *seq, int index)
-//{
-//    return mget1(&seq->aRAM[seq->ver.velTableAddr + index]);
-//}
-
 /** truncate note. */
 static void hudsonSpcTruncateNote (HudsonSpcSeqStat *seq, int track)
 {
     HudsonSpcTrackStat *tr = &seq->track[track];
 
-    if (tr->lastNote.active && tr->lastNote.len > 0) {
-        int lastTick = tr->lastNote.tick + tr->lastNote.len;
+    if (tr->lastNote.active && tr->lastNote.dur > 0) {
+        int lastTick = tr->lastNote.tick + tr->lastNote.dur;
         int diffTick = lastTick - seq->tick;
 
         if (diffTick > 0) {
-            tr->lastNote.len -= diffTick;
-            if (tr->lastNote.len == 0)
+            tr->lastNote.dur -= diffTick;
+            if (tr->lastNote.dur == 0)
                 tr->lastNote.active = false;
         }
     }
@@ -507,9 +483,6 @@ static void hudsonSpcTruncateNoteAll (HudsonSpcSeqStat *seq)
 /** finalize note. */
 static bool hudsonSpcDequeueNote (HudsonSpcSeqStat *seq, int track)
 {
-    // TODO
-    return false;
-#if 0
     HudsonSpcTrackStat *tr = &seq->track[track];
     HudsonSpcNoteParam *lastNote = &tr->lastNote;
     bool result = false;
@@ -517,10 +490,11 @@ static bool hudsonSpcDequeueNote (HudsonSpcSeqStat *seq, int track)
     if (lastNote->active) {
         int dur;
         int key;
-        int vel;
+        int vel = 100;
 
+        dur = lastNote->dur;
         //if (lastNote->tied)
-            dur = (lastNote->dur * lastNote->durRate) >> 8;
+        //    dur = (lastNote->dur * lastNote->durRate) >> 8;
         //else
         //    dur = (lastNote->dur - lastNote->lastDur)
         //        + ((lastNote->lastDur * lastNote->durRate) >> 8);
@@ -530,15 +504,14 @@ static bool hudsonSpcDequeueNote (HudsonSpcSeqStat *seq, int track)
         key = lastNote->key + lastNote->transpose
             + seq->ver.patchFix[tr->lastNote.patch].key
             + SPC_NOTE_KEYSHIFT;
-        vel = lastNote->vel;
-        if (vel == 0)
-            vel++;
+        //vel = lastNote->vel;
+        //if (vel == 0)
+        //    vel++;
 
         result = smfInsertNote(seq->smf, lastNote->tick, track, track, key, vel, dur);
         lastNote->active = false;
     }
     return result;
-#endif
 /*
     int tick = seq->track[track].lastNoteTick;
     int note = seq->track[track].lastNote;
@@ -594,6 +567,23 @@ static void hudsonSpcInactiveTrack(HudsonSpcSeqStat *seq, int track)
     seq->active = false;
 }
 
+/** increment loop count. */
+static void hudsonSpcAddTrackLoopCount(HudsonSpcSeqStat *seq, int track, int count)
+{
+    int tr;
+
+    seq->track[track].looped += count;
+    seq->looped = (hudsonSpcLoopMax > 0) ? hudsonSpcLoopMax : 0xffff;
+    for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
+        if (seq->track[tr].active)
+            seq->looped = min(seq->looped, seq->track[tr].looped);
+    }
+
+    if (seq->looped >= hudsonSpcLoopMax) {
+        seq->active = false;
+    }
+}
+
 /** advance seq tick. */
 static void hudsonSpcSeqAdvTick(HudsonSpcSeqStat *seq)
 {
@@ -613,52 +603,58 @@ static void hudsonSpcSeqAdvTick(HudsonSpcSeqStat *seq)
 }
 
 /** vcmds: unknown event (without status change). */
-static void hudsonSpcEventUnknownInline (HudsonSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
+static void hudsonSpcEventUnknownInline (HudsonSpcSeqStat *seq, SeqEventReport *ev)
 {
     sprintf(ev->note, "Unknown Event %02X", ev->code);
     strcat(ev->classStr, " unknown");
-    if (!hudsonSpcLessTextInSMF)
-        smfInsertMetaText(smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 
     if (ev->unidentified)
-        fprintf(stderr, "Error: Encountered unidentified event %02X\n", ev->code);
+        fprintf(stderr, "Error: Encountered unidentified event %02X [Track %d]\n", ev->code, ev->track + 1);
     else
-        fprintf(stderr, "Warning: Skipped unknown event %02X\n", ev->code);
+        fprintf(stderr, "Warning: Skipped unknown event %02X [Track %d]\n", ev->code, ev->track + 1);
 }
 
 /** vcmds: unidentified event. */
-static void hudsonSpcEventUnidentified (HudsonSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
+static void hudsonSpcEventUnidentified (HudsonSpcSeqStat *seq, SeqEventReport *ev)
 {
     ev->unidentified = true;
-    hudsonSpcEventUnknownInline(seq, ev, smf);
+    hudsonSpcEventUnknownInline(seq, ev);
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmds: unknown event (no args). */
-static void hudsonSpcEventUnknown0 (HudsonSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
+static void hudsonSpcEventUnknown0 (HudsonSpcSeqStat *seq, SeqEventReport *ev)
 {
-    hudsonSpcEventUnknownInline(seq, ev, smf);
+    hudsonSpcEventUnknownInline(seq, ev);
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmds: unknown event (1 byte arg). */
-static void hudsonSpcEventUnknown1 (HudsonSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
+static void hudsonSpcEventUnknown1 (HudsonSpcSeqStat *seq, SeqEventReport *ev)
 {
     int arg1;
-    int *p = &seq->track[ev->track].pos;
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
 
     ev->size++;
     arg1 = seq->aRAM[*p];
     (*p)++;
 
-    hudsonSpcEventUnknownInline(seq, ev, smf);
+    hudsonSpcEventUnknownInline(seq, ev);
     sprintf(argDumpStr, ", arg1 = %d", arg1);
     strcat(ev->note, argDumpStr);
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmds: unknown event (2 byte args). */
-static void hudsonSpcEventUnknown2 (HudsonSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
+static void hudsonSpcEventUnknown2 (HudsonSpcSeqStat *seq, SeqEventReport *ev)
 {
     int arg1, arg2;
-    int *p = &seq->track[ev->track].pos;
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
 
     ev->size += 2;
     arg1 = seq->aRAM[*p];
@@ -666,16 +662,19 @@ static void hudsonSpcEventUnknown2 (HudsonSpcSeqStat *seq, SeqEventReport *ev, S
     arg2 = seq->aRAM[*p];
     (*p)++;
 
-    hudsonSpcEventUnknownInline(seq, ev, smf);
+    hudsonSpcEventUnknownInline(seq, ev);
     sprintf(argDumpStr, ", arg1 = %d, arg2 = %d, arg1/2 = %d", arg1, arg2, arg2 * 256 + arg1);
     strcat(ev->note, argDumpStr);
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmd: unknown event (3 byte args). */
-static void hudsonSpcEventUnknown3 (HudsonSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
+static void hudsonSpcEventUnknown3 (HudsonSpcSeqStat *seq, SeqEventReport *ev)
 {
     int arg1, arg2, arg3;
-    int *p = &seq->track[ev->track].pos;
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
 
     ev->size += 3;
     arg1 = seq->aRAM[*p];
@@ -685,9 +684,11 @@ static void hudsonSpcEventUnknown3 (HudsonSpcSeqStat *seq, SeqEventReport *ev, S
     arg3 = seq->aRAM[*p];
     (*p)++;
 
-    hudsonSpcEventUnknownInline(seq, ev, smf);
+    hudsonSpcEventUnknownInline(seq, ev);
     sprintf(argDumpStr, ", arg1 = %d, arg2 = %d, arg3 = %d", arg1, arg2, arg3);
     strcat(ev->note, argDumpStr);
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmds: no operation. */
@@ -770,18 +771,82 @@ static void hudsonSpcEventNote (HudsonSpcSeqStat *seq, SeqEventReport *ev)
     hudsonSpcDequeueNote(seq, ev->track);
 
     // set new note
-//    if (!rest) {
-//        tr->lastNote.tick = ev->tick;
-//        tr->lastNote.dur = tr->note.dur;
-//        tr->lastNote.key = note;
-//        tr->lastNote.durRate = tr->note.durRate;
-//        tr->lastNote.vel = tr->note.vel;
-//        tr->lastNote.transpose = seq->transpose + tr->note.transpose;
-//        tr->lastNote.patch = tr->note.patch;
-//        tr->lastNote.tied = false;
-//        tr->lastNote.active = true;
-//    }
+    if (!rest) {
+        tr->lastNote.tick = ev->tick;
+        tr->lastNote.dur = dur;
+        tr->lastNote.key = note;
+        //tr->lastNote.vel = tr->note.vel;
+        tr->lastNote.transpose = seq->transpose + tr->note.transpose;
+        tr->lastNote.patch = tr->note.patch;
+        tr->lastNote.tied = false;
+        tr->lastNote.active = true;
+    }
     tr->tick += len;
+}
+
+/** vcmd d1: set tempo. */
+static void hudsonSpcEventSetTempo (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    seq->tempo = arg1;
+
+    sprintf(ev->note, "Set Tempo, tempo = %.1f", hudsonSpcTempo(seq));
+    strcat(ev->classStr, " ev-tempo");
+
+    smfInsertTempoBPM(seq->smf, ev->tick, 0, hudsonSpcTempo(seq));
+}
+
+/** vcmd d2: set octave. */
+static void hudsonSpcEventSetOctave (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Set Octave, octave = %d", arg1);
+    strcat(ev->classStr, " ev-octave");
+
+    if (arg1 > 5) {
+        arg1 = 5;
+    }
+    tr->octave = arg1;
+}
+
+/** vcmd d3: increase octave. */
+static void hudsonSpcEventOctaveUp (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+
+    if (tr->octave < 5) {
+        tr->octave++;
+    }
+
+    sprintf(ev->note, "Octave Up, octave = %d", tr->octave);
+    strcat(ev->classStr, " ev-octaveup");
+}
+
+/** vcmd d4: decrease octave. */
+static void hudsonSpcEventOctaveDown (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+
+    if (tr->octave > 0) {
+        tr->octave--;
+    }
+
+    sprintf(ev->note, "Octave Down, octave = %d", tr->octave);
+    strcat(ev->classStr, " ev-octavedown");
 }
 
 /** vcmd dd: loop start. */
@@ -844,10 +909,57 @@ static void hudsonSpcEventLoopEnd (HudsonSpcSeqStat *seq, SeqEventReport *ev)
     }
 }
 
+/** vcmd df: call subroutine. */
+static void hudsonSpcEventSubroutine (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 2;
+    arg1 = mget2l(&seq->aRAM[*p]);
+
+    sprintf(ev->note, "Call Subroutine, dest = $%04X", arg1);
+    strcat(ev->classStr, " ev-call");
+
+    if (tr->callStackPtr + 2 > tr->callStackSize) {
+        fprintf(stderr, "Call Stack Access Violation, sp = %d\n", tr->callStackPtr);
+        hudsonSpcInactiveTrack(seq, ev->track);
+        return;
+    }
+
+    tr->callStack[tr->callStackPtr++] = (byte)(*p);
+    tr->callStack[tr->callStackPtr++] = (byte)((*p) >> 8);
+    *p = arg1;
+}
+
+/** vcmd e0: jump. */
+static void hudsonSpcEventJump (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 2;
+    arg1 = mget2l(&seq->aRAM[*p]);
+
+    sprintf(ev->note, "Jump, dest = $%04X", arg1);
+    strcat(ev->classStr, " ev-jump");
+
+    // assumes backjump = loop
+    if (arg1 < *p) {
+        hudsonSpcAddTrackLoopCount(seq, ev->track, 1);
+    }
+    *p = arg1;
+
+    *p = arg1;
+}
+
 /** vcmd ff: end subroutine / end of track. */
 static void hudsonSpcEventEndSubroutine (HudsonSpcSeqStat *seq, SeqEventReport *ev)
 {
     HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
 
     if (tr->callStackPtr == 0) {
         sprintf(ev->note, "End of Track");
@@ -856,10 +968,17 @@ static void hudsonSpcEventEndSubroutine (HudsonSpcSeqStat *seq, SeqEventReport *
         hudsonSpcInactiveTrack(seq, ev->track);
     }
     else {
-        sprintf(ev->note, "End Subroutine (NYI)");
+        sprintf(ev->note, "End Subroutine");
         strcat(ev->classStr, " ev-ret");
 
-        hudsonSpcInactiveTrack(seq, ev->track);
+        if (tr->callStackPtr < 2) {
+            fprintf(stderr, "Call Stack Access Violation, sp = %d\n", tr->callStackPtr);
+            hudsonSpcInactiveTrack(seq, ev->track);
+            return;
+        }
+
+        *p = mget2l(&tr->callStack[tr->callStackPtr]) + 2;
+        tr->callStackPtr -= 2;
     }
 }
 
@@ -878,10 +997,10 @@ static void hudsonSpcSetEventList (HudsonSpcSeqStat *seq)
         event[code] = (HudsonSpcEvent) hudsonSpcEventNote;
     }
     event[0xd0] = (HudsonSpcEvent) hudsonSpcEventNOP;
-    event[0xd1] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
-    event[0xd2] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
-    event[0xd3] = (HudsonSpcEvent) hudsonSpcEventUnknown0;
-    event[0xd4] = (HudsonSpcEvent) hudsonSpcEventUnknown0;
+    event[0xd1] = (HudsonSpcEvent) hudsonSpcEventSetTempo;
+    event[0xd2] = (HudsonSpcEvent) hudsonSpcEventSetOctave;
+    event[0xd3] = (HudsonSpcEvent) hudsonSpcEventOctaveUp;
+    event[0xd4] = (HudsonSpcEvent) hudsonSpcEventOctaveDown;
     event[0xd5] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
     event[0xd6] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
     event[0xd7] = (HudsonSpcEvent) hudsonSpcEventNOP2;
@@ -892,8 +1011,8 @@ static void hudsonSpcSetEventList (HudsonSpcSeqStat *seq)
     event[0xdc] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
     event[0xdd] = (HudsonSpcEvent) hudsonSpcEventLoopStart;
     event[0xde] = (HudsonSpcEvent) hudsonSpcEventLoopEnd;
-    //event[0xdf] = (HudsonSpcEvent) hudsonSpcEventUnknown2;
-    //event[0xe0] = (HudsonSpcEvent) hudsonSpcEventUnknown2;
+    event[0xdf] = (HudsonSpcEvent) hudsonSpcEventSubroutine;
+    event[0xe0] = (HudsonSpcEvent) hudsonSpcEventJump;
     event[0xe1] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
     event[0xe2] = (HudsonSpcEvent) hudsonSpcEventUnknown2;
     event[0xe3] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
