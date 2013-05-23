@@ -1230,6 +1230,48 @@ static void hudsonSpcEventJump (HudsonSpcSeqStat *seq, SeqEventReport *ev)
     //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
+/** vcmd e4: set echo volume. */
+static void hudsonSpcEventEchoVolume (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Echo Volume, L = %d, R = %d", arg1, arg2);
+    strcat(ev->classStr, " ev-echovol");
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd e5: set echo delay, feedback, FIR. */
+static void hudsonSpcEventEchoParam (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2, arg3;
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 3;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+    arg3 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Echo Param, delay = %d, feedback = %d, FIR = %d", arg1, arg2, arg3);
+    strcat(ev->classStr, " ev-echoparam");
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
 /** vcmd ff: end subroutine / end of track. */
 static void hudsonSpcEventEndSubroutine (HudsonSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -1294,8 +1336,8 @@ static void hudsonSpcSetEventList (HudsonSpcSeqStat *seq)
     event[0xe1] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
     event[0xe2] = (HudsonSpcEvent) hudsonSpcEventUnknown2;
     event[0xe3] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
-    event[0xe4] = (HudsonSpcEvent) hudsonSpcEventUnknown2;
-    event[0xe5] = (HudsonSpcEvent) hudsonSpcEventUnknown3;
+    event[0xe4] = (HudsonSpcEvent) hudsonSpcEventEchoVolume;
+    event[0xe5] = (HudsonSpcEvent) hudsonSpcEventEchoParam;
     event[0xe6] = (HudsonSpcEvent) hudsonSpcEventUnknown0;
     event[0xe7] = (HudsonSpcEvent) hudsonSpcEventTransposeAbs;
     event[0xe8] = (HudsonSpcEvent) hudsonSpcEventTransposeRel;
