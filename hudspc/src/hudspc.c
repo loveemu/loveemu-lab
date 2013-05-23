@@ -768,7 +768,15 @@ static void hudsonSpcEventNote (HudsonSpcSeqStat *seq, SeqEventReport *ev)
 
     if (lenBits != 0) {
         const byte lenTbl[8] = { 0xc0, 0x60, 0x30, 0x18, 0x0c, 0x06, 0x03, 0x01 };
-        len = lenTbl[lenBits - 1];
+        int index = (lenBits - 1) + 0; // TODO: +($b4 & 3)
+        if (index >= 8) {
+            fprintf(stderr, "Note length index overflow, index = %d\n", index);
+            index = 7;
+        }
+        len = lenTbl[index];
+        if (len == 1) {
+            // something special?
+        }
     }
     else {
         ev->size++;
@@ -901,6 +909,23 @@ static void hudsonSpcEventOctaveDown (HudsonSpcSeqStat *seq, SeqEventReport *ev)
     strcat(ev->classStr, " ev-octavedown");
 }
 
+/** vcmd d5: set quantize. */
+static void hudsonSpcEventSetQuantize (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    tr->quantize = arg1;
+
+    sprintf(ev->note, "Set Quantize, q = %d", arg1);
+    strcat(ev->classStr, " ev-quantize");
+}
+
 /** vcmd d6: set instrument. */
 static void hudsonSpcEventInstrument (HudsonSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -943,7 +968,43 @@ static void hudsonSpcEventVolume (HudsonSpcSeqStat *seq, SeqEventReport *ev)
     smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_VOLUME, hudsonSpcMidiVolOf(tr->volume));
 }
 
-/** vcmd da: add volume. */
+/** vcmd da: set panpot. */
+static void hudsonSpcEventPanpot (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int panIndex;
+    byte panValue;
+    int *p = &seq->track[ev->track].pos;
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+
+    const byte panTable[] = {
+        0x00, 0x07, 0x0d, 0x14, 0x1a, 0x21, 0x27, 0x2e,
+        0x34, 0x3a, 0x40, 0x45, 0x4b, 0x50, 0x55, 0x5a,
+        0x5e, 0x63, 0x67, 0x6b, 0x6e, 0x71, 0x74, 0x77,
+        0x79, 0x7b, 0x7c, 0x7d, 0x7e, 0x7f, 0x7f,
+    };
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    // TODO: interpret higher bits
+    panIndex = (arg1 & 0x1f);
+    if (panIndex > 0x1e) {
+        panIndex = 0x1e;
+    }
+    panValue = panTable[panIndex]; // sloppy guess
+
+    sprintf(ev->note, "Panpot, balance = %d (index %d)", panValue, panIndex);
+    strcat(ev->classStr, " ev-pan");
+
+    //if (!hudsonSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_PANPOT, panValue);
+}
+
+/** vcmd dc: add volume. */
 static void hudsonSpcEventAddVolume (HudsonSpcSeqStat *seq, SeqEventReport *ev)
 {
     int arg1;
@@ -1039,8 +1100,8 @@ static void hudsonSpcEventLoopStart (HudsonSpcSeqStat *seq, SeqEventReport *ev)
     tr->callStack[tr->callStackPtr++] = arg1;
     (*p)++;
 
-    if (!hudsonSpcLessTextInSMF)
-        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+    //if (!hudsonSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmd de: loop end. */
@@ -1077,8 +1138,8 @@ static void hudsonSpcEventLoopEnd (HudsonSpcSeqStat *seq, SeqEventReport *ev)
         *p = mget2l(&tr->callStack[tr->callStackPtr - 3]) + 1;
     }
 
-    if (!hudsonSpcLessTextInSMF)
-        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+    //if (!hudsonSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmd df: call subroutine. */
@@ -1124,8 +1185,8 @@ static void hudsonSpcEventJump (HudsonSpcSeqStat *seq, SeqEventReport *ev)
     }
     *p = arg1;
 
-    if (!hudsonSpcLessTextInSMF)
-        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+    //if (!hudsonSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmd ff: end subroutine / end of track. */
@@ -1154,8 +1215,8 @@ static void hudsonSpcEventEndSubroutine (HudsonSpcSeqStat *seq, SeqEventReport *
         *p = mget2l(&tr->callStack[tr->callStackPtr]) + 2;
     }
 
-    if (!hudsonSpcLessTextInSMF)
-        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+    //if (!hudsonSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** set pointers of each event. */
@@ -1177,14 +1238,14 @@ static void hudsonSpcSetEventList (HudsonSpcSeqStat *seq)
     event[0xd2] = (HudsonSpcEvent) hudsonSpcEventSetOctave;
     event[0xd3] = (HudsonSpcEvent) hudsonSpcEventOctaveUp;
     event[0xd4] = (HudsonSpcEvent) hudsonSpcEventOctaveDown;
-    event[0xd5] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
+    event[0xd5] = (HudsonSpcEvent) hudsonSpcEventSetQuantize;
     event[0xd6] = (HudsonSpcEvent) hudsonSpcEventInstrument;
     event[0xd7] = (HudsonSpcEvent) hudsonSpcEventNOP2;
     event[0xd8] = (HudsonSpcEvent) hudsonSpcEventNOP2;
     event[0xd9] = (HudsonSpcEvent) hudsonSpcEventVolume;
-    event[0xda] = (HudsonSpcEvent) hudsonSpcEventAddVolume;
+    event[0xda] = (HudsonSpcEvent) hudsonSpcEventPanpot;
     event[0xdb] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
-    event[0xdc] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
+    event[0xdc] = (HudsonSpcEvent) hudsonSpcEventAddVolume;
     event[0xdd] = (HudsonSpcEvent) hudsonSpcEventLoopStart;
     event[0xde] = (HudsonSpcEvent) hudsonSpcEventLoopEnd;
     event[0xdf] = (HudsonSpcEvent) hudsonSpcEventSubroutine;
