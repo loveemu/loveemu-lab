@@ -196,6 +196,7 @@ static int hudsonSpcCheckVer (HudsonSpcSeqStat *seq)
     const byte *aRAM = seq->aRAM;
     int version = SPC_VER_UNKNOWN;
 
+    seq->timebase = hudsonSpcTimeBase;
     seq->ver.seqListAddr = -1;
     seq->ver.songIndex = -1;
     seq->ver.seqHeaderAddr = -1;
@@ -430,7 +431,7 @@ static Smf *hudsonSpcCreateSmf (HudsonSpcSeqStat *seq)
     Smf* smf;
     int tr;
 
-    smf = smfCreate(hudsonSpcTimeBase);
+    smf = smfCreate(seq->timebase);
     if (!smf)
         return NULL;
     seq->smf = smf;
@@ -797,15 +798,50 @@ static void hudsonSpcEventLoopStart (HudsonSpcSeqStat *seq, SeqEventReport *ev)
     strcat(ev->classStr, " ev-loopstart");
 
     if (tr->callStackPtr + 3 > tr->callStackSize) {
-        fprintf(stderr, "Call Stack Overflow\n");
+        fprintf(stderr, "Call Stack Access Violation, sp = %d\n", tr->callStackPtr);
         hudsonSpcInactiveTrack(seq, ev->track);
         return;
     }
 
     tr->callStack[tr->callStackPtr++] = (byte)(*p);
-    tr->callStack[tr->callStackPtr++] = (byte)(*p >> 8);
+    tr->callStack[tr->callStackPtr++] = (byte)((*p) >> 8);
     tr->callStack[tr->callStackPtr++] = arg1;
     (*p)++;
+}
+
+/** vcmd de: loop end. */
+static void hudsonSpcEventLoopEnd (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+    byte loopCount;
+
+    sprintf(ev->note, "Loop End/Continue");
+    strcat(ev->classStr, " ev-loopend");
+
+    if (tr->callStackPtr == 0) {
+        fprintf(stderr, "Call Stack Access Violation, sp = %d\n", tr->callStackPtr);
+        hudsonSpcInactiveTrack(seq, ev->track);
+        return;
+    }
+
+    loopCount = tr->callStack[tr->callStackPtr - 1];
+    if (--loopCount == 0) {
+        // repeat end, fall through
+        sprintf(ev->note, "Loop End");
+        if (tr->callStackPtr < 3) {
+            fprintf(stderr, "Call Stack Access Violation, sp = %d\n", tr->callStackPtr);
+            hudsonSpcInactiveTrack(seq, ev->track);
+            return;
+        }
+        tr->callStackPtr -= 3;
+    }
+    else {
+        // repeat again
+        sprintf(ev->note, "Loop Continue, count = %d", loopCount);
+        tr->callStack[tr->callStackPtr - 1] = loopCount;
+        *p = mget2l(&tr->callStack[tr->callStackPtr - 3]);
+    }
 }
 
 /** vcmd ff: end subroutine / end of track. */
@@ -855,7 +891,7 @@ static void hudsonSpcSetEventList (HudsonSpcSeqStat *seq)
     event[0xdb] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
     event[0xdc] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
     event[0xdd] = (HudsonSpcEvent) hudsonSpcEventLoopStart;
-    //event[0xde] = (HudsonSpcEvent) hudsonSpcEventUnknown0;
+    event[0xde] = (HudsonSpcEvent) hudsonSpcEventLoopEnd;
     //event[0xdf] = (HudsonSpcEvent) hudsonSpcEventUnknown2;
     //event[0xe0] = (HudsonSpcEvent) hudsonSpcEventUnknown2;
     event[0xe1] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
@@ -943,13 +979,15 @@ Smf* hudsonSpcARAMToMidi (const byte *aRAM)
 
         for (ev.track = 0; ev.track < SPC_TRACK_MAX; ev.track++) {
 
-            while (seq->active && seq->track[ev.track].pos && seq->track[ev.track].tick <= seq->tick) {
+            HudsonSpcTrackStat *evtr = &seq->track[ev.track];
+
+            while (seq->active && evtr->active && evtr->tick <= seq->tick) {
 
                 bool inSub;
 
                 // init event report
                 ev.tick = seq->tick;
-                ev.addr = seq->track[ev.track].pos;
+                ev.addr = evtr->pos;
                 ev.size = 0;
                 ev.unidentified = false;
                 strcpy(ev.note, "");
@@ -958,14 +996,14 @@ Smf* hudsonSpcARAMToMidi (const byte *aRAM)
                 ev.size++;
                 ev.code = aRAM[ev.addr];
                 sprintf(ev.classStr, "ev%02X", ev.code);
-                seq->track[ev.track].pos++;
+                evtr->pos++;
                 // in subroutine?
-                //inSub = (seq->track[ev.track].loopCount > 0);
-                //strcat(ev.classStr, inSub ? " sub" : "");
+                inSub = false; // NYI
+                strcat(ev.classStr, inSub ? " sub" : "");
 
                 //if (ev.code != seq->ver.pitchSlideByte)
-                //    seq->track[ev.track].prevTick = seq->track[ev.track].tick;
-                seq->track[ev.track].used = true;
+                //    evtr->prevTick = evtr->tick;
+                evtr->used = true;
                 // dispatch event
                 seq->ver.event[ev.code](seq, &ev, smf);
 
@@ -985,8 +1023,8 @@ Smf* hudsonSpcARAMToMidi (const byte *aRAM)
             // rewind tracks to end point
             for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
                 seq->track[tr].tick = seq->tick;
-                seq->track[tr].prevTick = seq->tick;
-                smfSetEndTimingOfTrack(smf, tr, seq->tick);
+                if (seq->track[tr].used)
+                    smfSetEndTimingOfTrack(seq->smf, tr, seq->tick);
             }
         }
         else {
@@ -994,7 +1032,8 @@ Smf* hudsonSpcARAMToMidi (const byte *aRAM)
 
             // check time limit
             if (seq->time >= hudsonSpcTimeLimit) {
-                abortFlag = true;
+            	fprintf(stderr, "TIMEOUT %f %f\n", seq->time, hudsonSpcTimeLimit);
+                seq->active = false;
             }
         }
     }
