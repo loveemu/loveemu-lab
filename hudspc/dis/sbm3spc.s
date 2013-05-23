@@ -1631,7 +1631,7 @@
 1540: 48 01     eor   a,#$01
 1542: d4 a4     mov   $a4+x,a           ; $a4+x ^= 1
 1544: 28 01     and   a,#$01
-1546: bc        inc   a
+1546: bc        inc   a                 ; length += 0.5
 1547: 2f 06     bra   $154f
 ; if length == 0, get actual length from next byte
 1549: 8d 00     mov   y,#$00

@@ -16,7 +16,7 @@
 
 #define APPNAME "Hudson SPC2MIDI"
 #define APPSHORTNAME "hudspc"
-#define VERSION "[2013-05-23]"
+#define VERSION "[2013-05-24]"
 
 static int hudsonSpcLoopMax = 2;            // maximum loop count of parser
 static int hudsonSpcTextLoopMax = 1;        // maximum loop count of text output
@@ -768,23 +768,23 @@ static void hudsonSpcEventNote (HudsonSpcSeqStat *seq, SeqEventReport *ev)
     int lenBits = noteByte & 7;
     bool tieBit = (noteByte & 8) != 0;
     int keyBits = noteByte >> 4;
+    int timebaseShift = (mget1(&seq->aRAM[0xb4]) & 3);
 
     if (lenBits != 0) {
         const byte lenTbl[8] = { 0xc0, 0x60, 0x30, 0x18, 0x0c, 0x06, 0x03, 0x01 };
-        int index = (lenBits - 1) + 0; // TODO: +($b4 & 3)
+        // actual driver does index += ($b4 & 3),
+        // this tool does not emulate it, instead...
+        int index = (lenBits - 1);
         if (index >= 8) {
             fprintf(stderr, "Note length index overflow, index = %d\n", index);
             index = 7;
         }
         len = lenTbl[index];
-        if (len == 1) {
-            // something special?
-        }
     }
     else {
         ev->size++;
         len = mget1(&seq->aRAM[*p]);
-        len *= 4; // POOR HACK
+        len <<= timebaseShift;
         (*p)++;
     }
 
@@ -793,7 +793,7 @@ static void hudsonSpcEventNote (HudsonSpcSeqStat *seq, SeqEventReport *ev)
             dur = len * tr->quantize / 8;
         }
         else {
-            dur = len - (tr->quantize - 8);
+            dur = len - ((tr->quantize - 8) << timebaseShift);
             if (dur < 0) {
                 dur = 0; // really?
             }
