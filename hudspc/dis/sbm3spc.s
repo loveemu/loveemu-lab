@@ -1573,8 +1573,8 @@
 14d9: dw $1773  ; e4 - set echo volume
 14db: dw $1782  ; e5 - set echo delay, feedback, FIR
 14dd: dw $179d  ; e6
-14df: dw $17a8  ; e7
-14e1: dw $17b2  ; e8
+14df: dw $17a8  ; e7 - transpose (absolute)
+14e1: dw $17b2  ; e8 - transpose (relative)
 14e3: dw $17c0  ; e9
 14e5: dw $17eb  ; ea
 14e7: dw $17f6  ; eb
@@ -1972,13 +1972,13 @@
 17a2: 0e 83 00  tset1 $0083
 17a5: 5f 9e 14  jmp   $149e
 
-; vcmd e7
+; vcmd e7 - transpose (absolute)
 17a8: f8 40     mov   x,$40
 17aa: f7 03     mov   a,($03)+y
 17ac: d5 41 02  mov   $0241+x,a
 17af: 5f 9c 14  jmp   $149c
 
-; vcmd e8
+; vcmd e8 - transpose (relative)
 17b2: f8 40     mov   x,$40
 17b4: f5 41 02  mov   a,$0241+x
 17b7: 60        clrc

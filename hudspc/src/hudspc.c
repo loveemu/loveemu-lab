@@ -224,6 +224,7 @@ static void hudsonSpcResetTrackParam (HudsonSpcSeqStat *seq, int track)
     tr->octave = 2;
     tr->quantize = 8;
     tr->volume = 100;
+    tr->note.transpose = 0;
     tr->lastNote.active = false;
     tr->callStackPtr = 0;
     tr->callStackSize = 0x10; // Super Bomberman 3
@@ -1076,6 +1077,46 @@ static void hudsonSpcEventVolumeFromTable (HudsonSpcSeqStat *seq, SeqEventReport
     smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_VOLUME, hudsonSpcMidiVolOf(tr->volume));
 }
 
+/** vcmd e7: transpose (absolute). */
+static void hudsonSpcEventTransposeAbs (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    tr->note.transpose = arg1;
+
+    sprintf(ev->note, "Transpose, key = %d", arg1);
+    strcat(ev->classStr, " ev-transpose");
+
+    //if (!hudsonSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd e8: transpose (relative). */
+static void hudsonSpcEventTransposeRel (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    tr->note.transpose += arg1;
+
+    sprintf(ev->note, "Transpose, key += %d", arg1);
+    strcat(ev->classStr, " ev-transpose");
+
+    //if (!hudsonSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
 /** vcmd dd: loop start. */
 static void hudsonSpcEventLoopStart (HudsonSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -1256,8 +1297,8 @@ static void hudsonSpcSetEventList (HudsonSpcSeqStat *seq)
     event[0xe4] = (HudsonSpcEvent) hudsonSpcEventUnknown2;
     event[0xe5] = (HudsonSpcEvent) hudsonSpcEventUnknown3;
     event[0xe6] = (HudsonSpcEvent) hudsonSpcEventUnknown0;
-    event[0xe7] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
-    event[0xe8] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
+    event[0xe7] = (HudsonSpcEvent) hudsonSpcEventTransposeAbs;
+    event[0xe8] = (HudsonSpcEvent) hudsonSpcEventTransposeRel;
     event[0xe9] = (HudsonSpcEvent) hudsonSpcEventUnknown3;
     event[0xea] = (HudsonSpcEvent) hudsonSpcEventUnknown0;
     event[0xeb] = (HudsonSpcEvent) hudsonSpcEventUnknown0;
