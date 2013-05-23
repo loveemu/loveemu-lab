@@ -30,6 +30,17 @@ static int hudsonSpcTimeBase = 48;
 static int hudsonSpcForceSongIndex = -1;
 static int hudsonSpcForceSongListAddr = -1;
 
+static bool hudsonSpcPatchFixOverride = false;
+static PatchFixInfo hudsonSpcPatchFix[256];
+
+enum {
+    SMF_RESET_GM1 = 0,      // General MIDI Level 1
+    SMF_RESET_GS,           // Roland GS
+    SMF_RESET_XG,           // YAMAHA XG
+    SMF_RESET_GM2,          // General MIDI Level 2
+};
+static int hudsonSpcMidiResetType = SMF_RESET_GM1;
+
 static const char *mycssfile = APPSHORTNAME ".css";
 
 //----
@@ -142,6 +153,52 @@ int hudsonSpcSetLoopCount (int count)
     return oldLoopCount;
 }
 
+/** read patch fix info file. */
+bool hudsonSpcImportPatchFixFile (const char *filename)
+{
+    FILE *fp;
+    int src, patch, bankL, bankM, key, mmlKey;
+    char lineBuf[512];
+
+    if (!filename) {
+        hudsonSpcPatchFixOverride = false;
+        return false;
+    }
+
+    fp = fopen(filename, "r");
+    if (!fp) {
+        hudsonSpcPatchFixOverride = false;
+        return false;
+    }
+
+    // reset patch fix
+    for (patch = 0; patch < 256; patch++) {
+        hudsonSpcPatchFix[patch].bankSelM = 0;
+        hudsonSpcPatchFix[patch].bankSelL = patch >> 7;
+        hudsonSpcPatchFix[patch].patchNo = patch & 0x7f;
+        hudsonSpcPatchFix[patch].key = 0;
+        hudsonSpcPatchFix[patch].mmlKey = 0;
+    }
+    // import patch fix
+    while (fgets(lineBuf, countof(lineBuf), fp)) {
+      strtok(lineBuf, ";"); // for comment support
+
+      key = 0;
+      mmlKey = 0;
+      if (sscanf(lineBuf, "%d %d %d %d %d %d", &src, &bankM, &bankL, &patch, &key, &mmlKey) >= 4) {
+        hudsonSpcPatchFix[src].bankSelM = bankM & 0x7f;
+        hudsonSpcPatchFix[src].bankSelL = bankL & 0x7f;
+        hudsonSpcPatchFix[src].patchNo = (patch - 1) & 0x7f;
+        hudsonSpcPatchFix[src].key = key;
+        hudsonSpcPatchFix[src].mmlKey = mmlKey;
+      }
+    }
+    hudsonSpcPatchFixOverride = true;
+
+    fclose(fp);
+    return true;
+}
+
 //----
 
 /** returns version string of music engine. */
@@ -174,6 +231,7 @@ static void hudsonSpcResetTrackParam (HudsonSpcSeqStat *seq, int track)
 static void hudsonSpcResetParam (HudsonSpcSeqStat *seq)
 {
     int track;
+    int patch;
 
     seq->tick = 0;
     seq->time = 0;
@@ -189,6 +247,22 @@ static void hudsonSpcResetParam (HudsonSpcSeqStat *seq)
         tr->tick = 0;
         hudsonSpcResetTrackParam(seq, track);
     }
+
+    // reset patch fix
+    for (patch = 0; patch < 256; patch++) {
+        seq->ver.patchFix[patch].bankSelM = 0;
+        seq->ver.patchFix[patch].bankSelL = patch >> 7;
+        seq->ver.patchFix[patch].patchNo = patch & 0x7f;
+        seq->ver.patchFix[patch].key = 0;
+        seq->ver.patchFix[patch].mmlKey = 0;
+    }
+    // copy patch fix if needed
+    if (hudsonSpcPatchFixOverride) {
+        for (patch = 0; patch < 256; patch++) {
+            memcpy(&seq->ver.patchFix[patch], &hudsonSpcPatchFix[patch], sizeof(PatchFixInfo));
+        }
+    }
+
 }
 
 /** returns what version the sequence is, and sets individual info. */
@@ -410,21 +484,6 @@ static int hudsonSpcMidiVolOf (int value)
         return (int) floor(sqrt((double) value/255) * 127 + 0.5); // more similar with MIDI?
 }
 
-/** insert program event. */
-/*
-static bool smfInsertHudsonSpcProgram (Smf* seq, int time, int channel, int track, int programNumber)
-{
-    bool result;
-
-    programNumber &= 0xff;
-    result  = smfInsertControl(seq, time, channel, track, SMF_CONTROL_BANKSELM, hudsonSpcPatchFixInfo[programNumber].bankSelM);
-    result &= smfInsertControl(seq, time, channel, track, SMF_CONTROL_BANKSELL, hudsonSpcPatchFixInfo[programNumber].bankSelL);
-    result &= smfInsertProgram(seq, time, channel, track, hudsonSpcPatchFixInfo[programNumber].patchNo);
-    return result;
-    //return false;
-}
-*/
-
 /** create new smf object and link to spc seq. */
 static Smf *hudsonSpcCreateSmf (HudsonSpcSeqStat *seq)
 {
@@ -439,8 +498,23 @@ static Smf *hudsonSpcCreateSmf (HudsonSpcSeqStat *seq)
 
     sprintf(songTitle, "%s %s", APPNAME, VERSION);
     smfInsertMetaText(smf, 0, 0, SMF_META_SEQUENCENAME, songTitle);
+
+    switch (hudsonSpcMidiResetType) {
+      case SMF_RESET_GS:
+        smfInsertGM1SystemOn(smf, 0, 0, 0);
+        smfInsertSysex(smf, 0, 0, 0, (const byte *) "\xf0\x41\x10\x42\x12\x40\x00\x7f\x00\x41\xf7", 11);
+        break;
+      case SMF_RESET_XG:
+        smfInsertGM1SystemOn(smf, 0, 0, 0);
+        smfInsertSysex(smf, 0, 0, 0, (const byte *) "\xf0\x43\x10\x4c\x00\x00\x7e\x00\xf7", 9);
+        break;
+      case SMF_RESET_GM2:
+        smfInsertSysex(smf, 0, 0, 0, (const byte *) "\xf0\x7e\x7f\x09\x03\xf7", 6);
+        break;
+      default:
+        smfInsertGM1SystemOn(smf, 0, 0, 0);
+    }
     smfInsertTempoBPM(smf, 0, 0, hudsonSpcTempo(seq));
-    smfInsertGM1SystemOn(smf, 0, 0, 0);
 
     // put initial info for each track
     for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
@@ -849,6 +923,26 @@ static void hudsonSpcEventOctaveDown (HudsonSpcSeqStat *seq, SeqEventReport *ev)
     strcat(ev->classStr, " ev-octavedown");
 }
 
+/** vcmd d6: set instrument. */
+static void hudsonSpcEventInstrument (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    tr->note.patch = arg1;
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_BANKSELM, seq->ver.patchFix[arg1].bankSelM);
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_BANKSELL, seq->ver.patchFix[arg1].bankSelL);
+    smfInsertProgram(seq->smf, ev->tick, ev->track, ev->track, seq->ver.patchFix[arg1].patchNo);
+
+    sprintf(ev->note, "Set Instrument, patch = %d", arg1);
+    strcat(ev->classStr, " ev-patch");
+}
+
 /** vcmd dd: loop start. */
 static void hudsonSpcEventLoopStart (HudsonSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -1002,7 +1096,7 @@ static void hudsonSpcSetEventList (HudsonSpcSeqStat *seq)
     event[0xd3] = (HudsonSpcEvent) hudsonSpcEventOctaveUp;
     event[0xd4] = (HudsonSpcEvent) hudsonSpcEventOctaveDown;
     event[0xd5] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
-    event[0xd6] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
+    event[0xd6] = (HudsonSpcEvent) hudsonSpcEventInstrument;
     event[0xd7] = (HudsonSpcEvent) hudsonSpcEventNOP2;
     event[0xd8] = (HudsonSpcEvent) hudsonSpcEventNOP2;
     event[0xd9] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
@@ -1251,7 +1345,7 @@ static int gArgc;
 static char **gArgv;
 static bool manDisplayed = false;
 
-typedef void (*CmdDispatcher) (void);
+typedef bool (*CmdDispatcher) (void);
 
 typedef struct TagCmdOptDefs {
     char *name;
@@ -1262,14 +1356,22 @@ typedef struct TagCmdOptDefs {
     char *description;
 } CmdOptDefs;
 
-static void cmdOptHelp (void);
-static void cmdOptLoop (void);
+static bool cmdOptHelp (void);
+static bool cmdOptLoop (void);
+static bool cmdOptPatchFix (void);
+static bool cmdOptGS (void);
+static bool cmdOptXG (void);
+static bool cmdOptGM2 (void);
 static bool cmdOptSong (void);
 static bool cmdOptSongList (void);
 
 static CmdOptDefs optDef[] = {
-    { "--help", '\0', 0, cmdOptHelp, "", "show usage" },
-    { "--loop", '\0', 1, cmdOptLoop, "<times>", "set loop count" },
+    { "help", '\0', 0, cmdOptHelp, "", "show usage" },
+    { "loop", '\0', 1, cmdOptLoop, "<times>", "set loop count" },
+    { "patchfix", '\0', 1, cmdOptPatchFix, "<file>", "modify patch/transpose" },
+    { "gs", '\0', 0, cmdOptGS, "", "Insert GS Reset at beginning of seq" },
+    { "xg", '\0', 0, cmdOptXG, "", "Insert XG System On at beginning of seq" },
+    { "gm2", '\0', 0, cmdOptGM2, "", "Insert GM2 System On at beginning of seq" },
     { "song", '\0', 1, cmdOptSong, "<index>", "force set song index" },
     { "songlist", '\0', 1, cmdOptSongList, "<addr>", "force set song (list) address" },
 };
@@ -1321,16 +1423,18 @@ void about (void)
 //----
 
 /** show usage */
-static void cmdOptHelp (void)
+static bool cmdOptHelp (void)
 {
     man();
+    return true;
 }
 
 /** set loop count */
-static void cmdOptLoop (void)
+static bool cmdOptLoop (void)
 {
     int loopCount = strtol(gArgv[0], NULL, 0);
     hudsonSpcSetLoopCount(loopCount);
+    return true;
 }
 
 /** set song index. */
@@ -1349,40 +1453,99 @@ static bool cmdOptSongList (void)
     return true;
 }
 
+/** import patch fix file. */
+static bool cmdOptPatchFix (void)
+{
+    if (hudsonSpcImportPatchFixFile(gArgv[0]))
+        return true;
+    else {
+        fprintf(stderr, "Error: unable to import patchfix.\n");
+        return false;
+    }
+}
+
+/** use GS reset. */
+static bool cmdOptGS (void)
+{
+    hudsonSpcMidiResetType = SMF_RESET_GS;
+    return true;
+}
+
+/** use XG reset. */
+static bool cmdOptXG (void)
+{
+    hudsonSpcMidiResetType = SMF_RESET_XG;
+    return true;
+}
+
+/** use GM2 reset. */
+static bool cmdOptGM2 (void)
+{
+    hudsonSpcMidiResetType = SMF_RESET_GM2;
+    return true;
+}
+
 /** handle command-line options. */
-static void handleCmdLineOpts (void)
+static bool handleCmdLineOpts (void)
 {
     int op;
 
     // dispatch options
     while (gArgc > 0 && gArgv[0][0] == '-') {
-        bool unknown = true;
+        bool shortOpt = (gArgv[0][1] != '-');
+        int optLen;
+        int chIndex;
 
         // match for each option
-        for (op = 0; op < countof(optDef); op++) {
-            if (strcmp(gArgv[0], optDef[op].name) == 0) {
-                unknown = false;
+        optLen = (int) strlen(gArgv[0]);
+        for (chIndex = 1; chIndex < (shortOpt ? optLen : 2); chIndex++) {
+            bool unknown = true;
+
+            for (op = 0; op < countof(optDef); op++) {
+                if (optDef[op].dispatch
+                        && ((!shortOpt && optDef[op].name && strcmp(&gArgv[0][2], optDef[op].name) == 0)
+                        || (shortOpt && optDef[op].shortName != '\0' && gArgv[0][chIndex] == optDef[op].shortName))) {
+                    unknown = false;
+                    if (!shortOpt) {
+                        gArgc--;
+                        gArgv++;
+                        if (gArgc >= optDef[op].numArgs) {
+                            if (!optDef[op].dispatch())
+                                return false;
+                            gArgc -= optDef[op].numArgs;
+                            gArgv += optDef[op].numArgs;
+                        }
+                        else {
+                            fprintf(stderr, "Error: too few arguments for option \"--%s\".\n", optDef[op].name);
+                            gArgv += gArgc;
+                            gArgc = 0;
+                            return false;
+                        }
+                    }
+                    else {
+                        assert(optDef[op].numArgs == 0);
+                        if (!optDef[op].dispatch())
+                            return false;
+                    }
+                    break;
+                }
+            }
+            if (unknown) {
+                if (!shortOpt)
+                    fprintf(stderr, "Error: unknown option \"%s\".\n", gArgv[0]);
+                else
+                    fprintf(stderr, "Error: unknown option \"-%c\".\n", gArgv[0][chIndex]);
                 gArgc--;
                 gArgv++;
-                if (gArgc >= optDef[op].numArgs) {
-                    optDef[op].dispatch();
-                    gArgc -= optDef[op].numArgs;
-                    gArgv += optDef[op].numArgs;
-                }
-                else {
-                    fprintf(stderr, "Error: too few arguments for option \"%s\".\n", optDef[op].name);
-                    gArgv += gArgc;
-                    gArgc = 0;
-                }
-                break;
+                return false;
             }
         }
-        if (unknown) {
-            fprintf(stderr, "Error: unknown option \"%s\".\n", gArgv[0]);
+        if (shortOpt) {
             gArgc--;
             gArgv++;
         }
     }
+    return true;
 }
 
 //----
