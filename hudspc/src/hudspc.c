@@ -93,6 +93,7 @@ struct TagHudsonSpcTrackStat {
     int looped;             // how many times looped (internal)
     byte quantize;          // quantize (0-8: qN, 9-: @qN)
     byte octave;            // octave
+    byte volume;            // voice volume
     int patch;              // patch number (for pitch fix)
     byte callStack[0x10];   // subroutine stack
     int callStackPtr;       // subroutine stack ptr
@@ -222,6 +223,7 @@ static void hudsonSpcResetTrackParam (HudsonSpcSeqStat *seq, int track)
     tr->looped = 0;
     tr->octave = 2;
     tr->quantize = 8;
+    tr->volume = 100;
     tr->lastNote.active = false;
     tr->callStackPtr = 0;
     tr->callStackSize = 0x10; // Super Bomberman 3
@@ -567,11 +569,6 @@ static bool hudsonSpcDequeueNote (HudsonSpcSeqStat *seq, int track)
         int vel = 100;
 
         dur = lastNote->dur;
-        //if (lastNote->tied)
-        //    dur = (lastNote->dur * lastNote->durRate) >> 8;
-        //else
-        //    dur = (lastNote->dur - lastNote->lastDur)
-        //        + ((lastNote->lastDur * lastNote->durRate) >> 8);
         if (dur == 0)
             dur++;
 
@@ -586,36 +583,6 @@ static bool hudsonSpcDequeueNote (HudsonSpcSeqStat *seq, int track)
         lastNote->active = false;
     }
     return result;
-/*
-    int tick = seq->track[track].lastNoteTick;
-    int note = seq->track[track].lastNote;
-    int length = seq->track[track].lastNoteDur;
-    int duration;
-    int durRate = seq->track[track].lastDurRate;
-    int velocity = seq->track[track].lastVel;
-    int transpose = seq->track[track].lastTranspose;
-    int keyFix = seq->track[track].lastKeyFix;
-    bool perc = seq->track[track].lastIsPerc;
-    bool tied = seq->track[track].tied;
-    bool result = false;
-    bool put = (note >= 0);
-
-    if (put)
-    {
-        if (!tied)
-            duration = (length * durRate) >> 8;
-        else
-            duration = (length - seq->track[track].lastLen)
-                     + ((seq->track[track].lastLen * durRate) >> 8);
-
-        if (duration == 0)
-            duration++;
-
-        result = smfInsertHudsonSpcNote(smf, tick, track, note + (perc ? 0 : transpose), keyFix, perc, velocity, duration);
-    }
-    seq->track[track].lastNote = -1;
-    return result;
-*/
 }
 
 /** finalize note for each track. */
@@ -796,7 +763,7 @@ static void hudsonSpcEventNote (HudsonSpcSeqStat *seq, SeqEventReport *ev)
     bool rest;
 
     int lenBits = noteByte & 7;
-    bool xxxBit = (noteByte & 8) != 0;
+    bool tieBit = (noteByte & 8) != 0;
     int keyBits = noteByte >> 4;
 
     if (lenBits != 0) {
@@ -809,7 +776,7 @@ static void hudsonSpcEventNote (HudsonSpcSeqStat *seq, SeqEventReport *ev)
         (*p)++;
     }
 
-    if (!xxxBit) {
+    if (!tieBit) {
         if (tr->quantize <= 8) {
             dur = len * tr->quantize / 8;
         }
@@ -830,29 +797,40 @@ static void hudsonSpcEventNote (HudsonSpcSeqStat *seq, SeqEventReport *ev)
     }
 
     if (rest) {
-        sprintf(ev->note, "Rest, len = %d", len);
+        sprintf(ev->note, "Rest%s, len = %d", tieBit ? " (Tied)" : "", len);
         strcat(ev->classStr, " ev-rest");
     }
     else {
         getNoteName(ev->note, note + seq->transpose + tr->note.transpose
             + seq->ver.patchFix[tr->note.patch].key + SPC_NOTE_KEYSHIFT);
-        sprintf(argDumpStr, ", len = %d", len);
+        sprintf(argDumpStr, "%s, len = %d", tieBit ? " (Tied)" : "", len);
         strcat(ev->note, argDumpStr);
         strcat(ev->classStr, " ev-note");
     }
 
-    // outputput old note first
-    hudsonSpcDequeueNote(seq, ev->track);
+    //if (!hudsonSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    // output old note first
+    if (!tr->lastNote.tied)
+    {
+        hudsonSpcDequeueNote(seq, ev->track);
+    }
 
     // set new note
     if (!rest) {
-        tr->lastNote.tick = ev->tick;
-        tr->lastNote.dur = dur;
-        tr->lastNote.key = note;
-        //tr->lastNote.vel = tr->note.vel;
-        tr->lastNote.transpose = seq->transpose + tr->note.transpose;
-        tr->lastNote.patch = tr->note.patch;
-        tr->lastNote.tied = false;
+        if (tr->lastNote.active && tr->lastNote.tied) {
+            tr->lastNote.dur += dur;
+        }
+        else {
+            tr->lastNote.tick = ev->tick;
+            tr->lastNote.dur = dur;
+            tr->lastNote.key = note;
+            //tr->lastNote.vel = tr->note.vel;
+            tr->lastNote.transpose = seq->transpose + tr->note.transpose;
+            tr->lastNote.patch = tr->note.patch;
+        }
+        tr->lastNote.tied = tieBit;
         tr->lastNote.active = true;
     }
     tr->tick += len;
@@ -943,6 +921,100 @@ static void hudsonSpcEventInstrument (HudsonSpcSeqStat *seq, SeqEventReport *ev)
     strcat(ev->classStr, " ev-patch");
 }
 
+/** vcmd d9: set volume. */
+static void hudsonSpcEventVolume (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    tr->volume = arg1;
+
+    sprintf(ev->note, "Volume, vol = %d", arg1);
+    strcat(ev->classStr, " ev-vol");
+
+    //if (!hudsonSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_VOLUME, hudsonSpcMidiVolOf(tr->volume));
+}
+
+/** vcmd da: add volume. */
+static void hudsonSpcEventAddVolume (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int newVolume;
+    int *p = &seq->track[ev->track].pos;
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    newVolume = tr->volume + arg1;
+    if (newVolume < 0) {
+        newVolume = 0;
+    }
+    else if (newVolume > 0xff) {
+    	newVolume = 0xff;
+    }
+    tr->volume = newVolume;
+
+    sprintf(ev->note, "Volume (Add), vol += %d", arg1);
+    strcat(ev->classStr, " ev-vol");
+
+    //if (!hudsonSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_VOLUME, hudsonSpcMidiVolOf(tr->volume));
+}
+
+/** vcmd ee: set volume from table. */
+static void hudsonSpcEventVolumeFromTable (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int volIndex;
+    int *p = &seq->track[ev->track].pos;
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+
+    const byte volTable[] = {
+        0x00, 0x01, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02,
+        0x02, 0x02, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03,
+        0x04, 0x04, 0x04, 0x04, 0x05, 0x05, 0x05, 0x05,
+        0x06, 0x06, 0x06, 0x07, 0x07, 0x08, 0x08, 0x09,
+        0x09, 0x0a, 0x0a, 0x0b, 0x0b, 0x0c, 0x0d, 0x0e,
+        0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
+        0x17, 0x18, 0x1a, 0x1b, 0x1d, 0x1e, 0x20, 0x22,
+        0x24, 0x26, 0x28, 0x2b, 0x2d, 0x30, 0x33, 0x36,
+        0x39, 0x3c, 0x40, 0x44, 0x48, 0x4c, 0x51, 0x55,
+        0x5a, 0x60, 0x66, 0x6c, 0x72, 0x79, 0x80, 0x87,
+        0x8f, 0x98, 0xa1, 0xaa, 0xb5, 0xbf, 0xcb, 0xd7,
+        0xe3, 0xf1, 0xff,
+    };
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    volIndex = arg1;
+    if (volIndex > 0x5a) {
+        volIndex = 0x5a;
+    }
+    tr->volume = volTable[arg1];
+
+    sprintf(ev->note, "Volume From Table, vol = %d (index %d)", tr->volume, arg1);
+    strcat(ev->classStr, " ev-vol");
+
+    //if (!hudsonSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_VOLUME, hudsonSpcMidiVolOf(tr->volume));
+}
+
 /** vcmd dd: loop start. */
 static void hudsonSpcEventLoopStart (HudsonSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -966,6 +1038,9 @@ static void hudsonSpcEventLoopStart (HudsonSpcSeqStat *seq, SeqEventReport *ev)
     tr->callStack[tr->callStackPtr++] = (byte)((*p) >> 8);
     tr->callStack[tr->callStackPtr++] = arg1;
     (*p)++;
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmd de: loop end. */
@@ -999,8 +1074,11 @@ static void hudsonSpcEventLoopEnd (HudsonSpcSeqStat *seq, SeqEventReport *ev)
         // repeat again
         sprintf(ev->note, "Loop Continue, count = %d", loopCount);
         tr->callStack[tr->callStackPtr - 1] = loopCount;
-        *p = mget2l(&tr->callStack[tr->callStackPtr - 3]);
+        *p = mget2l(&tr->callStack[tr->callStackPtr - 3]) + 1;
     }
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmd df: call subroutine. */
@@ -1046,7 +1124,8 @@ static void hudsonSpcEventJump (HudsonSpcSeqStat *seq, SeqEventReport *ev)
     }
     *p = arg1;
 
-    *p = arg1;
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmd ff: end subroutine / end of track. */
@@ -1071,9 +1150,12 @@ static void hudsonSpcEventEndSubroutine (HudsonSpcSeqStat *seq, SeqEventReport *
             return;
         }
 
-        *p = mget2l(&tr->callStack[tr->callStackPtr]) + 2;
         tr->callStackPtr -= 2;
+        *p = mget2l(&tr->callStack[tr->callStackPtr]) + 2;
     }
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** set pointers of each event. */
@@ -1099,8 +1181,8 @@ static void hudsonSpcSetEventList (HudsonSpcSeqStat *seq)
     event[0xd6] = (HudsonSpcEvent) hudsonSpcEventInstrument;
     event[0xd7] = (HudsonSpcEvent) hudsonSpcEventNOP2;
     event[0xd8] = (HudsonSpcEvent) hudsonSpcEventNOP2;
-    event[0xd9] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
-    event[0xda] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
+    event[0xd9] = (HudsonSpcEvent) hudsonSpcEventVolume;
+    event[0xda] = (HudsonSpcEvent) hudsonSpcEventAddVolume;
     event[0xdb] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
     event[0xdc] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
     event[0xdd] = (HudsonSpcEvent) hudsonSpcEventLoopStart;
@@ -1120,7 +1202,7 @@ static void hudsonSpcSetEventList (HudsonSpcSeqStat *seq)
     event[0xeb] = (HudsonSpcEvent) hudsonSpcEventUnknown0;
     event[0xec] = (HudsonSpcEvent) hudsonSpcEventUnknown0;
     event[0xed] = (HudsonSpcEvent) hudsonSpcEventUnknown0;
-    event[0xee] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
+    event[0xee] = (HudsonSpcEvent) hudsonSpcEventVolumeFromTable;
     event[0xef] = (HudsonSpcEvent) hudsonSpcEventUnknown2;
     event[0xf0] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
     event[0xf1] = (HudsonSpcEvent) hudsonSpcEventUnknown2;
