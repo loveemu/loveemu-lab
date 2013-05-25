@@ -86,7 +86,7 @@ struct TagHudsonSpcTrackStat {
     bool active;            // if the channel is still active
     bool used;              // if the channel used once or not
     int pos;                // current address on ARAM
-    int startPos;           // song start address on ARAM
+    int trackLoopAddr;      // track loop address on ARAM
     int tick;               // timing (must be synchronized with seq)
     int prevTick;           // previous timing (for pitch slide)
     HudsonSpcNoteParam note;     // current note param
@@ -337,7 +337,7 @@ static bool hudsonSpcDetectSeq (HudsonSpcSeqStat *seq)
         // if active, read more info
         if ((trActiveBits & (1 << tr)) != 0) {
             seq->track[tr].pos = mget2l(&aRAM[seqHeaderAddr + trHeaderOffset]);
-            seq->track[tr].startPos = seq->track[tr].pos;
+            seq->track[tr].trackLoopAddr = seq->track[tr].pos;
             trHeaderOffset += 2;
 
             seq->track[tr].active = true;
@@ -523,7 +523,16 @@ static Smf *hudsonSpcCreateSmf (HudsonSpcSeqStat *seq)
 
     // put initial info for each track
     for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
-        // TODO: add code
+        if (!seq->track[tr].active)
+            continue;
+
+        //smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_VOLUME, rareSpcMidiVolOf(seq->track[tr].volume));
+        smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_REVERB, 0);
+        //smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_RELEASETIME, 64 + 6);
+        smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_MONO, 127);
+
+        sprintf(songTitle, "Track %d - $%04X", tr + 1, seq->track[tr].pos);
+        smfInsertMetaText(seq->smf, 0, tr, SMF_META_TRACKNAME, songTitle);
     }
     return smf;
 }
@@ -649,13 +658,16 @@ static void hudsonSpcSeqAdvTick(HudsonSpcSeqStat *seq)
 /** vcmds: unknown event (without status change). */
 static void hudsonSpcEventUnknownInline (HudsonSpcSeqStat *seq, SeqEventReport *ev)
 {
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
     sprintf(ev->note, "Unknown Event %02X", ev->code);
     strcat(ev->classStr, " unknown");
 
     if (ev->unidentified)
-        fprintf(stderr, "Error: Encountered unidentified event %02X [Track %d]\n", ev->code, ev->track + 1);
+        fprintf(stderr, "Error: Encountered unidentified event %02X at $%04X [Track %d]\n", ev->code, *p, ev->track + 1);
     else
-        fprintf(stderr, "Warning: Skipped unknown event %02X [Track %d]\n", ev->code, ev->track + 1);
+        fprintf(stderr, "Warning: Skipped unknown event %02X at $%04X [Track %d]\n", ev->code, *p, ev->track + 1);
 }
 
 /** vcmds: unidentified event. */
@@ -1233,35 +1245,100 @@ static void hudsonSpcEventJump (HudsonSpcSeqStat *seq, SeqEventReport *ev)
     //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
-/** vcmd eb: overwrite song start position. */
-static void hudsonSpcEventSetSongStart (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+/** vcmd eb: set track loop position. */
+static void hudsonSpcEventSetTrackLoop (HudsonSpcSeqStat *seq, SeqEventReport *ev)
 {
     HudsonSpcTrackStat *tr = &seq->track[ev->track];
     int *p = &seq->track[ev->track].pos;
 
-    sprintf(ev->note, "Set Song Start, dest = $%04X", *p);
-    strcat(ev->classStr, " ev-setsongstart");
+    sprintf(ev->note, "Set Track Loop Position, dest = $%04X", *p);
+    strcat(ev->classStr, " ev-settrackloop");
 
-    tr->startPos = *p;
+    tr->trackLoopAddr = *p;
+
+    //if (!hudsonSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd ec: goto track loop position. */
+static void hudsonSpcEventJumpTrackLoop (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    sprintf(ev->note, "Repeat From Track Loop Position, dest = $%04X", tr->trackLoopAddr);
+    strcat(ev->classStr, " ev-gototrackloop");
+
+    // assumes backjump = loop
+    if (tr->trackLoopAddr < *p) {
+        hudsonSpcAddTrackLoopCount(seq, ev->track, 1);
+    }
+    *p = tr->trackLoopAddr;
+
+    //if (!hudsonSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd e1: detune. */
+static void hudsonSpcEventDetune (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    sprintf(ev->note, "Tuning, key += %d / 256", arg1);
+    strcat(ev->classStr, " ev-tuning");
+
+    //if (!hudsonSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNM, 0);
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNL, 1);
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_DATAENTRYM, 64 + (arg1 / 4));
+    //smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_DATAENTRYL, 0);
+}
+
+/** vcmd e2: set vibrato. */
+static void hudsonSpcEventSetVibrato (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    if ((arg1 & 0x7f) != 0)
+    {
+        sprintf(ev->note, "Set Vibrato, rate = %d, depth = %d", arg1, arg2);
+    }
+    else
+    {
+        sprintf(ev->note, "Set Vibrato, depth = 0");
+    }
+    strcat(ev->classStr, " ev-vibrato");
 
     if (!hudsonSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
-/** vcmd ec: goto song start position. */
-static void hudsonSpcEventJumpToSongStart (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+/** vcmd e3: set vibrato delay. */
+static void hudsonSpcEventSetVibratoDelay (HudsonSpcSeqStat *seq, SeqEventReport *ev)
 {
-    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int arg1;
     int *p = &seq->track[ev->track].pos;
 
-    sprintf(ev->note, "Jump To Song Start, dest = $%04X", tr->startPos);
-    strcat(ev->classStr, " ev-gotosongstart");
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
 
-    // assumes backjump = loop
-    if (tr->startPos < *p) {
-        hudsonSpcAddTrackLoopCount(seq, ev->track, 1);
-    }
-    *p = tr->startPos;
+    sprintf(ev->note, "Set Vibrato Delay, delay = %d", arg1);
+    strcat(ev->classStr, " ev-vibratodelay");
 
     if (!hudsonSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
@@ -1370,9 +1447,9 @@ static void hudsonSpcSetEventList (HudsonSpcSeqStat *seq)
     event[0xde] = (HudsonSpcEvent) hudsonSpcEventLoopEnd;
     event[0xdf] = (HudsonSpcEvent) hudsonSpcEventSubroutine;
     event[0xe0] = (HudsonSpcEvent) hudsonSpcEventJump;
-    event[0xe1] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
-    event[0xe2] = (HudsonSpcEvent) hudsonSpcEventUnknown2;
-    event[0xe3] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
+    event[0xe1] = (HudsonSpcEvent) hudsonSpcEventDetune;
+    event[0xe2] = (HudsonSpcEvent) hudsonSpcEventSetVibrato;
+    event[0xe3] = (HudsonSpcEvent) hudsonSpcEventSetVibratoDelay;
     event[0xe4] = (HudsonSpcEvent) hudsonSpcEventEchoVolume;
     event[0xe5] = (HudsonSpcEvent) hudsonSpcEventEchoParam;
     event[0xe6] = (HudsonSpcEvent) hudsonSpcEventUnknown0;
@@ -1380,8 +1457,8 @@ static void hudsonSpcSetEventList (HudsonSpcSeqStat *seq)
     event[0xe8] = (HudsonSpcEvent) hudsonSpcEventTransposeRel;
     event[0xe9] = (HudsonSpcEvent) hudsonSpcEventUnknown3;
     event[0xea] = (HudsonSpcEvent) hudsonSpcEventUnknown0;
-    event[0xeb] = (HudsonSpcEvent) hudsonSpcEventSetSongStart;
-    event[0xec] = (HudsonSpcEvent) hudsonSpcEventJumpToSongStart;
+    event[0xeb] = (HudsonSpcEvent) hudsonSpcEventSetTrackLoop;
+    event[0xec] = (HudsonSpcEvent) hudsonSpcEventJumpTrackLoop;
     event[0xed] = (HudsonSpcEvent) hudsonSpcEventUnknown0;
     event[0xee] = (HudsonSpcEvent) hudsonSpcEventVolumeFromTable;
     event[0xef] = (HudsonSpcEvent) hudsonSpcEventUnknown2;

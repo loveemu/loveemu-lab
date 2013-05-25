@@ -90,7 +90,7 @@
 092c: 3f 37 12  call  $1237
 092f: 3f 83 0d  call  $0d83
 0932: 2f c6     bra   $08fa
-;
+; update tempo
 0934: 68 0a     cmp   a,#$0a
 0936: b0 02     bcs   $093a
 0938: e8 0a     mov   a,#$0a
@@ -1181,6 +1181,7 @@
 11e5: db $5e,$63,$67,$6b,$6e,$71,$74,$77
 11ed: db $79,$7b,$7c,$7d,$7e,$7f,$7f
 
+; tempo - bpm to time table (sort of)
 11f4: db $00,$02,$04,$05,$07,$09,$0b,$0d
 11fc: db $0e,$10,$12,$14,$16,$17,$19,$1b
 1204: db $1d,$1f,$21,$22,$24,$26,$28,$2a
@@ -1356,7 +1357,7 @@
 134e: fc        inc   y
 134f: f7 03     mov   a,($03)+y         ; seq start address (hi)
 1351: d5 09 02  mov   $0209+x,a
-1354: d5 5a 02  mov   $025a+x,a
+1354: d5 5a 02  mov   $025a+x,a         ; default global loop point = song start
 1357: e8 00     mov   a,#$00
 1359: d5 6f 03  mov   $036f+x,a
 135c: d5 39 02  mov   $0239+x,a
@@ -1567,9 +1568,9 @@
 14cd: dw $16e6  ; de - end loop
 14cf: dw $1709  ; df - call subroutine
 14d1: dw $172b  ; e0 - goto
-14d3: dw $1738  ; e1
-14d5: dw $1742  ; e2
-14d7: dw $175f  ; e3
+14d3: dw $1738  ; e1 - detune
+14d5: dw $1742  ; e2 - set vibrato
+14d7: dw $175f  ; e3 - set vibrato delay
 14d9: dw $1773  ; e4 - set echo volume
 14db: dw $1782  ; e5 - set echo delay, feedback, FIR
 14dd: dw $179d  ; e6
@@ -1577,8 +1578,8 @@
 14e1: dw $17b2  ; e8 - transpose (relative)
 14e3: dw $17c0  ; e9
 14e5: dw $17eb  ; ea
-14e7: dw $17f6  ; eb - overwrite song start position
-14e8: dw $1805  ; ec - goto song start position
+14e7: dw $17f6  ; eb - set track loop position
+14e8: dw $1805  ; ec - repeat from track loop position
 14ea: dw $1814  ; ed
 14ed: dw $182f  ; ee - set volume (from table)
 14ef: dw $1843  ; ef
@@ -1914,35 +1915,35 @@
 1733: d8 03     mov   $03,x
 1735: 5f 9e 14  jmp   $149e
 
-; vcmd e1
+; vcmd e1 - detune
 1738: f8 40     mov   x,$40
 173a: f7 03     mov   a,($03)+y
 173c: d5 8b 02  mov   $028b+x,a
 173f: 5f 9c 14  jmp   $149c
 
-; vcmd e2
+; vcmd e2 - set vibrato
 1742: f8 40     mov   x,$40
 1744: f7 03     mov   a,($03)+y
 1746: 28 7f     and   a,#$7f
 1748: f0 0d     beq   $1757
-174a: d5 94 02  mov   $0294+x,a
+174a: d5 94 02  mov   $0294+x,a         ; arg1 - vibrato rate
 174d: 3a 03     incw  $03
 174f: f7 03     mov   a,($03)+y
-1751: d5 9c 02  mov   $029c+x,a
+1751: d5 9c 02  mov   $029c+x,a         ; arg2 - vibrato depth
 1754: 5f 9c 14  jmp   $149c
-
+; if arg1 == 0, set depth = 0
 1757: d5 9c 02  mov   $029c+x,a
 175a: 3a 03     incw  $03
 175c: 5f 9c 14  jmp   $149c
 
-; vcmd e3
+; vcmd e3 - set vibrato delay
 175f: f8 40     mov   x,$40
 1761: f7 03     mov   a,($03)+y
 1763: d0 08     bne   $176d
 1765: f5 10 11  mov   a,$1110+x
 1768: 4e 93 02  tclr1 $0293
 176b: e8 00     mov   a,#$00
-176d: d5 bc 02  mov   $02bc+x,a
+176d: d5 bc 02  mov   $02bc+x,a         ; arg1 - vibrato delay (tick?)
 1770: 5f 9c 14  jmp   $149c
 
 ; vcmd e4 - set echo volume
@@ -2016,7 +2017,7 @@
 17f1: d4 ac     mov   $ac+x,a
 17f3: 5f 9e 14  jmp   $149e
 
-; vcmd eb - overwrite song start position
+; vcmd eb - set track loop position
 17f6: f8 40     mov   x,$40
 17f8: e4 03     mov   a,$03
 17fa: d5 52 02  mov   $0252+x,a
@@ -2024,7 +2025,7 @@
 17ff: d5 5a 02  mov   $025a+x,a
 1802: 5f 9e 14  jmp   $149e
 
-; vcmd ec - goto song start position
+; vcmd ec - repeat from track loop position
 1805: f8 40     mov   x,$40
 1807: f5 52 02  mov   a,$0252+x
 180a: c4 03     mov   $03,a
