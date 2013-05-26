@@ -87,6 +87,7 @@ struct TagHudsonSpcTrackStat {
     int pos;                // current address on ARAM
     int trackLoopAddr;      // track loop address on ARAM
     bool trackLoopIsSet;    // track loop flag to prevent double run
+    bool rhythmChannel;     // rhythm channel / melody channel
     int tick;               // timing (must be synchronized with seq)
     int prevTick;           // previous timing (for pitch slide)
     HudsonSpcNoteParam note;     // current note param
@@ -238,6 +239,7 @@ static void hudsonSpcResetTrackParam (HudsonSpcSeqStat *seq, int track)
     tr->callStackPtr = 0;
     tr->callStackSize = 0x10; // Super Bomberman 3
     tr->trackLoopIsSet = false;
+    tr->rhythmChannel = false;
 }
 
 /** reset before play/convert song. */
@@ -709,7 +711,7 @@ static bool hudsonSpcDequeueNote (HudsonSpcSeqStat *seq, int track)
 
         key = lastNote->key + lastNote->transpose
             + seq->ver.patchFix[tr->lastNote.patch].key
-            + SPC_NOTE_KEYSHIFT;
+            + (tr->rhythmChannel ? 0 : SPC_NOTE_KEYSHIFT);
         //vel = lastNote->vel;
         //if (vel == 0)
         //    vel++;
@@ -948,7 +950,8 @@ static void hudsonSpcEventNote (HudsonSpcSeqStat *seq, SeqEventReport *ev)
     }
     else {
         getNoteName(ev->note, note + seq->transpose + tr->note.transpose
-            + seq->ver.patchFix[tr->note.patch].key + SPC_NOTE_KEYSHIFT);
+            + seq->ver.patchFix[tr->note.patch].key
+            + (tr->rhythmChannel ? 0 : SPC_NOTE_KEYSHIFT));
         sprintf(argDumpStr, "%s, len = %d", tieBit ? " (Tied)" : "", len);
         strcat(ev->note, argDumpStr);
         strcat(ev->classStr, " ev-note");
@@ -1673,11 +1676,12 @@ static void hudsonSpcEventSubEvent (HudsonSpcSeqStat *seq, SeqEventReport *ev)
     case 0x03:
         sprintf(ev->note, "Subcmd %02X (Rhythm Channel On)", arg1);
         strcat(ev->classStr, " ev-rhythmon");
+        tr->rhythmChannel = true;
 
         if (!hudsonSpcLessTextInSMF)
             smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 
-        // better than nothing?
+        // HACK: better than nothing?
         smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_BANKSELM, seq->ver.patchFix[255].bankSelM);
         smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_BANKSELL, seq->ver.patchFix[255].bankSelL);
         smfInsertProgram(seq->smf, ev->tick, ev->track, ev->track, seq->ver.patchFix[255].patchNo);
@@ -1685,6 +1689,7 @@ static void hudsonSpcEventSubEvent (HudsonSpcSeqStat *seq, SeqEventReport *ev)
     case 0x04:
         sprintf(ev->note, "Subcmd %02X (Rhythm Channel Off)", arg1);
         strcat(ev->classStr, " ev-rhythmoff");
+        tr->rhythmChannel = false;
 
         if (!hudsonSpcLessTextInSMF)
             smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
