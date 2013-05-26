@@ -1123,6 +1123,9 @@
 10ea: f6 80 06  mov   a,$0680+y
 10ed: 6f        ret
 
+; calc L/R volume balance
+; $00=pan, $01=channel volume
+; return A=R volume, Y=L volume
 10ee: e8 1e     mov   a,#$1e
 10f0: 80        setc
 10f1: a4 00     sbc   a,$00
@@ -1175,7 +1178,7 @@
 
 11c8: db $79,$7f,$87,$8f,$98,$a0,$aa,$b5,$bf,$ca,$d6,$e3,$f1
 
-; panpot table?
+; panpot - volume balance table
 11d5: db $00,$07,$0d,$14,$1a,$21,$27,$2e
 11dd: db $34,$3a,$40,$45,$4b,$50,$55,$5a
 11e5: db $5e,$63,$67,$6b,$6e,$71,$74,$77
@@ -1280,7 +1283,7 @@
 12bb: 8f 00 83  mov   $83,#$00
 12be: e4 00     mov   a,$00
 12c0: 8d 5c     mov   y,#$5c
-12c2: 4f 0c     pcall $0c               ; set $(01)00 to KOF
+12c2: 4f 0c     pcall $0c               ; set $00 to KOF
 12c4: 8d 0b     mov   y,#$0b
 12c6: fe fe     dbnz  y,$12c6
 12c8: e8 00     mov   a,#$00
@@ -1562,7 +1565,7 @@
 14c1: dw $1671  ; d8 - nop (2 bytes)
 14c3: dw $1676  ; d9 - set volume
 14c5: dw $1688  ; da - set panpot
-14c7: dw $1692  ; db
+14c7: dw $1692  ; db - set reverse phase
 14c9: dw $16a5  ; dc - add volume
 14cb: dw $16c7  ; dd - start loop
 14cd: dw $16e6  ; de - end loop
@@ -1573,18 +1576,18 @@
 14d7: dw $175f  ; e3 - set vibrato delay
 14d9: dw $1773  ; e4 - set echo volume
 14db: dw $1782  ; e5 - set echo delay, feedback, FIR
-14dd: dw $179d  ; e6
+14dd: dw $179d  ; e6 - echo on
 14df: dw $17a8  ; e7 - transpose (absolute)
 14e1: dw $17b2  ; e8 - transpose (relative)
-14e3: dw $17c0  ; e9
-14e5: dw $17eb  ; ea
+14e3: dw $17c0  ; e9 - pitch attack envelope on
+14e5: dw $17eb  ; ea - pitch attack envelope off
 14e7: dw $17f6  ; eb - set track loop position
 14e8: dw $1805  ; ec - repeat from track loop position
 14ea: dw $1814  ; ed
 14ed: dw $182f  ; ee - set volume (from table)
-14ef: dw $1843  ; ef
+14ef: dw $1843  ; ef - one-step pitch envelope?
 14f1: dw $1854  ; f0
-14f3: dw $185e  ; f1
+14f3: dw $185e  ; f1 - set portamento
 14f5: dw $149e  ; f2 - nop
 14f7: dw $149e  ; f3 - nop
 14f9: dw $149e  ; f4 - nop
@@ -1602,13 +1605,13 @@
 
 ; subcmd table (see vcmd fe)
 1511: dw $18af  ; 00 - end of track
-1513: dw $18b8  ; 01
+1513: dw $18b8  ; 01 - echo off
 1515: dw $18c3  ; 02
-1517: dw $18cc  ; 03
-1519: dw $18d7  ; 04
-151b: dw $18e2  ; 05
-151d: dw $18e2  ; 06
-151f: dw $18e2  ; 07
+1517: dw $18cc  ; 03 - rhythm channel on
+1519: dw $18d7  ; 04 - rhythm channel off
+151b: dw $18e2  ; 05 - set vibrato type 0
+151d: dw $18e2  ; 06 - set vibrato type 1
+151f: dw $18e2  ; 07 - set vibrato type 2
 1521: dw $18ef  ; 08
 1523: dw $1901  ; 09
 
@@ -1702,11 +1705,11 @@
 15bb: 28 18     and   a,#$18
 15bd: 68 08     cmp   a,#$08
 15bf: d0 2d     bne   $15ee
-;
+; melody instrument
 15c1: f5 11 02  mov   a,$0211+x
 15c4: 1c        asl   a
 15c5: 1c        asl   a
-15c6: fd        mov   y,a
+15c6: fd        mov   y,a               ; y = note number * 4
 15c7: f7 3c     mov   a,($3c)+y
 15c9: 75 62 02  cmp   a,$0262+x
 15cc: f0 09     beq   $15d7
@@ -1816,7 +1819,8 @@
 168c: d5 83 02  mov   $0283+x,a
 168f: 5f 9c 14  jmp   $149c
 
-; vcmd db
+; vcmd db - set reverse phase
+; (it needs a few of certain conditions to effect.)
 1692: f8 40     mov   x,$40
 1694: f7 03     mov   a,($03)+y
 1696: 28 03     and   a,#$03
@@ -1967,7 +1971,7 @@
 1798: 42 b4     set2  $b4
 179a: 5f 9c 14  jmp   $149c
 
-; vcmd e6
+; vcmd e6 - echo on
 179d: f8 40     mov   x,$40
 179f: f5 10 11  mov   a,$1110+x
 17a2: 0e 83 00  tset1 $0083
@@ -1987,30 +1991,30 @@
 17ba: d5 41 02  mov   $0241+x,a
 17bd: 5f 9c 14  jmp   $149c
 
-; vcmd e9
+; vcmd e9 - pitch attack envelope on
 17c0: f8 40     mov   x,$40
 17c2: f7 03     mov   a,($03)+y
 17c4: 28 7f     and   a,#$7f
 17c6: f0 1c     beq   $17e4
-;
-17c8: d5 cd 02  mov   $02cd+x,a
+; if (arg1 != 0), enable pitch attack envelope
+17c8: d5 cd 02  mov   $02cd+x,a         ; arg1 = pitch attack speed
 17cb: 3a 03     incw  $03
 17cd: f7 03     mov   a,($03)+y
 17cf: f0 15     beq   $17e6
-17d1: d5 d5 02  mov   $02d5+x,a
+17d1: d5 d5 02  mov   $02d5+x,a         ; arg2 = detune amount (unsigned)
 17d4: 3a 03     incw  $03
 17d6: f7 03     mov   a,($03)+y
-17d8: d5 dd 02  mov   $02dd+x,a
+17d8: d5 dd 02  mov   $02dd+x,a         ; arg3 = direction (0: down, otherwise: up)
 17db: f4 ac     mov   a,$ac+x
 17dd: 08 10     or    a,#$10
 17df: d4 ac     mov   $ac+x,a
 17e1: 5f 9c 14  jmp   $149c
-;
+; if (arg1 == 0), do nothing
 17e4: 3a 03     incw  $03
 17e6: 3a 03     incw  $03
 17e8: 5f 9c 14  jmp   $149c
 
-; vcmd ea
+; vcmd ea - pitch attack envelope off
 17eb: f8 40     mov   x,$40
 17ed: f4 ac     mov   a,$ac+x
 17ef: 28 ef     and   a,#$ef
@@ -2033,7 +2037,7 @@
 180f: c4 04     mov   $04,a
 1811: 5f 9e 14  jmp   $149e
 
-; vcmd ed
+; vcmd ed - set track loop position (only work with the first call)
 1814: f8 40     mov   x,$40
 1816: f4 ac     mov   a,$ac+x
 1818: 28 20     and   a,#$20
@@ -2058,13 +2062,13 @@
 183d: d5 7b 02  mov   $027b+x,a
 1840: 5f 7d 16  jmp   $167d
 
-; vcmd ef
+; vcmd ef - one-step pitch envelope?
 1843: f7 03     mov   a,($03)+y
 1845: f8 40     mov   x,$40
-1847: d5 fd 02  mov   $02fd+x,a
+1847: d5 fd 02  mov   $02fd+x,a         ; arg1
 184a: 3a 03     incw  $03
 184c: f7 03     mov   a,($03)+y
-184e: d5 05 03  mov   $0305+x,a
+184e: d5 05 03  mov   $0305+x,a         ; arg2
 1851: 5f 9c 14  jmp   $149c
 
 ; vcmd f0
@@ -2073,13 +2077,13 @@
 1858: d5 f5 02  mov   $02f5+x,a
 185b: 5f 9c 14  jmp   $149c
 
-; vcmd f1
+; vcmd f1 - set portamento
 185e: f8 40     mov   x,$40
 1860: f7 03     mov   a,($03)+y
 1862: f0 18     beq   $187c
-;
+; if (arg1 != 0), portamento on
 1864: bc        inc   a
-1865: d5 fd 02  mov   $02fd+x,a
+1865: d5 fd 02  mov   $02fd+x,a         ; arg1 - portamento speed (higher is faster)
 1868: f4 ac     mov   a,$ac+x
 186a: 08 40     or    a,#$40
 186c: d4 ac     mov   $ac+x,a
@@ -2087,9 +2091,9 @@
 1870: d4 94     mov   $94+x,a
 1872: d4 9c     mov   $9c+x,a
 1874: d5 05 03  mov   $0305+x,a
-1877: 3a 03     incw  $03
+1877: 3a 03     incw  $03               ; arg2 - no effect? usually 0
 1879: 5f 9c 14  jmp   $149c
-;
+; if (arg1 == 0), portamento off
 187c: f4 ac     mov   a,$ac+x
 187e: 28 bf     and   a,#$bf
 1880: d4 ac     mov   $ac+x,a
@@ -2127,7 +2131,7 @@
 18b5: d4 a4     mov   $a4+x,a
 18b7: 6f        ret
 
-; subcmd 01
+; subcmd 01 - echo off
 18b8: f8 40     mov   x,$40
 18ba: f5 10 11  mov   a,$1110+x
 18bd: 4e 83 00  tclr1 $0083
@@ -2138,21 +2142,21 @@
 18c6: 3f 2b 0f  call  $0f2b
 18c9: 5f 9e 14  jmp   $149e
 
-; subcmd 03
+; subcmd 03 - rhythm channel on
 18cc: f8 40     mov   x,$40
 18ce: f4 a4     mov   a,$a4+x
 18d0: 08 08     or    a,#$08
 18d2: d4 a4     mov   $a4+x,a
 18d4: 5f 9e 14  jmp   $149e
 
-; subcmd 04
+; subcmd 04 - rhythm channel off
 18d7: f8 40     mov   x,$40
 18d9: f4 a4     mov   a,$a4+x
 18db: 28 f7     and   a,#$f7
 18dd: d4 a4     mov   $a4+x,a
 18df: 5f 9e 14  jmp   $149e
 
-; subcmd 05,06,07
+; subcmd 05,06,07 - set vibrato type
 18e2: e4 00     mov   a,$00
 18e4: 80        setc
 18e5: a8 05     sbc   a,#$05
@@ -2239,35 +2243,36 @@
 197b: f8 40     mov   x,$40
 197d: f5 83 02  mov   a,$0283+x
 1980: 30 40     bmi   $19c2
+; if panpot >= 0, calc volume
 1982: 73 b4 02  bbc3  $b4,$1987
-1985: e8 0f     mov   a,#$0f
+1985: e8 0f     mov   a,#$0f            ; set pan = center, if (($b4 & 8) != 0)
 1987: c4 00     mov   $00,a
 1989: f5 7b 02  mov   a,$027b+x
 198c: c4 01     mov   $01,a
-198e: 3f ee 10  call  $10ee
+198e: 3f ee 10  call  $10ee             ; calc L/R volume
 1991: cb 04     mov   $04,y
 1993: ec 7a 02  mov   y,$027a
-1996: cf        mul   ya
+1996: cf        mul   ya                ; R volume * master volume
 1997: cb 03     mov   $03,y
 1999: e4 04     mov   a,$04
 199b: ec 7a 02  mov   y,$027a
-199e: cf        mul   ya
+199e: cf        mul   ya                ; L volume * master volume
 199f: cb 04     mov   $04,y
 19a1: f8 40     mov   x,$40
-19a3: 63 b4 16  bbs3  $b4,$19bc
+19a3: 63 b4 16  bbs3  $b4,$19bc         ; can negate volume (reverse phase), if (($b4 & 8) == 0)
 19a6: f4 ac     mov   a,$ac+x
 19a8: 28 01     and   a,#$01
 19aa: f0 05     beq   $19b1
 19ac: 58 ff 03  eor   $03,#$ff
-19af: ab 03     inc   $03
+19af: ab 03     inc   $03               ; negate R volume, if ((($ac+x) & 1) != 0)
 19b1: f4 ac     mov   a,$ac+x
 19b3: 28 02     and   a,#$02
 19b5: f0 05     beq   $19bc
 19b7: 58 ff 04  eor   $04,#$ff
-19ba: ab 04     inc   $04
+19ba: ab 04     inc   $04               ; negate L volume, if ((($ac+x) & 2) != 0)
 19bc: ba 03     movw  ya,$03
-19be: d4 41     mov   $41+x,a
-19c0: db 49     mov   $49+x,y
+19be: d4 41     mov   $41+x,a           ; set final R volume
+19c0: db 49     mov   $49+x,y           ; set final L volume
 19c2: 6f        ret
 
 19c3: f8 40     mov   x,$40
@@ -2585,6 +2590,7 @@
 1c59: 9c        dec   a
 1c5a: f0 6a     beq   $1cc6
 1c5c: 2f 68     bra   $1cc6
+; vibrato type 0 (up and down)
 1c5e: f5 94 02  mov   a,$0294+x
 1c61: c4 00     mov   $00,a
 1c63: f5 b4 02  mov   a,$02b4+x
@@ -2641,6 +2647,7 @@
 1cc3: 8d ff     mov   y,#$ff
 1cc5: 6f        ret
 
+; vibrato type 1,2,... (upper half only)
 1cc6: f5 94 02  mov   a,$0294+x
 1cc9: c4 00     mov   $00,a
 1ccb: f5 b4 02  mov   a,$02b4+x

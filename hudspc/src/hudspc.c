@@ -16,14 +16,13 @@
 
 #define APPNAME "Hudson SPC2MIDI"
 #define APPSHORTNAME "hudspc"
-#define VERSION "[2013-05-24]"
+#define VERSION "[2013-05-26]"
 
 static int hudsonSpcLoopMax = 2;            // maximum loop count of parser
 static int hudsonSpcTextLoopMax = 1;        // maximum loop count of text output
 static double hudsonSpcTimeLimit = 1200;    // time limit of conversion (for safety)
 static bool hudsonSpcLessTextInSMF = false; // decreases amount of texts in SMF output
 
-static bool hudsonSpcNoPatchChange = false; // XXX: hack, should be false for serious conversion
 static bool hudsonSpcVolIsLinear = false;   // assumes volume curve between SPC and MIDI is linear
 
 static int hudsonSpcTimeBase = 48;
@@ -87,6 +86,7 @@ struct TagHudsonSpcTrackStat {
     bool used;              // if the channel used once or not
     int pos;                // current address on ARAM
     int trackLoopAddr;      // track loop address on ARAM
+    bool trackLoopIsSet;    // track loop flag to prevent double run
     int tick;               // timing (must be synchronized with seq)
     int prevTick;           // previous timing (for pitch slide)
     HudsonSpcNoteParam note;     // current note param
@@ -229,6 +229,7 @@ static void hudsonSpcResetTrackParam (HudsonSpcSeqStat *seq, int track)
     tr->lastNote.active = false;
     tr->callStackPtr = 0;
     tr->callStackSize = 0x10; // Super Bomberman 3
+    tr->trackLoopIsSet = false;
 }
 
 /** reset before play/convert song. */
@@ -526,7 +527,7 @@ static Smf *hudsonSpcCreateSmf (HudsonSpcSeqStat *seq)
         if (!seq->track[tr].active)
             continue;
 
-        //smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_VOLUME, rareSpcMidiVolOf(seq->track[tr].volume));
+        //smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_VOLUME, hudsonSpcMidiVolOf(seq->track[tr].volume));
         smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_REVERB, 0);
         //smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_RELEASETIME, 64 + 6);
         smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_MONO, 127);
@@ -989,7 +990,9 @@ static void hudsonSpcEventPanpot (HudsonSpcSeqStat *seq, SeqEventReport *ev)
 {
     int arg1;
     int panIndex;
-    byte panValue;
+    int panValue;
+    byte leftVolScale;
+    byte rightVolScale;
     int *p = &seq->track[ev->track].pos;
     HudsonSpcTrackStat *tr = &seq->track[ev->track];
 
@@ -1009,15 +1012,47 @@ static void hudsonSpcEventPanpot (HudsonSpcSeqStat *seq, SeqEventReport *ev)
     if (panIndex > 0x1e) {
         panIndex = 0x1e;
     }
-    panValue = panTable[panIndex]; // sloppy guess
+    leftVolScale = panTable[panIndex];
+    rightVolScale = panTable[0x1e - panIndex];
 
-    sprintf(ev->note, "Panpot, balance = %d (index %d)", panValue, panIndex);
+    if (leftVolScale + rightVolScale != 0)
+    {
+        panValue = (int)((rightVolScale / (double)(leftVolScale + rightVolScale)) * 126 + 1 + 0.5);
+        if (panValue == 1)
+        {
+            panValue = 0;
+        }
+    }
+    else
+    {
+        panValue = 0;
+    }
+
+    sprintf(ev->note, "Panpot, balance = %d/%d (index %d)", leftVolScale, rightVolScale, panIndex);
     strcat(ev->classStr, " ev-pan");
 
     //if (!hudsonSpcLessTextInSMF)
     //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 
     smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_PANPOT, panValue);
+}
+
+/** vcmd db: set reverse phase. */
+static void hudsonSpcEventReversePhase (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Reverse Phase, L = %s, R = %s", (arg1 & 2) ? "on" : "off", (arg1 & 1) ? "on" : "off");
+    strcat(ev->classStr, " ev-reversephase");
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmd dc: add volume. */
@@ -1130,6 +1165,54 @@ static void hudsonSpcEventTransposeRel (HudsonSpcSeqStat *seq, SeqEventReport *e
 
     //if (!hudsonSpcLessTextInSMF)
     //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd e9: pitch attack envelope on. */
+static void hudsonSpcEventPitchAttackEnvOn (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2, arg3;
+    int *p = &seq->track[ev->track].pos;
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size += 3;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+    arg3 = seq->aRAM[*p];
+    (*p)++;
+
+    if (arg1 != 0)
+    {
+        if (arg2 != 0)
+        {
+            sprintf(ev->note, "Pitch Attack Envelope On, speed = %d, depth = %d, direction = %s", arg1, arg2, (arg3 != 0) ? "up" : "down");
+        }
+        else
+        {
+            sprintf(ev->note, "Pitch Attack Envelope On, speed = %d", arg1);
+        }
+    }
+    else
+    {
+        strcpy(ev->note, "Pitch Attack Envelope On");
+    }
+    strcat(ev->classStr, " ev-pitchattackenvon");
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd ea: pitch attack envelope on. */
+static void hudsonSpcEventPitchAttackEnvOff (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Pitch Attack Envelope Off");
+    strcat(ev->classStr, " ev-pitchattackenvoff");
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmd dd: loop start. */
@@ -1279,6 +1362,25 @@ static void hudsonSpcEventJumpTrackLoop (HudsonSpcSeqStat *seq, SeqEventReport *
     //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
+/** vcmd ed: set track loop position (only work with the first call). */
+static void hudsonSpcEventSetTrackLoopAlt (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    sprintf(ev->note, "Set Track Loop Position (One-Shot), dest = $%04X, ignore = %s", *p, tr->trackLoopIsSet ? "true" : "false");
+    strcat(ev->classStr, " ev-settrackloop");
+
+    if (!tr->trackLoopIsSet)
+    {
+        tr->trackLoopAddr = *p;
+        tr->trackLoopIsSet = true;
+    }
+
+    //if (!hudsonSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
 /** vcmd e1: detune. */
 static void hudsonSpcEventDetune (HudsonSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -1344,6 +1446,30 @@ static void hudsonSpcEventSetVibratoDelay (HudsonSpcSeqStat *seq, SeqEventReport
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
+/** vcmd f1: set portamento. */
+static void hudsonSpcEventSetPortamento (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    int *p = &seq->track[ev->track].pos;
+    bool po_on;
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    po_on = (arg1 != 0);
+
+    sprintf(ev->note, "Set Portamento %s, speed = %d, arg2 = %d", po_on ? "On" : "Off", arg1, arg2);
+    strcat(ev->classStr, " ev-portamento");
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_PORTAMENTO, po_on ? 127 : 0);
+}
+
 /** vcmd e4: set echo volume. */
 static void hudsonSpcEventEchoVolume (HudsonSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -1384,6 +1510,88 @@ static void hudsonSpcEventEchoParam (HudsonSpcSeqStat *seq, SeqEventReport *ev)
 
     if (!hudsonSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd e6: echo on. */
+static void hudsonSpcEventEchoOn (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Echo On");
+    strcat(ev->classStr, " ev-echoon");
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_REVERB, 100);
+}
+
+/** vcmd fe: subcmd. */
+static void hudsonSpcEventSubEvent (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+    bool unknown = false;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    switch(arg1)
+    {
+    case 0x00:
+        sprintf(ev->note, "Subcmd %02X (End Of Track Alt)", arg1);
+        strcat(ev->classStr, " ev-end");
+        hudsonSpcInactiveTrack(seq, ev->track);
+        if (!hudsonSpcLessTextInSMF)
+            smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+        break;
+    case 0x01:
+        sprintf(ev->note, "Subcmd %02X (Echo Off)", arg1);
+        strcat(ev->classStr, " ev-echooff");
+        smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_REVERB, 0);
+        break;
+    case 0x03:
+        sprintf(ev->note, "Subcmd %02X (Rhythm Channel On)", arg1);
+        strcat(ev->classStr, " ev-rhythmon");
+
+        if (!hudsonSpcLessTextInSMF)
+            smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+        // better than nothing?
+        smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_BANKSELM, seq->ver.patchFix[255].bankSelM);
+        smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_BANKSELL, seq->ver.patchFix[255].bankSelL);
+        smfInsertProgram(seq->smf, ev->tick, ev->track, ev->track, seq->ver.patchFix[255].patchNo);
+        break;
+    case 0x04:
+        sprintf(ev->note, "Subcmd %02X (Rhythm Channel Off)", arg1);
+        strcat(ev->classStr, " ev-rhythmoff");
+
+        if (!hudsonSpcLessTextInSMF)
+            smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+        break;
+    case 0x05:
+    case 0x06:
+    case 0x07:
+        sprintf(ev->note, "Subcmd %02X (Vibrato Type, type = %d)", arg1 - 0x05);
+        strcat(ev->classStr, " ev-vibratotype");
+
+        if (!hudsonSpcLessTextInSMF)
+            smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+        break;
+    case 0x02:
+    case 0x08:
+    case 0x09:
+    default:
+        sprintf(ev->note, "Unknown Event %02X %02X", ev->code, arg1);
+        strcat(ev->classStr, " ev-subcmd unknown");
+        unknown = true;
+        break;
+    }
+
+    if (unknown) {
+        if (!hudsonSpcLessTextInSMF)
+            smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+        fprintf(stderr, "Warning: Skipped unknown event %02X %02X at $%04X [Track %d]\n", ev->code, arg1, *p, ev->track + 1);
+    }
 }
 
 /** vcmd ff: end subroutine / end of track. */
@@ -1441,7 +1649,7 @@ static void hudsonSpcSetEventList (HudsonSpcSeqStat *seq)
     event[0xd8] = (HudsonSpcEvent) hudsonSpcEventNOP2;
     event[0xd9] = (HudsonSpcEvent) hudsonSpcEventVolume;
     event[0xda] = (HudsonSpcEvent) hudsonSpcEventPanpot;
-    event[0xdb] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
+    event[0xdb] = (HudsonSpcEvent) hudsonSpcEventReversePhase;
     event[0xdc] = (HudsonSpcEvent) hudsonSpcEventAddVolume;
     event[0xdd] = (HudsonSpcEvent) hudsonSpcEventLoopStart;
     event[0xde] = (HudsonSpcEvent) hudsonSpcEventLoopEnd;
@@ -1452,18 +1660,18 @@ static void hudsonSpcSetEventList (HudsonSpcSeqStat *seq)
     event[0xe3] = (HudsonSpcEvent) hudsonSpcEventSetVibratoDelay;
     event[0xe4] = (HudsonSpcEvent) hudsonSpcEventEchoVolume;
     event[0xe5] = (HudsonSpcEvent) hudsonSpcEventEchoParam;
-    event[0xe6] = (HudsonSpcEvent) hudsonSpcEventUnknown0;
+    event[0xe6] = (HudsonSpcEvent) hudsonSpcEventEchoOn;
     event[0xe7] = (HudsonSpcEvent) hudsonSpcEventTransposeAbs;
     event[0xe8] = (HudsonSpcEvent) hudsonSpcEventTransposeRel;
-    event[0xe9] = (HudsonSpcEvent) hudsonSpcEventUnknown3;
-    event[0xea] = (HudsonSpcEvent) hudsonSpcEventUnknown0;
+    event[0xe9] = (HudsonSpcEvent) hudsonSpcEventPitchAttackEnvOn;
+    event[0xea] = (HudsonSpcEvent) hudsonSpcEventPitchAttackEnvOff;
     event[0xeb] = (HudsonSpcEvent) hudsonSpcEventSetTrackLoop;
     event[0xec] = (HudsonSpcEvent) hudsonSpcEventJumpTrackLoop;
-    event[0xed] = (HudsonSpcEvent) hudsonSpcEventUnknown0;
+    event[0xed] = (HudsonSpcEvent) hudsonSpcEventSetTrackLoopAlt;
     event[0xee] = (HudsonSpcEvent) hudsonSpcEventVolumeFromTable;
     event[0xef] = (HudsonSpcEvent) hudsonSpcEventUnknown2;
     event[0xf0] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
-    event[0xf1] = (HudsonSpcEvent) hudsonSpcEventUnknown2;
+    event[0xf1] = (HudsonSpcEvent) hudsonSpcEventSetPortamento;
     event[0xf2] = (HudsonSpcEvent) hudsonSpcEventNOP;
     event[0xf3] = (HudsonSpcEvent) hudsonSpcEventNOP;
     event[0xf4] = (HudsonSpcEvent) hudsonSpcEventNOP;
@@ -1476,8 +1684,7 @@ static void hudsonSpcSetEventList (HudsonSpcSeqStat *seq)
     event[0xfb] = (HudsonSpcEvent) hudsonSpcEventNOP;
     event[0xfc] = (HudsonSpcEvent) hudsonSpcEventNOP;
     event[0xfd] = (HudsonSpcEvent) hudsonSpcEventNOP;
-    event[0xfe] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
-    event[0xff] = (HudsonSpcEvent) hudsonSpcEventUnknown0;
+    event[0xfe] = (HudsonSpcEvent) hudsonSpcEventSubEvent;
     event[0xff] = (HudsonSpcEvent) hudsonSpcEventEndSubroutine;
 
     if (seq->ver.id == SPC_VER_UNKNOWN)
