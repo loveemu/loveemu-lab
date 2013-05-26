@@ -44,7 +44,7 @@
 08ce: 2f f2     bra   $08c2
 08d0: e5 c2 07  mov   a,$07c2
 08d3: ec c3 07  mov   y,$07c3
-08d6: da 13     movw  $13,ya            ; set song table address from $07c2/3 to $13/4
+08d6: da 13     movw  $13,ya            ; set music structure address from $07c2/3 to $13/4
 08d8: e5 c4 07  mov   a,$07c4
 08db: ec c5 07  mov   y,$07c5
 08de: da 15     movw  $15,ya
@@ -614,9 +614,9 @@
 0d3d: cd 07     mov   x,#$07
 0d3f: e8 00     mov   a,#$00
 0d41: 8d 01     mov   y,#$01
-0d43: 4f 00     pcall $00
+0d43: 4f 00     pcall $00               ; set #$00 to VOL(R)
 0d45: 8d 00     mov   y,#$00
-0d47: 4f 00     pcall $00
+0d47: 4f 00     pcall $00               ; set #$00 to VOL(L)
 0d49: 1d        dec   x
 0d4a: 10 f5     bpl   $0d41
 0d4c: e5 cb 07  mov   a,$07cb
@@ -690,10 +690,10 @@
 0dd3: 90 0c     bcc   $0de1
 0dd5: e8 9f     mov   a,#$9f
 0dd7: 8d 07     mov   y,#$07
-0dd9: 4f 00     pcall $00
+0dd9: 4f 00     pcall $00               ; set #$9f to GAIN
 0ddb: e8 00     mov   a,#$00
 0ddd: 8d 05     mov   y,#$05
-0ddf: 4f 00     pcall $00
+0ddf: 4f 00     pcall $00               ; set #$00 to ADSR(1)
 0de1: 1d        dec   x
 0de2: 10 ed     bpl   $0dd1
 0de4: f8 5d     mov   x,$5d
@@ -1397,10 +1397,10 @@
 13a7: 6d        push  y
 13a8: e8 78     mov   a,#$78
 13aa: c5 00 02  mov   $0200,a
-13ad: 3f 34 09  call  $0934
+13ad: 3f 34 09  call  $0934             ; set default tempo = 120
 13b0: e8 02     mov   a,#$02
 13b2: c4 b4     mov   $b4,a
-13b4: 3f 59 09  call  $0959
+13b4: 3f 59 09  call  $0959             ; set default timebase = 12 (48 >> 2)
 13b7: e8 ff     mov   a,#$ff
 13b9: c5 7a 02  mov   $027a,a
 13bc: e8 00     mov   a,#$00
@@ -1411,25 +1411,25 @@
 13c9: c5 6d 03  mov   $036d,a
 13cc: 13 35 02  bbc0  $35,$13d1
 13cf: 62 b4     set3  $b4
-; read some info from song table?
+; read default table addresses from music structure (probably)
 13d1: 8d 02     mov   y,#$02
 13d3: f7 13     mov   a,($13)+y
 13d5: c4 3a     mov   $3a,a
 13d7: fc        inc   y
 13d8: f7 13     mov   a,($13)+y
-13da: c4 3b     mov   $3b,a             ; [2/3] set $3a/b
+13da: c4 3b     mov   $3b,a             ; set instrument table address from offset 2/3
 13dc: fc        inc   y
 13dd: f7 13     mov   a,($13)+y
 13df: c4 3c     mov   $3c,a
 13e1: fc        inc   y
 13e2: f7 13     mov   a,($13)+y
-13e4: c4 3d     mov   $3d,a             ; [4/5] set $3c/d
+13e4: c4 3d     mov   $3d,a             ; set $3c/d from offset 4/5
 13e6: 8d 07     mov   y,#$07
 13e8: f7 13     mov   a,($13)+y
 13ea: c4 3e     mov   $3e,a
 13ec: fc        inc   y
 13ed: f7 13     mov   a,($13)+y
-13ef: c4 3f     mov   $3f,a             ; [7/8] set $3e/f
+13ef: c4 3f     mov   $3f,a             ; set $3e/f from offset 7/8 (why it isn't 6/7?)
 ; read more from seq header, or another location? (repeat until 00 appears)
 13f1: ee        pop   y
 13f2: fc        inc   y
@@ -1439,14 +1439,14 @@
 13f7: 5d        mov   x,a
 13f8: 1f fb 13  jmp   ($13fb+x)
 
-13fb: dw $146f  ; 00 - no extra header
-13fd: dw $1407  ; 01 - note length scale (1 byte)
-13ff: dw $1418  ; 02 - (? byte)
-1401: dw $1449  ; 03 - (? byte)
-1403: dw $1430  ; 04 - (? byte)
-1405: dw $1456  ; 05 - (? byte)
+13fb: dw $146f  ; 00 - end of extra header
+13fd: dw $1407  ; 01 - set timebase (1 byte)
+13ff: dw $1418  ; 02 - instrument table (alternative?) (1+N byte)
+1401: dw $1449  ; 03 - rhythm kit table (1+N byte)
+1403: dw $1430  ; 04 - instrument table (1+4*N byte)
+1405: dw $1456  ; 05 - (1+2*N byte)
 
-; extra header 01 - note length scale
+; extra header 01 - set timebase (note length shift)
 1407: f7 03     mov   a,($03)+y
 1409: 28 03     and   a,#$03
 140b: c4 00     mov   $00,a
@@ -1454,64 +1454,64 @@
 1410: 09 00 b4  or    ($b4),($00)
 1413: 3f 59 09  call  $0959
 1416: 2f da     bra   $13f2
-; extra header 02
-1418: f7 03     mov   a,($03)+y
+; extra header 02 - instrument table (alternative?)
+1418: f7 03     mov   a,($03)+y         ; arg1 - size of table (in bytes)
 141a: 5d        mov   x,a
 141b: dd        mov   a,y
 141c: bc        inc   a
 141d: 8d 00     mov   y,#$00
 141f: 7a 03     addw  ya,$03
-1421: da 3a     movw  $3a,ya
-;
+1421: da 3a     movw  $3a,ya            ; set instrument table address to $3a/b
+; $03 += x, next
 1423: da 03     movw  $03,ya
 1425: 8d 00     mov   y,#$00
 1427: 7d        mov   a,x
 1428: 7a 03     addw  ya,$03
-142a: da 03     movw  $03,ya
+142a: da 03     movw  $03,ya            ; $03 = $3a + arg1
 142c: 8d ff     mov   y,#$ff
 142e: 2f c2     bra   $13f2
-; extra header 04
-1430: f7 03     mov   a,($03)+y
+; extra header 04 - instrument table
+1430: f7 03     mov   a,($03)+y         ; arg1 - number of instruments
 1432: 5d        mov   x,a
 1433: dd        mov   a,y
 1434: bc        inc   a
 1435: 8d 00     mov   y,#$00
 1437: 7a 03     addw  ya,$03
-1439: da 3a     movw  $3a,ya
+1439: da 3a     movw  $3a,ya            ; set instrument table address to $3a/b
 143b: da 03     movw  $03,ya
 143d: 8d 04     mov   y,#$04
 143f: 7d        mov   a,x
 1440: cf        mul   ya
 1441: 7a 03     addw  ya,$03
-1443: da 03     movw  $03,ya
+1443: da 03     movw  $03,ya            ; skip table contents, (arg1 * 4) bytes
 1445: 8d ff     mov   y,#$ff
 1447: 2f a9     bra   $13f2
-; extra header 03
-1449: f7 03     mov   a,($03)+y
+; extra header 03 - rhythm kit table
+1449: f7 03     mov   a,($03)+y         ; arg1 - size of table (in bytes)
 144b: 5d        mov   x,a
 144c: dd        mov   a,y
 144d: bc        inc   a
 144e: 8d 00     mov   y,#$00
 1450: 7a 03     addw  ya,$03
-1452: da 3c     movw  $3c,ya
-1454: 2f cd     bra   $1423
+1452: da 3c     movw  $3c,ya            ; set rhythm kit table address to $3c/d
+1454: 2f cd     bra   $1423             ; skip table contents, (arg1) bytes
 ; extra header 05
-1456: f7 03     mov   a,($03)+y
+1456: f7 03     mov   a,($03)+y         ; arg1 - count of addresses in table
 1458: 5d        mov   x,a
 1459: dd        mov   a,y
 145a: bc        inc   a
 145b: 8d 00     mov   y,#$00
 145d: 7a 03     addw  ya,$03
-145f: da 3e     movw  $3e,ya
+145f: da 3e     movw  $3e,ya            ; $3e = ($03 + offset Y) + 1
 1461: da 03     movw  $03,ya
 1463: 7d        mov   a,x
 1464: 1c        asl   a
 1465: 8d 00     mov   y,#$00
-1467: 7a 03     addw  ya,$03
+1467: 7a 03     addw  ya,$03            ; $03 = $3e + (arg1 * 2)
 1469: da 03     movw  $03,ya
 146b: 8d ff     mov   y,#$ff
 146d: 2f 83     bra   $13f2
-; extra header 01 (none)
+; extra header 00 - end of extra header
 146f: 6f        ret
 
 1470: e8 00     mov   a,#$00
@@ -1705,7 +1705,7 @@
 15bb: 28 18     and   a,#$18
 15bd: 68 08     cmp   a,#$08
 15bf: d0 2d     bne   $15ee
-; melody instrument
+; rhythm channel
 15c1: f5 11 02  mov   a,$0211+x
 15c4: 1c        asl   a
 15c5: 1c        asl   a
@@ -1713,7 +1713,7 @@
 15c7: f7 3c     mov   a,($3c)+y
 15c9: 75 62 02  cmp   a,$0262+x
 15cc: f0 09     beq   $15d7
-15ce: d5 62 02  mov   $0262+x,a
+15ce: d5 62 02  mov   $0262+x,a         ; instrument #
 15d1: f4 a4     mov   a,$a4+x
 15d3: 08 04     or    a,#$04
 15d5: d4 a4     mov   $a4+x,a
@@ -1721,13 +1721,13 @@
 15d8: f7 3c     mov   a,($3c)+y
 15da: 73 00 02  bbc3  $00,$15df
 15dd: 08 80     or    a,#$80
-15df: d5 11 02  mov   $0211+x,a
+15df: d5 11 02  mov   $0211+x,a         ; pitch (note number)
 15e2: fc        inc   y
 15e3: f7 3c     mov   a,($3c)+y
-15e5: d5 7b 02  mov   $027b+x,a
+15e5: d5 7b 02  mov   $027b+x,a         ; volume
 15e8: fc        inc   y
 15e9: f7 3c     mov   a,($3c)+y
-15eb: d5 83 02  mov   $0283+x,a
+15eb: d5 83 02  mov   $0283+x,a         ; panpot
 ;
 15ee: 38 f0 00  and   $00,#$f0
 15f1: d0 04     bne   $15f7
@@ -2193,10 +2193,10 @@
 191f: f4 a4     mov   a,$a4+x
 1921: 28 04     and   a,#$04
 1923: f0 33     beq   $1958
-1925: f5 62 02  mov   a,$0262+x
+1925: f5 62 02  mov   a,$0262+x         ; instrument #
 1928: 8d 04     mov   y,#$04
 192a: cf        mul   ya
-192b: 7a 3a     addw  ya,$3a
+192b: 7a 3a     addw  ya,$3a            ; add instrument table base
 192d: da 03     movw  $03,ya
 192f: 8d 03     mov   y,#$03
 1931: f7 03     mov   a,($03)+y
@@ -2206,38 +2206,38 @@
 1938: dc        dec   y
 1939: 17 03     or    a,($03)+y
 193b: f0 1c     beq   $1959
-193d: d4 79     mov   $79+x,a
+193d: d4 79     mov   $79+x,a           ; GAIN
 193f: dc        dec   y
 1940: f7 03     mov   a,($03)+y
-1942: d4 71     mov   $71+x,a
+1942: d4 71     mov   $71+x,a           ; ADSR(2)
 1944: dc        dec   y
 1945: f7 03     mov   a,($03)+y
-1947: d4 69     mov   $69+x,a
+1947: d4 69     mov   $69+x,a           ; ADSR(1)
 1949: dc        dec   y
 194a: f7 03     mov   a,($03)+y
-194c: d4 61     mov   $61+x,a
+194c: d4 61     mov   $61+x,a           ; SRCN
 194e: 3f 26 10  call  $1026
 1951: d5 6a 02  mov   $026a+x,a
 1954: dd        mov   a,y
 1955: d5 72 02  mov   $0272+x,a
 1958: 6f        ret
-
+; if ADSR == 0
 1959: 8d 03     mov   y,#$03
 195b: f7 03     mov   a,($03)+y
 195d: 1c        asl   a
 195e: 1c        asl   a
 195f: fd        mov   y,a
 1960: f6 80 07  mov   a,$0780+y
-1963: d4 61     mov   $61+x,a
+1963: d4 61     mov   $61+x,a           ; SRCN
 1965: fc        inc   y
 1966: f6 80 07  mov   a,$0780+y
-1969: d4 69     mov   $69+x,a
+1969: d4 69     mov   $69+x,a           ; ADSR(1)
 196b: fc        inc   y
 196c: f6 80 07  mov   a,$0780+y
-196f: d4 71     mov   $71+x,a
+196f: d4 71     mov   $71+x,a           ; ADSR(2)
 1971: fc        inc   y
 1972: f6 80 07  mov   a,$0780+y
-1975: d4 79     mov   $79+x,a
+1975: d4 79     mov   $79+x,a           ; GAIN
 1977: f4 61     mov   a,$61+x
 1979: 2f d3     bra   $194e
 197b: f8 40     mov   x,$40
@@ -2442,7 +2442,7 @@
 1b1b: d4 a4     mov   $a4+x,a
 1b1d: f4 61     mov   a,$61+x
 1b1f: 8d 04     mov   y,#$04
-1b21: 4f 00     pcall $00
+1b21: 4f 00     pcall $00               ; set $61+x to SRCN
 1b23: f4 51     mov   a,$51+x
 1b25: 60        clrc
 1b26: 94 84     adc   a,$84+x
@@ -2450,10 +2450,10 @@
 1b2a: f4 59     mov   a,$59+x
 1b2c: 94 8c     adc   a,$8c+x
 1b2e: 8d 03     mov   y,#$03
-1b30: 4f 00     pcall $00
+1b30: 4f 00     pcall $00               ; set to P(H)
 1b32: e4 00     mov   a,$00
 1b34: 8d 02     mov   y,#$02
-1b36: 4f 00     pcall $00
+1b36: 4f 00     pcall $00               ; set to P(L)
 1b38: f4 69     mov   a,$69+x
 1b3a: 10 1d     bpl   $1b59
 1b3c: e4 81     mov   a,$81
@@ -2465,26 +2465,26 @@
 1b49: b0 f8     bcs   $1b43
 1b4b: f4 69     mov   a,$69+x
 1b4d: 8d 05     mov   y,#$05
-1b4f: 4f 00     pcall $00
+1b4f: 4f 00     pcall $00               ; set $69+x to ADSR(1)
 1b51: f4 71     mov   a,$71+x
 1b53: 8d 06     mov   y,#$06
-1b55: 4f 00     pcall $00
+1b55: 4f 00     pcall $00               ; set $71+x to ADSR(2)
 1b57: 2f 0a     bra   $1b63
 1b59: 8d 05     mov   y,#$05
-1b5b: 4f 00     pcall $00
+1b5b: 4f 00     pcall $00               ; set $69+x to ADSR(1)
 1b5d: f4 79     mov   a,$79+x
 1b5f: 8d 07     mov   y,#$07
-1b61: 4f 00     pcall $00
+1b61: 4f 00     pcall $00               ; set $79+x to GAIN
 1b63: f5 83 02  mov   a,$0283+x
 1b66: 30 11     bmi   $1b79
 1b68: 08 80     or    a,#$80
 1b6a: d5 83 02  mov   $0283+x,a
 1b6d: f4 41     mov   a,$41+x
 1b6f: 8d 01     mov   y,#$01
-1b71: 4f 00     pcall $00
+1b71: 4f 00     pcall $00               ; set $41+x to VOL(R)
 1b73: f4 49     mov   a,$49+x
 1b75: 8d 00     mov   y,#$00
-1b77: 4f 00     pcall $00
+1b77: 4f 00     pcall $00               ; set $49+x to VOL(L)
 1b79: f5 10 11  mov   a,$1110+x
 1b7c: 0e 40 01  tset1 $0140
 1b7f: 2f 06     bra   $1b87
@@ -2804,7 +2804,7 @@
 1de7: f4 59     mov   a,$59+x
 1de9: 84 04     adc   a,$04
 1deb: 8d 03     mov   y,#$03
-1ded: 4f 00     pcall $00
+1ded: 4f 00     pcall $00               ; set to P(H)
 1def: e4 03     mov   a,$03
 1df1: 8d 02     mov   y,#$02
 1df3: 5f 00 ff  jmp   $ff00
@@ -3849,28 +3849,28 @@
 2670: d4 bd     mov   $bd+x,a
 2672: f5 07 04  mov   a,$0407+x
 2675: 8d 04     mov   y,#$04
-2677: 4f 00     pcall $00
+2677: 4f 00     pcall $00               ; set $0407+x to SRCN
 2679: f5 ff 03  mov   a,$03ff+x
 267c: 8d 02     mov   y,#$02
-267e: 4f 00     pcall $00
+267e: 4f 00     pcall $00               ; set $03ff+x to P(L)
 2680: f5 03 04  mov   a,$0403+x
 2683: 8d 03     mov   y,#$03
-2685: 4f 00     pcall $00
+2685: 4f 00     pcall $00               ; set $0403+x to P(H)
 2687: e5 17 04  mov   a,$0417
 268a: 35 10 11  and   a,$1110+x
 268d: f0 0e     beq   $269d
 268f: f5 0b 04  mov   a,$040b+x
 2692: 8d 05     mov   y,#$05
-2694: 4f 00     pcall $00
+2694: 4f 00     pcall $00               ; set $040b+x to ADSR(1)
 2696: f5 0f 04  mov   a,$040f+x
 2699: 8d 06     mov   y,#$06
-269b: 4f 00     pcall $00
+269b: 4f 00     pcall $00               ; set $040f+x to ADSR(2)
 269d: f5 f7 03  mov   a,$03f7+x
 26a0: 8d 01     mov   y,#$01
-26a2: 4f 00     pcall $00
+26a2: 4f 00     pcall $00               ; set $03f7+x to VOL(R)
 26a4: f5 fb 03  mov   a,$03fb+x
 26a7: 8d 00     mov   y,#$00
-26a9: 4f 00     pcall $00
+26a9: 4f 00     pcall $00               ; set $03fb+x to VOL(L)
 26ab: f5 10 11  mov   a,$1110+x
 26ae: 0e 41 01  tset1 $0141
 26b1: 8b bc     dec   $bc

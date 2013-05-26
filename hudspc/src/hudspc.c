@@ -105,6 +105,14 @@ struct TagHudsonSpcSeqStat {
     const byte* aRAM;           // SPC ARAM (65536 bytes)
     Smf* smf;                   // link for smf output
     int timebase;               // SMF division
+    byte timebaseShift;         // timebase shift amount
+    int hdTimebaseShift;        // header - timebase shift amount
+    int hdInstTableAddr;        // header - instrument table address
+    int hdInstTableSize;        // header - instrument table size
+    int hdRhythmTableAddr;      // header - rhythm kit table address
+    int hdRhythmTableSize;      // header - rhythm kit table size
+    int hdUnkAddrTableAddr;     // header - unknown address table address
+    int hdUnkAddrTableSize;     // header - unknown address table size
     int tick;                   // timing (tick)
     double time;                // timing (s)
     int tempo;                  // tempo (bpm)
@@ -245,6 +253,12 @@ static void hudsonSpcResetParam (HudsonSpcSeqStat *seq)
     seq->looped = 0;
     seq->active = true;
 
+    seq->timebaseShift = 2;
+    seq->hdTimebaseShift = -1;
+    seq->hdInstTableAddr = -1;
+    seq->hdRhythmTableAddr = -1;
+    seq->hdUnkAddrTableAddr = -1;
+
     // reset each track as well
     for (track = 0; track < SPC_TRACK_MAX; track++) {
         HudsonSpcTrackStat *tr = &seq->track[track];
@@ -321,6 +335,7 @@ static bool hudsonSpcDetectSeq (HudsonSpcSeqStat *seq)
     int seqHeaderAddr;
     bool result;
     int tr;
+    byte extraHeaderEvent;
 
     byte trActiveBits;
     int trHeaderOffset;
@@ -346,6 +361,100 @@ static bool hudsonSpcDetectSeq (HudsonSpcSeqStat *seq)
         }
     }
     hudsonSpcResetParam(seq);
+    // read extra header
+    while (true)
+    {
+        // prevent access violation
+        if ((seqHeaderAddr + trHeaderOffset) >= 0xffff)
+        {
+            fprintf(stderr, "Error: Access violation in extra header\n");
+            result = false;
+            break;
+        }
+
+        // end of header
+        extraHeaderEvent = aRAM[seqHeaderAddr + trHeaderOffset];
+        if (extraHeaderEvent == 0x00)
+        {
+            break;
+        }
+
+        // advance pointer, prevent access violation
+        trHeaderOffset++;
+        if ((seqHeaderAddr + trHeaderOffset) >= 0xffff)
+        {
+            fprintf(stderr, "Error: Access violation in extra header\n");
+            result = false;
+            break;
+        }
+
+        // check range
+        if (extraHeaderEvent >= 0x05)
+        {
+            fprintf(stderr, "Error: Unknown extra header event $%02X\n", extraHeaderEvent);
+            result = false;
+            break;
+        }
+
+        // dispatch
+        switch (extraHeaderEvent)
+        {
+        // set timebase
+        case 0x01:
+            {
+                seq->timebaseShift = aRAM[seqHeaderAddr + trHeaderOffset] & 0x03;
+                seq->hdTimebaseShift = seq->timebaseShift;
+                trHeaderOffset++;
+            }
+            break;
+
+        // set instrument table (alternative)
+        case 0x02:
+            {
+                byte tableSize = aRAM[seqHeaderAddr + trHeaderOffset];
+                trHeaderOffset++;
+                seq->hdInstTableAddr = seqHeaderAddr + trHeaderOffset;
+                seq->hdInstTableSize = tableSize;
+                trHeaderOffset += tableSize;
+            }
+            break;
+
+        // set rhythm kit table
+        case 0x03:
+            {
+                byte tableSize = aRAM[seqHeaderAddr + trHeaderOffset];
+                trHeaderOffset++;
+                seq->hdRhythmTableAddr = seqHeaderAddr + trHeaderOffset;
+                seq->hdRhythmTableSize = tableSize;
+                trHeaderOffset += tableSize;
+            }
+            break;
+
+        // set instrument table
+        case 0x04:
+            {
+                byte tableItemCount = aRAM[seqHeaderAddr + trHeaderOffset];
+                int tableSize = tableItemCount * 4;
+                trHeaderOffset++;
+                seq->hdInstTableAddr = seqHeaderAddr + trHeaderOffset;
+                seq->hdInstTableSize = tableSize;
+                trHeaderOffset += tableSize;
+            }
+            break;
+
+        // set unknown address table
+        case 0x05:
+            {
+                byte tableItemCount = aRAM[seqHeaderAddr + trHeaderOffset];
+                int tableSize = tableItemCount * 2;
+                trHeaderOffset++;
+                seq->hdUnkAddrTableAddr = seqHeaderAddr + trHeaderOffset;
+                seq->hdUnkAddrTableSize = tableSize;
+                trHeaderOffset += tableSize;
+            }
+            break;
+        }
+    }
     return result;
 }
 
@@ -408,6 +517,19 @@ static void printHtmlInfoList (HudsonSpcSeqStat *seq)
     myprintf("          <li>Song Entry: $%04X", seq->ver.seqHeaderAddr);
     myprintf(" (Song $%02x)", seq->ver.songIndex);
     myprintf("</li>\n");
+    myprintf("          <li>Timebase: %d (48 >> %d)</li>\n", 48 >> seq->hdTimebaseShift, seq->hdTimebaseShift);
+    if (seq->hdInstTableAddr >= 0)
+    {
+        myprintf("          <li>Instrument Table: $%04X (%d bytes)</li>\n", seq->hdInstTableAddr, seq->hdInstTableSize);
+    }
+    if (seq->hdRhythmTableAddr >= 0)
+    {
+        myprintf("          <li>Rhythm Kit Table: $%04X (%d bytes)</li>\n", seq->hdRhythmTableAddr, seq->hdRhythmTableSize);
+    }
+    if (seq->hdUnkAddrTableAddr >= 0)
+    {
+        myprintf("          <li>Unknown Address Table: $%04X (%d bytes)</li>\n", seq->hdUnkAddrTableAddr, seq->hdUnkAddrTableSize);
+    }
 }
 
 /** output seq info list detail for valid seq. */
@@ -781,12 +903,11 @@ static void hudsonSpcEventNote (HudsonSpcSeqStat *seq, SeqEventReport *ev)
     int lenBits = noteByte & 7;
     bool tieBit = (noteByte & 8) != 0;
     int keyBits = noteByte >> 4;
-    int timebaseShift = (mget1(&seq->aRAM[0xb4]) & 3);
 
     if (lenBits != 0) {
         const byte lenTbl[8] = { 0xc0, 0x60, 0x30, 0x18, 0x0c, 0x06, 0x03, 0x01 };
-        // actual driver does index += ($b4 & 3),
-        // this tool does not emulate it, instead...
+        // actual driver does index += ($b4 & 3), to implement timebase shift,
+        // this tool does not emulate it, but handles it in other ways.
         int index = (lenBits - 1);
         if (index >= 8) {
             fprintf(stderr, "Note length index overflow, index = %d\n", index);
@@ -797,7 +918,7 @@ static void hudsonSpcEventNote (HudsonSpcSeqStat *seq, SeqEventReport *ev)
     else {
         ev->size++;
         len = mget1(&seq->aRAM[*p]);
-        len <<= timebaseShift;
+        len <<= seq->timebaseShift;
         (*p)++;
     }
 
@@ -806,7 +927,7 @@ static void hudsonSpcEventNote (HudsonSpcSeqStat *seq, SeqEventReport *ev)
             dur = len * tr->quantize / 8;
         }
         else {
-            dur = len - ((tr->quantize - 8) << timebaseShift);
+            dur = len - ((tr->quantize - 8) << seq->timebaseShift);
             if (dur < 0) {
                 dur = 0; // really?
             }
@@ -1007,7 +1128,7 @@ static void hudsonSpcEventPanpot (HudsonSpcSeqStat *seq, SeqEventReport *ev)
     arg1 = seq->aRAM[*p];
     (*p)++;
 
-    // TODO: interpret higher bits
+    // Note: if arg1 is out of range, the music engine will perform buggy a little, after all.
     panIndex = (arg1 & 0x1f);
     if (panIndex > 0x1e) {
         panIndex = 0x1e;
