@@ -129,6 +129,7 @@ struct TagHudsonSpcSeqStat {
     int hdRhythmTableSize;      // header - rhythm kit table size
     int hdUnkAddrTableAddr;     // header - unknown address table address
     int hdUnkAddrTableSize;     // header - unknown address table size
+    int hdEchoParamAddr;        // header - initial echo params address
     int tick;                   // timing (tick)
     double time;                // timing (s)
     int tempo;                  // tempo (bpm)
@@ -289,6 +290,7 @@ static void hudsonSpcResetParam (HudsonSpcSeqStat *seq)
     seq->hdInstTableAddr = -1;
     seq->hdRhythmTableAddr = -1;
     seq->hdUnkAddrTableAddr = -1;
+    seq->hdEchoParamAddr = -1;
 
     // reset each track as well
     for (track = 0; track < SPC_TRACK_MAX; track++) {
@@ -581,17 +583,15 @@ static bool hudsonSpcSeqHed06 (HudsonSpcSeqStat *seq, int *pSeqHeaderReadPtr)
 /** extra header 07: set initial echo param. */
 static bool hudsonSpcSeqHedSetEchoParam (HudsonSpcSeqStat *seq, int *pSeqHeaderReadPtr)
 {
-    int arg1 = seq->aRAM[*pSeqHeaderReadPtr];
+    int arg1;
+    seq->hdEchoParamAddr = *pSeqHeaderReadPtr;
+
+    arg1 = seq->aRAM[*pSeqHeaderReadPtr];
     (*pSeqHeaderReadPtr)++;
 
     if (arg1 == 0)
     {
-        fprintf(stderr, "Info: use user-defined echo params\n");
-        (*pSeqHeaderReadPtr) += 7;
-    }
-    else
-    {
-        fprintf(stderr, "Info: use default echo params\n");
+        (*pSeqHeaderReadPtr) += 6;
     }
     return true;
 }
@@ -687,7 +687,7 @@ static bool hudsonSpcDetectSeq (HudsonSpcSeqStat *seq)
         // check range
         if (extraHeaderEvent >= numHeaderEventCount)
         {
-            fprintf(stderr, "Error: Unknown extra header event $%02X\n", extraHeaderEvent);
+            fprintf(stderr, "Error: unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
             result = false;
             break;
         }
@@ -720,12 +720,12 @@ static bool hudsonSpcDetectSeq (HudsonSpcSeqStat *seq)
 
             // set unknown address table
             case 0x05:
-                fprintf(stderr, "Error: unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
+                fprintf(stderr, "Warning: unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
                 result &= hudsonSpcSeqHed05(seq, &seqHeaderReadPtr);
                 break;
 
             default:
-                fprintf(stderr, "Error: undefined header event %02X\n", extraHeaderEvent);
+                fprintf(stderr, "Error: unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
                 result = false;
                 break;
             }
@@ -757,13 +757,13 @@ static bool hudsonSpcDetectSeq (HudsonSpcSeqStat *seq)
 
             // set unknown address table
             case 0x05:
-                fprintf(stderr, "Error: unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
+                fprintf(stderr, "Warning: unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
                 result &= hudsonSpcSeqHed05(seq, &seqHeaderReadPtr);
                 break;
 
             // 
             case 0x06:
-                fprintf(stderr, "Error: unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
+                fprintf(stderr, "Warning: unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
                 result &= hudsonSpcSeqHed06(seq, &seqHeaderReadPtr);
                 break;
 
@@ -774,13 +774,13 @@ static bool hudsonSpcDetectSeq (HudsonSpcSeqStat *seq)
 
             // 
             case 0x08:
-                fprintf(stderr, "Error: unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
+                fprintf(stderr, "Warning: unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
                 result &= hudsonSpcSeqHed08(seq, &seqHeaderReadPtr);
                 break;
 
             // 
             case 0x09:
-                fprintf(stderr, "Error: unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
+                fprintf(stderr, "Warning: unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
                 result &= hudsonSpcSeqHed09(seq, &seqHeaderReadPtr);
                 break;
 
@@ -881,6 +881,10 @@ static void printHtmlInfoList (HudsonSpcSeqStat *seq)
     {
         myprintf("          <li>Unknown Address Table: $%04X (%d bytes)</li>\n", seq->hdUnkAddrTableAddr, seq->hdUnkAddrTableSize);
     }
+    if (seq->hdEchoParamAddr >= 0)
+    {
+        myprintf("          <li>Echo parameters defined at $%04X</li>\n", seq->hdEchoParamAddr);
+    }
 }
 
 /** output seq info list detail for valid seq. */
@@ -969,6 +973,7 @@ static Smf *hudsonSpcCreateSmf (HudsonSpcSeqStat *seq)
     static char songTitle[512];
     Smf* smf;
     int tr;
+    byte echoOnBits = 0x00;
 
     smf = smfCreate(seq->timebase);
     if (!smf)
@@ -995,18 +1000,53 @@ static Smf *hudsonSpcCreateSmf (HudsonSpcSeqStat *seq)
     }
     smfInsertTempoBPM(smf, 0, 0, hudsonSpcTempo(seq));
 
+    // put track name first
+    for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
+        if (!seq->track[tr].active)
+            continue;
+
+        sprintf(songTitle, "Track %d - $%04X", tr + 1, seq->track[tr].pos);
+        smfInsertMetaText(seq->smf, 0, tr, SMF_META_TRACKNAME, songTitle);
+    }
+
+    if (seq->hdEchoParamAddr != -1)
+    {
+        bool echoUserDefined = (seq->aRAM[seq->hdEchoParamAddr] == 0);
+        byte EVOL_L, EVOL_R, EDL, EFB, FIR;
+        char echoDumpText[256];
+
+        if (echoUserDefined)
+        {
+            EVOL_L = seq->aRAM[seq->hdEchoParamAddr + 1];
+            EVOL_R = seq->aRAM[seq->hdEchoParamAddr + 2];
+            EDL = seq->aRAM[seq->hdEchoParamAddr + 3];
+            EFB = seq->aRAM[seq->hdEchoParamAddr + 4];
+            FIR = seq->aRAM[seq->hdEchoParamAddr + 5];
+            echoOnBits = seq->aRAM[seq->hdEchoParamAddr + 6];
+            sprintf(echoDumpText, "Header: Use User-Defined Echo Params, EVOL(L) = %d, EVOL(R) = %d, EDL = %d, EFB = %d, FIR = %d, EON = %02X", EVOL_L, EVOL_R, EDL, EFB, FIR, echoOnBits);
+        }
+        else
+        {
+            EVOL_L = seq->aRAM[0x0858 + 1];
+            EVOL_R = seq->aRAM[0x0858 + 2];
+            EDL = seq->aRAM[0x0858 + 3];
+            EFB = seq->aRAM[0x0858 + 4];
+            FIR = seq->aRAM[0x0858 + 5];
+            echoOnBits = seq->aRAM[0x0858 + 6];
+            sprintf(echoDumpText, "Header: Use Default Echo Params, EVOL(L) = %d, EVOL(R) = %d, EDL = %d, EFB = %d, FIR = %d, EON = %02X", EVOL_L, EVOL_R, EDL, EFB, FIR, echoOnBits);
+        }
+        smfInsertMetaText(seq->smf, 0, 0, SMF_META_TEXT, echoDumpText);
+    }
+
     // put initial info for each track
     for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
         if (!seq->track[tr].active)
             continue;
 
         //smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_VOLUME, hudsonSpcMidiVolOf(seq->track[tr].volume));
-        smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_REVERB, 0);
+        smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_REVERB, (echoOnBits & (1 << tr)) ? 100 : 0);
         //smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_RELEASETIME, 64 + 6);
         smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_MONO, 127);
-
-        sprintf(songTitle, "Track %d - $%04X", tr + 1, seq->track[tr].pos);
-        smfInsertMetaText(seq->smf, 0, tr, SMF_META_TRACKNAME, songTitle);
     }
     return smf;
 }

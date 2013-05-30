@@ -1527,7 +1527,7 @@
 14d0: da 46     movw  $46,ya
 14d2: 2f e6     bra   $14ba             ; skip table contents, (arg1 * 2) bytes
 ; extra header 07 - set initial echo param
-14d4: f7 04     mov   a,($04)+y         ; arg1 - use default echo (0=no, 1=yes)
+14d4: f7 04     mov   a,($04)+y         ; arg1 - use default echo
 14d6: f0 2e     beq   $1506             ; if 0, use user-defined echo params
 ; use default echo presets
 14d8: cd 00     mov   x,#$00
