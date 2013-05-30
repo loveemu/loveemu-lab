@@ -1430,10 +1430,10 @@
 13ec: fc        inc   y
 13ed: f7 13     mov   a,($13)+y
 13ef: c4 3f     mov   $3f,a             ; set $3e/f from offset 7/8 (why it isn't 6/7?)
-; read more from seq header, or another location? (repeat until 00 appears)
+; read more from seq header (repeat until 00 appears)
 13f1: ee        pop   y
 13f2: fc        inc   y
-13f3: f7 03     mov   a,($03)+y         ; song extra header type? (0-5)
+13f3: f7 03     mov   a,($03)+y         ; song extra header type (0-5)
 13f5: fc        inc   y
 13f6: 1c        asl   a
 13f7: 5d        mov   x,a

@@ -266,7 +266,7 @@ static void hudsonSpcResetTrackParam (HudsonSpcSeqStat *seq, int track)
     tr->note.transpose = 0;
     tr->lastNote.active = false;
     tr->callStackPtr = 0;
-    tr->callStackSize = 0x10; // Super Bomberman 3
+    tr->callStackSize = 0x10;
     tr->trackLoopIsSet = false;
     tr->rhythmChannel = false;
 }
@@ -409,7 +409,7 @@ static int hudsonSpcCheckVer (HudsonSpcSeqStat *seq)
             }
             else
             {
-                version = SPC_VER_V1XX;
+                version = SPC_VER_V116;
             }
         }
     }
@@ -432,10 +432,10 @@ static int hudsonSpcCheckVer (HudsonSpcSeqStat *seq)
         case SPC_VER_V117:
             seq->ver.seqListAddr = mget2l(&aRAM[0x07c2]);
             break;
-        case SPC_VER_V210: // TODO: verify
-        case SPC_VER_V227: // TODO: verify
-        case SPC_VER_V228: // TODO: verify
-        case SPC_VER_V230: // TODO: verify
+        case SPC_VER_V210:
+        case SPC_VER_V227:
+        case SPC_VER_V228:
+        case SPC_VER_V230:
         case SPC_VER_V232:
             seq->ver.seqListAddr = mget2l(&aRAM[0x0803]);
             break;
@@ -464,44 +464,203 @@ static int hudsonSpcCheckVer (HudsonSpcSeqStat *seq)
     return version;
 }
 
-/** detect now playing and prepare for analyze. */
-static bool hudsonSpcDetectSeq (HudsonSpcSeqStat *seq)
+/** extra header 01: set channel addresses. */
+static bool hudsonSpcSeqHedSetTrackAddresses (HudsonSpcSeqStat *seq, int *pSeqHeaderReadPtr)
 {
-    const byte *aRAM = seq->aRAM;
-    int seqHeaderAddr;
-    bool result;
-    int tr;
-    byte extraHeaderEvent;
-
+    bool result = false;
+    int seqHeaderReadPtr = *pSeqHeaderReadPtr;
     byte trActiveBits;
-    int trHeaderOffset;
+    int tr;
 
-    if (seq->ver.id == SPC_VER_UNKNOWN)
-        return false;
-
-    result = false;
-    seqHeaderAddr = seq->ver.seqHeaderAddr;
-
-    trActiveBits = mget1(&aRAM[seqHeaderAddr]);
-    trHeaderOffset = 1;
-    // track list (reverse order, big-endian)
+    trActiveBits = mget1(&seq->aRAM[seqHeaderReadPtr]);
+    seqHeaderReadPtr++;
+    // track list (reverse order)
     for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
         // if active, read more info
         if ((trActiveBits & (1 << tr)) != 0) {
-            seq->track[tr].pos = mget2l(&aRAM[seqHeaderAddr + trHeaderOffset]);
+            seq->track[tr].pos = mget2l(&seq->aRAM[seqHeaderReadPtr]);
             seq->track[tr].trackLoopAddr = seq->track[tr].pos;
-            trHeaderOffset += 2;
+            seqHeaderReadPtr += 2;
 
             seq->track[tr].active = true;
             result = true;
         }
     }
+
+    *pSeqHeaderReadPtr = seqHeaderReadPtr;
+    return result;
+}
+
+/** extra header 02: set timebase (note length shift). */
+static bool hudsonSpcSeqHedSetTimeBase (HudsonSpcSeqStat *seq, int *pSeqHeaderReadPtr)
+{
+    seq->timebaseShift = seq->aRAM[*pSeqHeaderReadPtr] & 0x03;
+    seq->hdTimebaseShift = seq->timebaseShift;
+    (*pSeqHeaderReadPtr)++;
+    return true;
+}
+
+/** extra header 03: set instrument table (old, in bytes). */
+static bool hudsonSpcSeqHedSetInstrumentTable (HudsonSpcSeqStat *seq, int *pSeqHeaderReadPtr)
+{
+    byte tableSize;
+
+    tableSize = seq->aRAM[*pSeqHeaderReadPtr] * 4;
+    (*pSeqHeaderReadPtr)++;
+    seq->hdInstTableAddr = *pSeqHeaderReadPtr;
+    seq->hdInstTableSize = tableSize;
+    (*pSeqHeaderReadPtr) += tableSize;
+    return true;
+}
+
+/** extra header 03 old: set instrument table (old, in bytes). */
+static bool hudsonSpcSeqHedSetInstrumentTableOld (HudsonSpcSeqStat *seq, int *pSeqHeaderReadPtr)
+{
+    byte tableSize;
+
+    tableSize = seq->aRAM[*pSeqHeaderReadPtr];
+    (*pSeqHeaderReadPtr)++;
+    seq->hdInstTableAddr = *pSeqHeaderReadPtr;
+    seq->hdInstTableSize = tableSize;
+    (*pSeqHeaderReadPtr) += tableSize;
+    return true;
+}
+
+/** extra header 04: set rhythm kit table (old, in bytes). */
+static bool hudsonSpcSeqHedSetRhythmTable (HudsonSpcSeqStat *seq, int *pSeqHeaderReadPtr)
+{
+    byte tableSize;
+
+    tableSize = seq->aRAM[*pSeqHeaderReadPtr] * 4;
+    (*pSeqHeaderReadPtr)++;
+    seq->hdRhythmTableAddr = *pSeqHeaderReadPtr;
+    seq->hdRhythmTableSize = tableSize;
+    (*pSeqHeaderReadPtr) += tableSize;
+    return true;
+}
+
+/** extra header 04 old: set rhythm kit table (old, in bytes). */
+static bool hudsonSpcSeqHedSetRhythmTableOld (HudsonSpcSeqStat *seq, int *pSeqHeaderReadPtr)
+{
+    byte tableSize;
+
+    tableSize = seq->aRAM[*pSeqHeaderReadPtr];
+    (*pSeqHeaderReadPtr)++;
+    seq->hdRhythmTableAddr = *pSeqHeaderReadPtr;
+    seq->hdRhythmTableSize = tableSize;
+    (*pSeqHeaderReadPtr) += tableSize;
+    return true;
+}
+
+/** extra header 05: set unknown address table. */
+static bool hudsonSpcSeqHed05 (HudsonSpcSeqStat *seq, int *pSeqHeaderReadPtr)
+{
+    byte tableSize;
+
+    tableSize = seq->aRAM[*pSeqHeaderReadPtr] * 2;
+    (*pSeqHeaderReadPtr)++;
+    seq->hdUnkAddrTableAddr = *pSeqHeaderReadPtr;
+    seq->hdUnkAddrTableSize = tableSize;
+    (*pSeqHeaderReadPtr) += tableSize;
+    return true;
+}
+
+/** extra header 06: set unknown table. */
+static bool hudsonSpcSeqHed06 (HudsonSpcSeqStat *seq, int *pSeqHeaderReadPtr)
+{
+    byte tableSize;
+
+    tableSize = seq->aRAM[*pSeqHeaderReadPtr] * 2;
+    (*pSeqHeaderReadPtr)++;
+    //seq->hdUnkAddrTableAddr = *pSeqHeaderReadPtr;
+    //seq->hdUnkAddrTableSize = tableSize;
+    (*pSeqHeaderReadPtr) += tableSize;
+    return true;
+}
+
+/** extra header 07: set initial echo param. */
+static bool hudsonSpcSeqHedSetEchoParam (HudsonSpcSeqStat *seq, int *pSeqHeaderReadPtr)
+{
+    int arg1 = seq->aRAM[*pSeqHeaderReadPtr];
+    (*pSeqHeaderReadPtr)++;
+
+    if (arg1 == 0)
+    {
+        fprintf(stderr, "Info: use user-defined echo params\n");
+        (*pSeqHeaderReadPtr) += 7;
+    }
+    else
+    {
+        fprintf(stderr, "Info: use default echo params\n");
+    }
+    return true;
+}
+
+/** extra header 08: set unknown byte. */
+static bool hudsonSpcSeqHed08 (HudsonSpcSeqStat *seq, int *pSeqHeaderReadPtr)
+{
+    int arg1 = seq->aRAM[*pSeqHeaderReadPtr];
+    (*pSeqHeaderReadPtr)++;
+    return true;
+}
+
+/** extra header 09: set unknown table. */
+static bool hudsonSpcSeqHed09 (HudsonSpcSeqStat *seq, int *pSeqHeaderReadPtr)
+{
+    byte tableSize;
+
+    tableSize = seq->aRAM[*pSeqHeaderReadPtr] * 2;
+    (*pSeqHeaderReadPtr)++;
+    //seq->hdUnkAddrTableAddr = *pSeqHeaderReadPtr;
+    //seq->hdUnkAddrTableSize = tableSize;
+    (*pSeqHeaderReadPtr) += tableSize;
+    return true;
+}
+
+/** detect now playing and prepare for analyze. */
+static bool hudsonSpcDetectSeq (HudsonSpcSeqStat *seq)
+{
+    int seqHeaderReadPtr;
+    bool result = true;
+    byte extraHeaderEvent;
+    int extraHeaderEventAddr = -1;
+    int numHeaderEventCount;
+
+    if (seq->ver.id == SPC_VER_UNKNOWN)
+        return false;
+
+    switch(seq->ver.id)
+    {
+    case SPC_VER_V210: // TODO: not verified
+    case SPC_VER_V227: // TODO: not verified
+    case SPC_VER_V228: // TODO: not verified
+    case SPC_VER_V230: // TODO: not verified
+    case SPC_VER_V232:
+        numHeaderEventCount = 10;
+        break;
+    default:
+        numHeaderEventCount = 6;
+        break;
+    }
+
+    seqHeaderReadPtr = seq->ver.seqHeaderAddr;
     hudsonSpcResetParam(seq);
+
+    // read channel addresses, for version 1.x
+    if (numHeaderEventCount == 6)
+    {
+        result &= hudsonSpcSeqHedSetTrackAddresses(seq, &seqHeaderReadPtr);
+        if (!result)
+        {
+            return false;
+        }
+    }
+
     // read extra header
     while (true)
     {
         // prevent access violation
-        if ((seqHeaderAddr + trHeaderOffset) >= 0xffff)
+        if (seqHeaderReadPtr >= 0xffff)
         {
             fprintf(stderr, "Error: Access violation in extra header\n");
             result = false;
@@ -509,15 +668,16 @@ static bool hudsonSpcDetectSeq (HudsonSpcSeqStat *seq)
         }
 
         // end of header
-        extraHeaderEvent = aRAM[seqHeaderAddr + trHeaderOffset];
+        extraHeaderEvent = seq->aRAM[seqHeaderReadPtr];
+        extraHeaderEventAddr = seqHeaderReadPtr;
         if (extraHeaderEvent == 0x00)
         {
             break;
         }
 
         // advance pointer, prevent access violation
-        trHeaderOffset++;
-        if ((seqHeaderAddr + trHeaderOffset) >= 0xffff)
+        seqHeaderReadPtr++;
+        if (seqHeaderReadPtr >= 0xffff)
         {
             fprintf(stderr, "Error: Access violation in extra header\n");
             result = false;
@@ -525,7 +685,7 @@ static bool hudsonSpcDetectSeq (HudsonSpcSeqStat *seq)
         }
 
         // check range
-        if (extraHeaderEvent > 0x05)
+        if (extraHeaderEvent >= numHeaderEventCount)
         {
             fprintf(stderr, "Error: Unknown extra header event $%02X\n", extraHeaderEvent);
             result = false;
@@ -533,61 +693,106 @@ static bool hudsonSpcDetectSeq (HudsonSpcSeqStat *seq)
         }
 
         // dispatch
-        switch (extraHeaderEvent)
+        if (numHeaderEventCount == 6)
         {
-        // set timebase
-        case 0x01:
+            // Ver 1.x
+            switch (extraHeaderEvent)
             {
-                seq->timebaseShift = aRAM[seqHeaderAddr + trHeaderOffset] & 0x03;
-                seq->hdTimebaseShift = seq->timebaseShift;
-                trHeaderOffset++;
-            }
-            break;
+            // set timebase
+            case 0x01:
+                result &= hudsonSpcSeqHedSetTimeBase(seq, &seqHeaderReadPtr);
+                break;
 
-        // set instrument table (alternative)
-        case 0x02:
-            {
-                byte tableSize = aRAM[seqHeaderAddr + trHeaderOffset];
-                trHeaderOffset++;
-                seq->hdInstTableAddr = seqHeaderAddr + trHeaderOffset;
-                seq->hdInstTableSize = tableSize;
-                trHeaderOffset += tableSize;
-            }
-            break;
+            // set instrument table (old)
+            case 0x02:
+                result &= hudsonSpcSeqHedSetInstrumentTableOld(seq, &seqHeaderReadPtr);
+                break;
 
-        // set rhythm kit table
-        case 0x03:
-            {
-                byte tableSize = aRAM[seqHeaderAddr + trHeaderOffset];
-                trHeaderOffset++;
-                seq->hdRhythmTableAddr = seqHeaderAddr + trHeaderOffset;
-                seq->hdRhythmTableSize = tableSize;
-                trHeaderOffset += tableSize;
-            }
-            break;
+            // set rhythm kit table
+            case 0x03:
+                result &= hudsonSpcSeqHedSetRhythmTableOld(seq, &seqHeaderReadPtr);
+                break;
 
-        // set instrument table
-        case 0x04:
-            {
-                byte tableItemCount = aRAM[seqHeaderAddr + trHeaderOffset];
-                int tableSize = tableItemCount * 4;
-                trHeaderOffset++;
-                seq->hdInstTableAddr = seqHeaderAddr + trHeaderOffset;
-                seq->hdInstTableSize = tableSize;
-                trHeaderOffset += tableSize;
-            }
-            break;
+            // set instrument table
+            case 0x04:
+                result &= hudsonSpcSeqHedSetInstrumentTable(seq, &seqHeaderReadPtr);
+                break;
 
-        // set unknown address table
-        case 0x05:
-            {
-                byte tableItemCount = aRAM[seqHeaderAddr + trHeaderOffset];
-                int tableSize = tableItemCount * 2;
-                trHeaderOffset++;
-                seq->hdUnkAddrTableAddr = seqHeaderAddr + trHeaderOffset;
-                seq->hdUnkAddrTableSize = tableSize;
-                trHeaderOffset += tableSize;
+            // set unknown address table
+            case 0x05:
+                fprintf(stderr, "Error: unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
+                result &= hudsonSpcSeqHed05(seq, &seqHeaderReadPtr);
+                break;
+
+            default:
+                fprintf(stderr, "Error: undefined header event %02X\n", extraHeaderEvent);
+                result = false;
+                break;
             }
+        }
+        else if (numHeaderEventCount == 10)
+        {
+            // Ver 2.x
+            switch (extraHeaderEvent)
+            {
+            // set channel addresses
+            case 0x01:
+                result &= hudsonSpcSeqHedSetTrackAddresses(seq, &seqHeaderReadPtr);
+                break;
+
+            // set timebase
+            case 0x02:
+                result &= hudsonSpcSeqHedSetTimeBase(seq, &seqHeaderReadPtr);
+                break;
+
+            // set instrument table
+            case 0x03:
+                result &= hudsonSpcSeqHedSetInstrumentTable(seq, &seqHeaderReadPtr);
+                break;
+
+            // set rhythm kit table
+            case 0x04:
+                result &= hudsonSpcSeqHedSetRhythmTable(seq, &seqHeaderReadPtr);
+                break;
+
+            // set unknown address table
+            case 0x05:
+                fprintf(stderr, "Error: unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
+                result &= hudsonSpcSeqHed05(seq, &seqHeaderReadPtr);
+                break;
+
+            // 
+            case 0x06:
+                fprintf(stderr, "Error: unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
+                result &= hudsonSpcSeqHed06(seq, &seqHeaderReadPtr);
+                break;
+
+            // 
+            case 0x07:
+                result &= hudsonSpcSeqHedSetEchoParam(seq, &seqHeaderReadPtr);
+                break;
+
+            // 
+            case 0x08:
+                fprintf(stderr, "Error: unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
+                result &= hudsonSpcSeqHed08(seq, &seqHeaderReadPtr);
+                break;
+
+            // 
+            case 0x09:
+                fprintf(stderr, "Error: unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
+                result &= hudsonSpcSeqHed09(seq, &seqHeaderReadPtr);
+                break;
+
+            default:
+                fprintf(stderr, "Error: unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
+                result = false;
+                break;
+            }
+        }
+
+        if (!result)
+        {
             break;
         }
     }
