@@ -47,8 +47,10 @@ static const char *mycssfile = APPSHORTNAME ".css";
 
 enum {
     SPC_VER_UNKNOWN = 0,
+    SPC_VER_V1XX,           // Super Bomberman 2, Hagane
     SPC_VER_V116,           // Super Bomberman 3, Super Genjin 2 (1.16E)
     SPC_VER_V117,           // Caravan Shooting Collection (1.17s)
+    // TODO: An American Tail: Fievel Goes West
     SPC_VER_V210,           // Do-Re-Mi Fantasy
     SPC_VER_V227,           // Tengai Makyou Zero (2.27b)
     SPC_VER_V228,           // Super Bomberman 4, Kishin Douji Zenki 3
@@ -229,6 +231,8 @@ bool hudsonSpcImportPatchFixFile (const char *filename)
 static const char *hudsonSpcVerToStrHtml (HudsonSpcSeqStat *seq)
 {
     switch (seq->ver.id) {
+    case SPC_VER_V1XX:
+        return "SFX SOUND DRIVER Version 1.xx (Earlier Version)";
     case SPC_VER_V116:
         return "SFX SOUND DRIVER Version 1.16";
     case SPC_VER_V117:
@@ -317,6 +321,7 @@ static int hudsonSpcCheckVer (HudsonSpcSeqStat *seq)
     const byte *aRAM = seq->aRAM;
     int version = SPC_VER_UNKNOWN;
     int versionStringHeaderLen = strlen(HUDSPC_VERSION_STRING_HEADER_L);
+    int v1xxSetSongTableAddr = -1;
 
     seq->timebase = hudsonSpcTimeBase;
     seq->ver.seqListAddr = -1;
@@ -391,8 +396,21 @@ static int hudsonSpcCheckVer (HudsonSpcSeqStat *seq)
         int noteLenTableAddr = indexOfHexPat(aRAM, "\xc0\x60\x30\x18\x0c\x06\x03\x01", SPC_ARAM_SIZE, NULL);
         if (noteLenTableAddr != -1)
         {
+            int v1xxSetSongTableAddr = indexOfHexPat(aRAM, "\\\xf6..\xc4\x0d\\\xfc\\\xf6..\xc4\x0e\x2f", SPC_ARAM_SIZE, NULL);
+            if (v1xxSetSongTableAddr != -1 && mget2l(&aRAM[v1xxSetSongTableAddr + 1]) != mget2l(&aRAM[v1xxSetSongTableAddr + 7]))
+            {
+                v1xxSetSongTableAddr = -1;
+            }
+
             // TODO: check assembly code and detect the version
-            version = SPC_VER_V116;
+            if (v1xxSetSongTableAddr != -1)
+            {
+                version = SPC_VER_V1XX;
+            }
+            else
+            {
+                version = SPC_VER_V1XX;
+            }
         }
     }
 
@@ -407,6 +425,9 @@ static int hudsonSpcCheckVer (HudsonSpcSeqStat *seq)
     else if (version != SPC_VER_UNKNOWN) {
         switch(version)
         {
+        case SPC_VER_V1XX:
+            seq->ver.seqListAddr = mget2l(&aRAM[0x0d]);
+            break;
         case SPC_VER_V116:
         case SPC_VER_V117:
             seq->ver.seqListAddr = mget2l(&aRAM[0x07c2]);
