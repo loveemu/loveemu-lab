@@ -1,5 +1,6 @@
 /**
- * Hudson spc2midi. (Super Bomberman 3)
+ * Hudson SFX SOUND DRIVER spc2midi.
+ * Based on Super Bomberman 3 analysis.
  * http://loveemu.yh.land.to/
  */
 
@@ -16,7 +17,7 @@
 
 #define APPNAME "Hudson SPC2MIDI"
 #define APPSHORTNAME "hudspc"
-#define VERSION "[2013-05-26]"
+#define VERSION "[2013-05-30]"
 
 static int hudsonSpcLoopMax = 2;            // maximum loop count of parser
 static int hudsonSpcTextLoopMax = 1;        // maximum loop count of text output
@@ -46,7 +47,13 @@ static const char *mycssfile = APPSHORTNAME ".css";
 
 enum {
     SPC_VER_UNKNOWN = 0,
-    SPC_VER_SBM3,           // Super Bomberman 3
+    SPC_VER_V116,           // Super Bomberman 3, Super Genjin 2 (1.16E)
+    SPC_VER_V117,           // Caravan Shooting Collection (1.17s)
+    SPC_VER_V210,           // Do-Re-Mi Fantasy
+    SPC_VER_V227,           // Tengai Makyou Zero (2.27b)
+    SPC_VER_V228,           // Super Bomberman 4, Kishin Douji Zenki 3
+    SPC_VER_V230,           // Same Game (2.30a)
+    SPC_VER_V232,           // Super Bomberman 5, Bomberman B-Daman
 };
 
 // MIDI/SMF limitations
@@ -57,6 +64,9 @@ enum {
 #define SPC_TRACK_MAX       8
 #define SPC_NOTE_KEYSHIFT   24
 #define SPC_ARAM_SIZE       0x10000
+
+#define HUDSPC_VERSION_STRING_HEADER_L  "SFX SOUND DRIVER Version " // Version 1
+#define HUDSPC_VERSION_STRING_HEADER_S  "SFX SOUND DRIVER Ver "     // Version 2
 
 typedef struct TagHudsonSpcTrackStat HudsonSpcTrackStat;
 typedef struct TagHudsonSpcSeqStat HudsonSpcSeqStat;
@@ -69,6 +79,9 @@ typedef struct TagHudsonSpcVerInfo {
     int seqHeaderAddr;
     HudsonSpcEvent event[256]; // vcmds
     PatchFixInfo patchFix[256];
+    char versionString[256];
+    int versionStringAddr;
+    bool seqDetected;
 } HudsonSpcVerInfo;
 
 typedef struct TagHudsonSpcNoteParam {
@@ -216,8 +229,20 @@ bool hudsonSpcImportPatchFixFile (const char *filename)
 static const char *hudsonSpcVerToStrHtml (HudsonSpcSeqStat *seq)
 {
     switch (seq->ver.id) {
-    case SPC_VER_SBM3:
-        return "Super Bomberman 3";
+    case SPC_VER_V116:
+        return "SFX SOUND DRIVER Version 1.16";
+    case SPC_VER_V117:
+        return "SFX SOUND DRIVER Version 1.17s";
+    case SPC_VER_V210:
+        return "SFX SOUND DRIVER Ver 2.10";
+    case SPC_VER_V227:
+        return "SFX SOUND DRIVER Ver 2.27b";
+    case SPC_VER_V228:
+        return "SFX SOUND DRIVER Ver 2.28";
+    case SPC_VER_V230:
+        return "SFX SOUND DRIVER Ver 2.30a";
+    case SPC_VER_V232:
+        return "SFX SOUND DRIVER Ver 2.32";
     default:
         return "Unknown Version / Unsupported";
     }
@@ -291,21 +316,109 @@ static int hudsonSpcCheckVer (HudsonSpcSeqStat *seq)
 {
     const byte *aRAM = seq->aRAM;
     int version = SPC_VER_UNKNOWN;
+    int versionStringHeaderLen = strlen(HUDSPC_VERSION_STRING_HEADER_L);
 
     seq->timebase = hudsonSpcTimeBase;
     seq->ver.seqListAddr = -1;
     seq->ver.songIndex = -1;
     seq->ver.seqHeaderAddr = -1;
+    seq->ver.seqDetected = false;
 
-    if (hudsonSpcForceSongListAddr >= 0) {
-        seq->ver.seqListAddr = hudsonSpcForceSongListAddr;
-        version = SPC_VER_SBM3;
+    strcpy(seq->ver.versionString, "");
+    // Version 1?
+    seq->ver.versionStringAddr = indexOfHexPat(aRAM, HUDSPC_VERSION_STRING_HEADER_L, SPC_ARAM_SIZE, NULL);
+    // Version 2?
+    if (seq->ver.versionStringAddr == -1)
+    {
+        seq->ver.versionStringAddr = indexOfHexPat(aRAM, HUDSPC_VERSION_STRING_HEADER_S, SPC_ARAM_SIZE, NULL);
+        versionStringHeaderLen = strlen(HUDSPC_VERSION_STRING_HEADER_S);
     }
-    else {
-        // TODO: more flexible autosearch
-        // the following code targets Super Bomberman 3
-        seq->ver.seqListAddr = mget2l(&aRAM[0x07c2]);
-        version = SPC_VER_SBM3;
+    // grab version string from RAM
+    if (seq->ver.versionStringAddr != -1)
+    {
+        int posEndOfVersion = seq->ver.versionStringAddr + versionStringHeaderLen;
+        int versionStringLength;
+        while (posEndOfVersion < SPC_ARAM_SIZE && (aRAM[posEndOfVersion] != ' ' && aRAM[posEndOfVersion] != ','))
+        {
+            posEndOfVersion++;
+        }
+        versionStringLength = posEndOfVersion - seq->ver.versionStringAddr;
+        strncpy(seq->ver.versionString, &aRAM[seq->ver.versionStringAddr], versionStringLength);
+        seq->ver.versionString[versionStringLength] = '\0';
+    }
+
+    // if version string is available, detect version by using it
+    if (seq->ver.versionStringAddr != -1)
+    {
+        if (memcmp(&seq->ver.versionString[versionStringHeaderLen], "1.16", 4) == 0)
+        {
+            version = SPC_VER_V116;
+        }
+        else if (memcmp(&seq->ver.versionString[versionStringHeaderLen], "1.17", 4) == 0)
+        {
+            version = SPC_VER_V117;
+        }
+        else if (memcmp(&seq->ver.versionString[versionStringHeaderLen], "2.10", 4) == 0)
+        {
+            version = SPC_VER_V210;
+        }
+        else if (memcmp(&seq->ver.versionString[versionStringHeaderLen], "2.27", 4) == 0)
+        {
+            version = SPC_VER_V227;
+        }
+        else if (memcmp(&seq->ver.versionString[versionStringHeaderLen], "2.28", 4) == 0)
+        {
+            version = SPC_VER_V228;
+        }
+        else if (memcmp(&seq->ver.versionString[versionStringHeaderLen], "2.30", 4) == 0)
+        {
+            version = SPC_VER_V230;
+        }
+        else if (memcmp(&seq->ver.versionString[versionStringHeaderLen], "2.32", 4) == 0)
+        {
+            version = SPC_VER_V232;
+        }
+        else
+        {
+            // TODO: unknown version, then, think as if the nearest famous version
+            version = SPC_VER_V116;
+        }
+    }
+    else
+    {
+        // unknown version without no version string, then,
+        // search note length table, to know if the song is the variant of SFX SOUND DRIVER
+        int noteLenTableAddr = indexOfHexPat(aRAM, "\xc0\x60\x30\x18\x0c\x06\x03\x01", SPC_ARAM_SIZE, NULL);
+        if (noteLenTableAddr != -1)
+        {
+            // TODO: check assembly code and detect the version
+            version = SPC_VER_V116;
+        }
+    }
+
+    if (hudsonSpcForceSongListAddr >= 0)
+    {
+        seq->ver.seqListAddr = hudsonSpcForceSongListAddr;
+        if (version == SPC_VER_UNKNOWN)
+        {
+            version = SPC_VER_V116;
+        }
+    }
+    else if (version != SPC_VER_UNKNOWN) {
+        switch(version)
+        {
+        case SPC_VER_V116:
+        case SPC_VER_V117:
+            seq->ver.seqListAddr = mget2l(&aRAM[0x07c2]);
+            break;
+        case SPC_VER_V210: // TODO: verify
+        case SPC_VER_V227: // TODO: verify
+        case SPC_VER_V228: // TODO: verify
+        case SPC_VER_V230: // TODO: verify
+        case SPC_VER_V232:
+            seq->ver.seqListAddr = mget2l(&aRAM[0x0803]);
+            break;
+        }
     }
 
     if (hudsonSpcForceSongIndex >= 0) {
@@ -391,7 +504,7 @@ static bool hudsonSpcDetectSeq (HudsonSpcSeqStat *seq)
         }
 
         // check range
-        if (extraHeaderEvent >= 0x05)
+        if (extraHeaderEvent > 0x05)
         {
             fprintf(stderr, "Error: Unknown extra header event $%02X\n", extraHeaderEvent);
             result = false;
@@ -468,9 +581,7 @@ static HudsonSpcSeqStat *newHudsonSpcSeq (const byte *aRAM)
     if (newSeq) {
         newSeq->aRAM = aRAM;
         hudsonSpcCheckVer(newSeq);
-        if (!hudsonSpcDetectSeq(newSeq)) {
-            newSeq->ver.id = SPC_VER_UNKNOWN;
-        }
+        newSeq->ver.seqDetected = hudsonSpcDetectSeq(newSeq);
     }
     return newSeq;
 }
@@ -514,7 +625,19 @@ static void printHtmlInfoList (HudsonSpcSeqStat *seq)
     if (seq == NULL)
         return;
 
-    myprintf("          <li>Version: %s</li>\n", hudsonSpcVerToStrHtml(seq));
+    if (seq->ver.versionStringAddr != -1)
+    {
+        myprintf("          <li>Version: %s at $%04X", seq->ver.versionString, seq->ver.versionStringAddr);
+        if (strcmp(seq->ver.versionString, hudsonSpcVerToStrHtml(seq)) != 0)
+        {
+            myprintf("<ul><li>Interpreted as %s</li></ul>", hudsonSpcVerToStrHtml(seq));
+        }
+        myprintf("</li>\n");
+    }
+    else
+    {
+        myprintf("          <li>Version (Guess): %s</li>\n", hudsonSpcVerToStrHtml(seq));
+    }
     myprintf("          <li>Song List: $%04X</li>\n", seq->ver.seqListAddr);
     myprintf("          <li>Song Entry: $%04X", seq->ver.seqHeaderAddr);
     myprintf(" (Song $%02x)", seq->ver.songIndex);
@@ -1839,7 +1962,7 @@ Smf* hudsonSpcARAMToMidi (const byte *aRAM)
     seq = newHudsonSpcSeq(aRAM);
     printHtmlInfoList(seq);
 
-    if (seq->ver.id == SPC_VER_UNKNOWN) {
+    if (seq->ver.id == SPC_VER_UNKNOWN || !seq->ver.seqDetected) {
         fprintf(stderr, "Error: Invalid or unsupported data.\n");
         myprintf("        </ul>\n");
         myprintf("      </div>\n");
