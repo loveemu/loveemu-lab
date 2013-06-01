@@ -1583,10 +1583,10 @@
 14e5: dw $17eb  ; ea - pitch attack envelope off
 14e7: dw $17f6  ; eb - set track loop position
 14e8: dw $1805  ; ec - repeat from track loop position
-14ea: dw $1814  ; ed
+14ea: dw $1814  ; ed - set track loop position (only work with the first call)
 14ed: dw $182f  ; ee - set volume (from table)
 14ef: dw $1843  ; ef - one-step pitch envelope?
-14f1: dw $1854  ; f0
+14f1: dw $1854  ; f0 - (1 byte)
 14f3: dw $185e  ; f1 - set portamento
 14f5: dw $149e  ; f2 - nop
 14f7: dw $149e  ; f3 - nop
@@ -1606,14 +1606,14 @@
 ; subcmd table (see vcmd fe)
 1511: dw $18af  ; 00 - end of track
 1513: dw $18b8  ; 01 - echo off
-1515: dw $18c3  ; 02
+1515: dw $18c3  ; 02 - (0 byte)
 1517: dw $18cc  ; 03 - rhythm channel on
 1519: dw $18d7  ; 04 - rhythm channel off
 151b: dw $18e2  ; 05 - set vibrato type 0
 151d: dw $18e2  ; 06 - set vibrato type 1
 151f: dw $18e2  ; 07 - set vibrato type 2
-1521: dw $18ef  ; 08
-1523: dw $1901  ; 09
+1521: dw $18ef  ; 08 - (0 byte)
+1523: dw $1901  ; 09 - (0 byte)
 
 ; dispatch note (00-cf)
 1525: f8 40     mov   x,$40
@@ -1630,7 +1630,7 @@
 1537: f6 40 20  mov   a,$2040+y
 153a: 68 01     cmp   a,#$01
 153c: d0 11     bne   $154f
-; if actual length == 1 (index 8, unreachable without $b4)
+; if actual length == 1, correct it to be 1.5
 153e: f4 a4     mov   a,$a4+x
 1540: 48 01     eor   a,#$01
 1542: d4 a4     mov   $a4+x,a           ; $a4+x ^= 1
@@ -1644,16 +1644,16 @@
 ;
 154f: d5 21 02  mov   $0221+x,a         ; set wait length (tick)
 1552: 63 00 2b  bbs3  $00,$1580
-; if bit 3 is not set, calc duration
-; (if bit 3 is set, use full length)
+; if bit 3 (tie) is not set, calc duration
+; (if bit 3 (tie) is set, use full length)
 1555: fd        mov   y,a
 1556: f5 31 02  mov   a,$0231+x         ; quantize value Q (see vcmd d5)
 1559: 10 04     bpl   $155f
 155b: 28 7f     and   a,#$7f
 155d: 2f 20     bra   $157f
 155f: 68 09     cmp   a,#$09
-; if Q>8, set duration to (full length - (Q - 8))) (MML @q)
 1561: 90 11     bcc   $1574
+; if Q>8, set duration to (full length - (Q - 8))) (MML @q)
 1563: a8 08     sbc   a,#$08
 1565: c4 01     mov   $01,a
 1567: f5 21 02  mov   a,$0221+x
@@ -1697,7 +1697,7 @@
 15aa: 60        clrc
 15ab: 84 01     adc   a,$01             ; note number (octave corrected, 0-71)
 15ad: 73 00 02  bbc3  $00,$15b2
-15b0: 08 80     or    a,#$80            ; set bit 7, if note bit 3 != 0
+15b0: 08 80     or    a,#$80            ; set bit 7, if note bit 3 (tie) is set
 15b2: d5 11 02  mov   $0211+x,a         ; set note number to $0211+x
 15b5: f4 a4     mov   a,$a4+x
 15b7: 28 ef     and   a,#$ef
@@ -1820,7 +1820,6 @@
 168f: 5f 9c 14  jmp   $149c
 
 ; vcmd db - set reverse phase
-; (it needs a few of certain conditions to effect.)
 1692: f8 40     mov   x,$40
 1694: f7 03     mov   a,($03)+y
 1696: 28 03     and   a,#$03

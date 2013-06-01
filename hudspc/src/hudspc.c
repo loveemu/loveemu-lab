@@ -17,7 +17,7 @@
 
 #define APPNAME "Hudson SPC2MIDI"
 #define APPSHORTNAME "hudspc"
-#define VERSION "[2013-05-30]"
+#define VERSION "[2013-05-31]"
 
 static int hudsonSpcLoopMax = 2;            // maximum loop count of parser
 static int hudsonSpcTextLoopMax = 1;        // maximum loop count of text output
@@ -47,15 +47,24 @@ static const char *mycssfile = APPSHORTNAME ".css";
 
 enum {
     SPC_VER_UNKNOWN = 0,
-    SPC_VER_V1XX,           // Super Bomberman 2, Hagane
-    SPC_VER_V116,           // Super Bomberman 3, Super Genjin 2 (1.16E)
-    SPC_VER_V117,           // Caravan Shooting Collection (1.17s)
-    // TODO: An American Tail: Fievel Goes West
-    SPC_VER_V210,           // Do-Re-Mi Fantasy
-    SPC_VER_V227,           // Tengai Makyou Zero (2.27b)
-    SPC_VER_V228,           // Super Bomberman 4, Kishin Douji Zenki 3
-    SPC_VER_V230,           // Same Game (2.30a)
-    SPC_VER_V232,           // Super Bomberman 5, Bomberman B-Daman
+    // Earlier Version:
+    // Super Bomberman 2, Hagane
+    SPC_VER_V0,
+    // Version 1.xx:
+    // Super Bomberman 3 (1.16)
+    // Super Genjin 2 (1.16E)
+    // Caravan Shooting Collection (1.17s)
+    SPC_VER_V1,
+    // Ver 2.xx
+    // TODO: An American Tail: Fievel Goes West (No Version String)
+    // Do-Re-Mi Fantasy (2.10)
+    // Tengai Makyou Zero (2.27b)
+    // Super Bomberman 4 (2.28)
+    // Kishin Douji Zenki 3 (2.28)
+    // Same Game (2.30a)
+    // Super Bomberman 5 (2.32)
+    // Bomberman B-Daman (2.32)
+    SPC_VER_V2,
 };
 
 // MIDI/SMF limitations
@@ -72,7 +81,7 @@ enum {
 
 typedef struct TagHudsonSpcTrackStat HudsonSpcTrackStat;
 typedef struct TagHudsonSpcSeqStat HudsonSpcSeqStat;
-typedef void (*HudsonSpcEvent) (HudsonSpcSeqStat *, SeqEventReport *, Smf *);
+typedef void (*HudsonSpcEvent) (HudsonSpcSeqStat *, SeqEventReport *);
 
 typedef struct TagHudsonSpcVerInfo {
     int id;
@@ -80,9 +89,11 @@ typedef struct TagHudsonSpcVerInfo {
     int songIndex;
     int seqHeaderAddr;
     HudsonSpcEvent event[256]; // vcmds
+    HudsonSpcEvent subevent[256]; // subcmds
     PatchFixInfo patchFix[256];
     char versionString[256];
     int versionStringAddr;
+    int versionNumber;
     bool seqDetected;
 } HudsonSpcVerInfo;
 
@@ -90,7 +101,7 @@ typedef struct TagHudsonSpcNoteParam {
     bool active;        // if the following params are used or not
     int tick;           // timing (tick)
     int dur;            // total length (tick)
-    bool tied;          // if the note tied
+    bool tied;          // if the note tied/slur
     int key;            // key
     int transpose;      // transpose
     int patch;          // instrument
@@ -138,6 +149,10 @@ struct TagHudsonSpcSeqStat {
     bool active;                // if the seq is still active
     HudsonSpcVerInfo ver;       // game version info
     HudsonSpcTrackStat track[SPC_TRACK_MAX]; // status of each tracks
+    byte reg[0x100];            // user RAM work area
+    int regCount;               // user RAM work area size
+    byte regCmp;                // value for user RAM comparison
+    bool regCarry;              // carry flag for user RAM comparison
 };
 
 static void hudsonSpcSetEventList (HudsonSpcSeqStat *seq);
@@ -232,22 +247,50 @@ bool hudsonSpcImportPatchFixFile (const char *filename)
 static const char *hudsonSpcVerToStrHtml (HudsonSpcSeqStat *seq)
 {
     switch (seq->ver.id) {
-    case SPC_VER_V1XX:
-        return "SFX SOUND DRIVER Version 1.xx (Earlier Version)";
-    case SPC_VER_V116:
+    case SPC_VER_V0:
+        return "SFX SOUND DRIVER Version x.xx (Earlier Version)";
+    case SPC_VER_V1:
         return "SFX SOUND DRIVER Version 1.16";
-    case SPC_VER_V117:
-        return "SFX SOUND DRIVER Version 1.17s";
-    case SPC_VER_V210:
-        return "SFX SOUND DRIVER Ver 2.10";
-    case SPC_VER_V227:
-        return "SFX SOUND DRIVER Ver 2.27b";
-    case SPC_VER_V228:
-        return "SFX SOUND DRIVER Ver 2.28";
-    case SPC_VER_V230:
-        return "SFX SOUND DRIVER Ver 2.30a";
-    case SPC_VER_V232:
+        //switch(seq->ver.versionNumber)
+        //{
+        //case 116:
+        //    return "SFX SOUND DRIVER Version 1.16";
+        //case 117:
+        //    return "SFX SOUND DRIVER Version 1.17s";
+        //default:
+        //    if (seq->ver.versionStringAddr != -1)
+        //    {
+        //        return seq->ver.versionString;
+        //    }
+        //    else
+        //    {
+        //        return "SFX SOUND DRIVER Version 1.xx";
+        //    }
+        //}
+    case SPC_VER_V2:
         return "SFX SOUND DRIVER Ver 2.32";
+        //switch(seq->ver.versionNumber)
+        //{
+        //case 210:
+        //    return "SFX SOUND DRIVER Ver 2.10";
+        //case 227:
+        //    return "SFX SOUND DRIVER Ver 2.27b";
+        //case 228:
+        //    return "SFX SOUND DRIVER Ver 2.28";
+        //case 230:
+        //    return "SFX SOUND DRIVER Ver 2.30a";
+        //case 232:
+        //    return "SFX SOUND DRIVER Ver 2.32";
+        //default:
+        //    if (seq->ver.versionStringAddr != -1)
+        //    {
+        //        return seq->ver.versionString;
+        //    }
+        //    else
+        //    {
+        //        return "SFX SOUND DRIVER Version 2.xx";
+        //    }
+        //}
     default:
         return "Unknown Version / Unsupported";
     }
@@ -284,6 +327,11 @@ static void hudsonSpcResetParam (HudsonSpcSeqStat *seq)
     seq->transpose = 0;
     seq->looped = 0;
     seq->active = true;
+
+    memset(seq->reg, 0, sizeof(seq->reg));
+    seq->regCount = 8;
+    seq->regCmp = 0;
+    seq->regCarry = false;
 
     seq->timebaseShift = 2;
     seq->hdTimebaseShift = -1;
@@ -331,6 +379,7 @@ static int hudsonSpcCheckVer (HudsonSpcSeqStat *seq)
     seq->ver.seqHeaderAddr = -1;
     seq->ver.seqDetected = false;
 
+    seq->ver.versionNumber = 0;
     strcpy(seq->ver.versionString, "");
     // Version 1?
     seq->ver.versionStringAddr = indexOfHexPat(aRAM, HUDSPC_VERSION_STRING_HEADER_L, SPC_ARAM_SIZE, NULL);
@@ -352,43 +401,31 @@ static int hudsonSpcCheckVer (HudsonSpcSeqStat *seq)
         versionStringLength = posEndOfVersion - seq->ver.versionStringAddr;
         strncpy(seq->ver.versionString, &aRAM[seq->ver.versionStringAddr], versionStringLength);
         seq->ver.versionString[versionStringLength] = '\0';
+
+        // grab version number
+        if (aRAM[seq->ver.versionStringAddr + versionStringHeaderLen + 1] == '.')
+        {
+            seq->ver.versionNumber =
+                (aRAM[seq->ver.versionStringAddr + versionStringHeaderLen] - '0') * 100
+                + (aRAM[seq->ver.versionStringAddr + versionStringHeaderLen + 2] - '0') * 10
+                + (aRAM[seq->ver.versionStringAddr + versionStringHeaderLen + 3] - '0');
+        }
     }
 
     // if version string is available, detect version by using it
     if (seq->ver.versionStringAddr != -1)
     {
-        if (memcmp(&seq->ver.versionString[versionStringHeaderLen], "1.16", 4) == 0)
+        if (seq->ver.versionNumber >= 100 && seq->ver.versionNumber <= 199)
         {
-            version = SPC_VER_V116;
+            version = SPC_VER_V1;
         }
-        else if (memcmp(&seq->ver.versionString[versionStringHeaderLen], "1.17", 4) == 0)
+        else if (seq->ver.versionNumber >= 200 && seq->ver.versionNumber <= 299)
         {
-            version = SPC_VER_V117;
-        }
-        else if (memcmp(&seq->ver.versionString[versionStringHeaderLen], "2.10", 4) == 0)
-        {
-            version = SPC_VER_V210;
-        }
-        else if (memcmp(&seq->ver.versionString[versionStringHeaderLen], "2.27", 4) == 0)
-        {
-            version = SPC_VER_V227;
-        }
-        else if (memcmp(&seq->ver.versionString[versionStringHeaderLen], "2.28", 4) == 0)
-        {
-            version = SPC_VER_V228;
-        }
-        else if (memcmp(&seq->ver.versionString[versionStringHeaderLen], "2.30", 4) == 0)
-        {
-            version = SPC_VER_V230;
-        }
-        else if (memcmp(&seq->ver.versionString[versionStringHeaderLen], "2.32", 4) == 0)
-        {
-            version = SPC_VER_V232;
+            version = SPC_VER_V2;
         }
         else
         {
-            // TODO: unknown version, then, think as if the nearest famous version
-            version = SPC_VER_V116;
+            version = SPC_VER_UNKNOWN;
         }
     }
     else
@@ -407,11 +444,14 @@ static int hudsonSpcCheckVer (HudsonSpcSeqStat *seq)
             // TODO: check assembly code and detect the version
             if (v1xxSetSongTableAddr != -1)
             {
-                version = SPC_VER_V1XX;
+                seq->ver.versionNumber = 1;
+                version = SPC_VER_V0;
             }
             else
             {
-                version = SPC_VER_V116;
+                // set default version
+                seq->ver.versionNumber = 232;
+                version = SPC_VER_V2;
             }
         }
     }
@@ -421,24 +461,21 @@ static int hudsonSpcCheckVer (HudsonSpcSeqStat *seq)
         seq->ver.seqListAddr = hudsonSpcForceSongListAddr;
         if (version == SPC_VER_UNKNOWN)
         {
-            version = SPC_VER_V116;
+            // force set default version
+            seq->ver.versionNumber = 232;
+            version = SPC_VER_V2;
         }
     }
     else if (version != SPC_VER_UNKNOWN) {
         switch(version)
         {
-        case SPC_VER_V1XX:
+        case SPC_VER_V0:
             seq->ver.seqListAddr = mget2l(&aRAM[0x0d]);
             break;
-        case SPC_VER_V116:
-        case SPC_VER_V117:
+        case SPC_VER_V1:
             seq->ver.seqListAddr = mget2l(&aRAM[0x07c2]);
             break;
-        case SPC_VER_V210:
-        case SPC_VER_V227:
-        case SPC_VER_V228:
-        case SPC_VER_V230:
-        case SPC_VER_V232:
+        case SPC_VER_V2:
             seq->ver.seqListAddr = mget2l(&aRAM[0x0803]);
             break;
         }
@@ -631,11 +668,7 @@ static bool hudsonSpcDetectSeq (HudsonSpcSeqStat *seq)
 
     switch(seq->ver.id)
     {
-    case SPC_VER_V210: // TODO: not verified
-    case SPC_VER_V227: // TODO: not verified
-    case SPC_VER_V228: // TODO: not verified
-    case SPC_VER_V230: // TODO: not verified
-    case SPC_VER_V232:
+    case SPC_VER_V2:
         numHeaderEventCount = 10;
         break;
     default:
@@ -687,13 +720,13 @@ static bool hudsonSpcDetectSeq (HudsonSpcSeqStat *seq)
         // check range
         if (extraHeaderEvent >= numHeaderEventCount)
         {
-            fprintf(stderr, "Error: unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
+            fprintf(stderr, "Error: Unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
             result = false;
             break;
         }
 
         // dispatch
-        if (numHeaderEventCount == 6)
+        if (numHeaderEventCount == 6) // SPC_VER_V0, SPC_VER_V1
         {
             // Ver 1.x
             switch (extraHeaderEvent)
@@ -720,17 +753,17 @@ static bool hudsonSpcDetectSeq (HudsonSpcSeqStat *seq)
 
             // set unknown address table
             case 0x05:
-                fprintf(stderr, "Warning: unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
+                fprintf(stderr, "Warning: Skipped unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
                 result &= hudsonSpcSeqHed05(seq, &seqHeaderReadPtr);
                 break;
 
             default:
-                fprintf(stderr, "Error: unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
+                fprintf(stderr, "Error: Unidentified header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
                 result = false;
                 break;
             }
         }
-        else if (numHeaderEventCount == 10)
+        else if (numHeaderEventCount == 10) // SPC_VER_V2
         {
             // Ver 2.x
             switch (extraHeaderEvent)
@@ -757,13 +790,13 @@ static bool hudsonSpcDetectSeq (HudsonSpcSeqStat *seq)
 
             // set unknown address table
             case 0x05:
-                fprintf(stderr, "Warning: unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
+                fprintf(stderr, "Warning: Skipped unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
                 result &= hudsonSpcSeqHed05(seq, &seqHeaderReadPtr);
                 break;
 
             // 
             case 0x06:
-                fprintf(stderr, "Warning: unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
+                fprintf(stderr, "Warning: Skipped unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
                 result &= hudsonSpcSeqHed06(seq, &seqHeaderReadPtr);
                 break;
 
@@ -774,18 +807,18 @@ static bool hudsonSpcDetectSeq (HudsonSpcSeqStat *seq)
 
             // 
             case 0x08:
-                fprintf(stderr, "Warning: unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
+                fprintf(stderr, "Warning: Skipped unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
                 result &= hudsonSpcSeqHed08(seq, &seqHeaderReadPtr);
                 break;
 
             // 
             case 0x09:
-                fprintf(stderr, "Warning: unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
+                fprintf(stderr, "Warning: Skipped unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
                 result &= hudsonSpcSeqHed09(seq, &seqHeaderReadPtr);
                 break;
 
             default:
-                fprintf(stderr, "Error: unknown header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
+                fprintf(stderr, "Error: Unidentified header event %02X at $%04X\n", extraHeaderEvent, extraHeaderEventAddr);
                 result = false;
                 break;
             }
@@ -1919,22 +1952,37 @@ static void hudsonSpcEventDetune (HudsonSpcSeqStat *seq, SeqEventReport *ev)
 /** vcmd e2: set vibrato. */
 static void hudsonSpcEventSetVibrato (HudsonSpcSeqStat *seq, SeqEventReport *ev)
 {
-    int arg1, arg2;
+    int arg1, arg2, arg3;
     int *p = &seq->track[ev->track].pos;
 
-    ev->size += 2;
-    arg1 = seq->aRAM[*p];
-    (*p)++;
-    arg2 = seq->aRAM[*p];
-    (*p)++;
-
-    if ((arg1 & 0x7f) != 0)
+    if (seq->ver.id == SPC_VER_V2)
     {
-        sprintf(ev->note, "Set Vibrato, rate = %d, depth = %d", arg1, arg2);
+        ev->size += 3;
+        arg1 = seq->aRAM[*p];
+        (*p)++;
+        arg2 = seq->aRAM[*p];
+        (*p)++;
+        arg3 = seq->aRAM[*p];
+        (*p)++;
+
+        sprintf(ev->note, "Set Vibrato, arg1 = %d, arg2 = %d, arg3 = %d", arg1, arg2, arg3);
     }
     else
     {
-        sprintf(ev->note, "Set Vibrato, depth = 0");
+        ev->size += 2;
+        arg1 = seq->aRAM[*p];
+        (*p)++;
+        arg2 = seq->aRAM[*p];
+        (*p)++;
+
+        if ((arg1 & 0x7f) != 0)
+        {
+            sprintf(ev->note, "Set Vibrato, rate = %d, depth = %d", arg1, arg2);
+        }
+        else
+        {
+            sprintf(ev->note, "Set Vibrato, depth = 0");
+        }
     }
     strcat(ev->classStr, " ev-vibrato");
 
@@ -2048,65 +2096,10 @@ static void hudsonSpcEventSubEvent (HudsonSpcSeqStat *seq, SeqEventReport *ev)
     arg1 = seq->aRAM[*p];
     (*p)++;
 
-    switch(arg1)
-    {
-    case 0x00:
-        sprintf(ev->note, "Subcmd %02X (End Of Track Alt)", arg1);
-        strcat(ev->classStr, " ev-end");
-        hudsonSpcInactiveTrack(seq, ev->track);
-        if (!hudsonSpcLessTextInSMF)
-            smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
-        break;
-    case 0x01:
-        sprintf(ev->note, "Subcmd %02X (Echo Off)", arg1);
-        strcat(ev->classStr, " ev-echooff");
-        smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_REVERB, 0);
-        break;
-    case 0x03:
-        sprintf(ev->note, "Subcmd %02X (Rhythm Channel On)", arg1);
-        strcat(ev->classStr, " ev-rhythmon");
-        tr->rhythmChannel = true;
+    ev->subcode = arg1;
+    sprintf(ev->note, "Subcmd %02X ", arg1);
 
-        if (!hudsonSpcLessTextInSMF)
-            smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
-
-        // HACK: better than nothing?
-        smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_BANKSELM, seq->ver.patchFix[255].bankSelM);
-        smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_BANKSELL, seq->ver.patchFix[255].bankSelL);
-        smfInsertProgram(seq->smf, ev->tick, ev->track, ev->track, seq->ver.patchFix[255].patchNo);
-        break;
-    case 0x04:
-        sprintf(ev->note, "Subcmd %02X (Rhythm Channel Off)", arg1);
-        strcat(ev->classStr, " ev-rhythmoff");
-        tr->rhythmChannel = false;
-
-        if (!hudsonSpcLessTextInSMF)
-            smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
-        break;
-    case 0x05:
-    case 0x06:
-    case 0x07:
-        sprintf(ev->note, "Subcmd %02X (Vibrato Type, type = %d)", arg1 - 0x05);
-        strcat(ev->classStr, " ev-vibratotype");
-
-        if (!hudsonSpcLessTextInSMF)
-            smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
-        break;
-    case 0x02:
-    case 0x08:
-    case 0x09:
-    default:
-        sprintf(ev->note, "Unknown Event %02X %02X", ev->code, arg1);
-        strcat(ev->classStr, " ev-subcmd unknown");
-        unknown = true;
-        break;
-    }
-
-    if (unknown) {
-        if (!hudsonSpcLessTextInSMF)
-            smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
-        fprintf(stderr, "Warning: Skipped unknown event %02X %02X at $%04X [Track %d]\n", ev->code, arg1, *p, ev->track + 1);
-    }
+    seq->ver.subevent[ev->subcode](seq, ev);
 }
 
 /** vcmd ff: end subroutine / end of track. */
@@ -2139,15 +2132,601 @@ static void hudsonSpcEventEndSubroutine (HudsonSpcSeqStat *seq, SeqEventReport *
     //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
+/** subcmd: unidentified event. */
+static void hudsonSpcEventSubUnidentified (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    char argDumpStr[256];
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->unidentified = true;
+
+    strcpy(argDumpStr, "(Unknown)");
+    strcat(ev->note, argDumpStr);
+    strcat(ev->classStr, " ev-subcmd unknown");
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    fprintf(stderr, "Error: Encountered unidentified event %02X %02X at $%04X [Track %d]\n", ev->code, ev->subcode, *p, ev->track + 1);
+}
+
+/** subcmd: unknown event (0 byte). */
+static void hudsonSpcEventSubUnknown0 (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    char argDumpStr[256];
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    strcpy(argDumpStr, "(Unknown)");
+    strcat(ev->note, argDumpStr);
+    strcat(ev->classStr, " ev-subcmd unknown");
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+    fprintf(stderr, "Warning: Skipped unknown event %02X %02X at $%04X [Track %d]\n", ev->code, ev->subcode, *p, ev->track + 1);
+}
+
+/** subcmd: unknown event (1 byte). */
+static void hudsonSpcEventSubUnknown1 (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    char argDumpStr[256];
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(argDumpStr, "(Unknown, arg1 = %d)", arg1);
+    strcat(ev->note, argDumpStr);
+    strcat(ev->classStr, " ev-subcmd unknown");
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+    fprintf(stderr, "Warning: Skipped unknown event %02X %02X at $%04X [Track %d]\n", ev->code, ev->subcode, *p, ev->track + 1);
+}
+
+/** subcmd: unknown event (2 bytes). */
+static void hudsonSpcEventSubUnknown2 (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    char argDumpStr[256];
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(argDumpStr, "(Unknown, arg1 = %d, arg2 = %d)", arg1, arg2);
+    strcat(ev->note, argDumpStr);
+    strcat(ev->classStr, " ev-subcmd unknown");
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+    fprintf(stderr, "Warning: Skipped unknown event %02X %02X at $%04X [Track %d]\n", ev->code, ev->subcode, *p, ev->track + 1);
+}
+
+/** subcmd: mov reg, #imm. */
+static void hudsonSpcEventSubMOVImm (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    char argDumpStr[256];
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(argDumpStr, "(mov $%02x, #%d)", arg1, arg2);
+    strcat(ev->note, argDumpStr);
+    strcat(ev->classStr, " ev-op ev-op-mov");
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    if (arg1 >= seq->regCount)
+    {
+        fprintf(stderr, "User RAM Access Violation, reg = $%02x\n", arg1);
+        hudsonSpcInactiveTrack(seq, ev->track);
+        return;
+    }
+
+    seq->reg[arg1] = arg2;
+    seq->regCmp = seq->reg[arg1];
+}
+
+/** subcmd: mov reg, reg. */
+static void hudsonSpcEventSubMOV (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    char argDumpStr[256];
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(argDumpStr, "(mov $%02x, $%02x)", arg1, arg2);
+    strcat(ev->note, argDumpStr);
+    strcat(ev->classStr, " ev-op ev-op-mov");
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    if (arg1 >= seq->regCount)
+    {
+        fprintf(stderr, "User RAM Access Violation, reg = $%02x\n", arg1);
+        hudsonSpcInactiveTrack(seq, ev->track);
+        return;
+    }
+    if (arg2 >= seq->regCount)
+    {
+        fprintf(stderr, "User RAM Access Violation, reg = $%02x\n", arg2);
+        hudsonSpcInactiveTrack(seq, ev->track);
+        return;
+    }
+
+    seq->reg[arg1] = seq->reg[arg2];
+    seq->regCmp = seq->reg[arg1];
+}
+
+/** subcmd: cmp reg, #imm. */
+static void hudsonSpcEventSubCMPImm (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    char argDumpStr[256];
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(argDumpStr, "(cmp $%02x, #%d)", arg1, arg2);
+    strcat(ev->note, argDumpStr);
+    strcat(ev->classStr, " ev-op ev-op-cmp");
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    if (arg1 >= seq->regCount)
+    {
+        fprintf(stderr, "User RAM Access Violation, reg = $%02x\n", arg1);
+        hudsonSpcInactiveTrack(seq, ev->track);
+        return;
+    }
+
+    seq->regCmp = seq->reg[arg1] - arg2;
+    seq->regCarry = (seq->reg[arg1] > arg2);
+}
+
+/** subcmd: cmp reg, reg. */
+static void hudsonSpcEventSubCMP (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    char argDumpStr[256];
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(argDumpStr, "(cmp $%02x, $%02x)", arg1, arg2);
+    strcat(ev->note, argDumpStr);
+    strcat(ev->classStr, " ev-op ev-op-cmp");
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    if (arg1 >= seq->regCount)
+    {
+        fprintf(stderr, "User RAM Access Violation, reg = $%02x\n", arg1);
+        hudsonSpcInactiveTrack(seq, ev->track);
+        return;
+    }
+    if (arg2 >= seq->regCount)
+    {
+        fprintf(stderr, "User RAM Access Violation, reg = $%02x\n", arg2);
+        hudsonSpcInactiveTrack(seq, ev->track);
+        return;
+    }
+
+    seq->regCmp = seq->reg[arg1] - seq->reg[arg2];
+    seq->regCarry = (seq->reg[arg1] > seq->reg[arg2]);
+}
+
+/** subcmd: bne (branch on Z=0). */
+static void hudsonSpcEventSubBNE (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    bool branch;
+    char argDumpStr[256];
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 2;
+    arg1 = mget2l(&seq->aRAM[*p]);
+    branch = (seq->regCmp != 0);
+
+    sprintf(argDumpStr, "(bne $%04x, branch = %s)", arg1, branch ? "true" : "false");
+    strcat(ev->note, argDumpStr);
+    strcat(ev->classStr, " ev-op ev-op-branch ev-op-bne");
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    if (branch)
+    {
+        // assumes backjump = loop
+        //if (arg1 < *p) {
+        //    hudsonSpcAddTrackLoopCount(seq, ev->track, 1);
+        //}
+        *p = arg1;
+    }
+}
+
+/** subcmd: beq (branch on Z=1). */
+static void hudsonSpcEventSubBEQ (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    bool branch;
+    char argDumpStr[256];
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 2;
+    arg1 = mget2l(&seq->aRAM[*p]);
+    branch = (seq->regCmp == 0);
+
+    sprintf(argDumpStr, "(beq $%04x, branch = %s)", arg1, branch ? "true" : "false");
+    strcat(ev->note, argDumpStr);
+    strcat(ev->classStr, " ev-op ev-op-branch ev-op-beq");
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    if (branch)
+    {
+        // assumes backjump = loop
+        //if (arg1 < *p) {
+        //    hudsonSpcAddTrackLoopCount(seq, ev->track, 1);
+        //}
+        *p = arg1;
+    }
+}
+
+/** subcmd: bcs (branch on C=1). */
+static void hudsonSpcEventSubBCS (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    bool branch;
+    char argDumpStr[256];
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 2;
+    arg1 = mget2l(&seq->aRAM[*p]);
+    branch = seq->regCarry;
+
+    sprintf(argDumpStr, "(bcs $%04x, branch = %s)", arg1, branch ? "true" : "false");
+    strcat(ev->note, argDumpStr);
+    strcat(ev->classStr, " ev-op ev-op-branch ev-op-bcs");
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    if (branch)
+    {
+        // assumes backjump = loop
+        //if (arg1 < *p) {
+        //    hudsonSpcAddTrackLoopCount(seq, ev->track, 1);
+        //}
+        *p = arg1;
+    }
+}
+
+/** subcmd: bcc (branch on C=0). */
+static void hudsonSpcEventSubBCC (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    bool branch;
+    char argDumpStr[256];
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 2;
+    arg1 = mget2l(&seq->aRAM[*p]);
+    branch = !seq->regCarry;
+
+    sprintf(argDumpStr, "(bcc $%04x, branch = %s)", arg1, branch ? "true" : "false");
+    strcat(ev->note, argDumpStr);
+    strcat(ev->classStr, " ev-op ev-op-branch ev-op-bcc");
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    if (branch)
+    {
+        // assumes backjump = loop
+        //if (arg1 < *p) {
+        //    hudsonSpcAddTrackLoopCount(seq, ev->track, 1);
+        //}
+        *p = arg1;
+    }
+}
+
+/** subcmd: bmi (branch on N=1). */
+static void hudsonSpcEventSubBMI (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    bool branch;
+    char argDumpStr[256];
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 2;
+    arg1 = mget2l(&seq->aRAM[*p]);
+    branch = ((seq->regCmp & 0x80) != 0);
+
+    sprintf(argDumpStr, "(bmi $%04x, branch = %s)", arg1, branch ? "true" : "false");
+    strcat(ev->note, argDumpStr);
+    strcat(ev->classStr, " ev-op ev-op-branch ev-op-bmi");
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    if (branch)
+    {
+        // assumes backjump = loop
+        //if (arg1 < *p) {
+        //    hudsonSpcAddTrackLoopCount(seq, ev->track, 1);
+        //}
+        *p = arg1;
+    }
+}
+
+/** subcmd: bpl (branch on N=0). */
+static void hudsonSpcEventSubBPL (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    bool branch;
+    char argDumpStr[256];
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 2;
+    arg1 = mget2l(&seq->aRAM[*p]);
+    branch = ((seq->regCmp & 0x80) != 0);
+
+    sprintf(argDumpStr, "(bpl $%04x, branch = %s)", arg1, branch ? "true" : "false");
+    strcat(ev->note, argDumpStr);
+    strcat(ev->classStr, " ev-op ev-op-branch ev-op-bpl");
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    if (branch)
+    {
+        // assumes backjump = loop
+        //if (arg1 < *p) {
+        //    hudsonSpcAddTrackLoopCount(seq, ev->track, 1);
+        //}
+        *p = arg1;
+    }
+}
+
+/** subcmd: set attack rate (AR). */
+static void hudsonSpcEventSubSetAR (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    char argDumpStr[256];
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(argDumpStr, "(Set Attack Rate, AR = %d)", arg1 & 15);
+    strcat(ev->note, argDumpStr);
+    strcat(ev->classStr, " ev-setAR");
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** subcmd: set decay rate (DR). */
+static void hudsonSpcEventSubSetDR (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    char argDumpStr[256];
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(argDumpStr, "(Set Decay Rate, DR = %d)", arg1 & 7);
+    strcat(ev->note, argDumpStr);
+    strcat(ev->classStr, " ev-setDR");
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** subcmd: set sustain level (SL). */
+static void hudsonSpcEventSubSetSL (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    char argDumpStr[256];
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(argDumpStr, "(Set Sustain Level, SL = %d)", arg1 & 7);
+    strcat(ev->note, argDumpStr);
+    strcat(ev->classStr, " ev-setSL");
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** subcmd: set sustain rate (SR). */
+static void hudsonSpcEventSubSetSR (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    char argDumpStr[256];
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(argDumpStr, "(Set Sustain Rate, SR = %d)", arg1 & 31);
+    strcat(ev->note, argDumpStr);
+    strcat(ev->classStr, " ev-setSR");
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** subcmd: set pseudo release rate (RR). */
+static void hudsonSpcEventSubSetRR (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    char argDumpStr[256];
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(argDumpStr, "(Set Release Rate, GAIN = 0xa0 | %d)", arg1);
+    strcat(ev->note, argDumpStr);
+    strcat(ev->classStr, " ev-setRR");
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** subcmd: nop. */
+static void hudsonSpcEventSubNOP (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    char argDumpStr[256];
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    strcpy(argDumpStr, "(NOP)");
+    strcat(ev->note, argDumpStr);
+}
+
+/** subcmd 00: end of track (alternate). */
+static void hudsonSpcEventSubEndOfTrack (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    char argDumpStr[256];
+
+    strcpy(argDumpStr, "(End Of Track Alt)");
+    strcat(ev->note, argDumpStr);
+    strcat(ev->classStr, " ev-end");
+    hudsonSpcInactiveTrack(seq, ev->track);
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** subcmd 01: echo off. */
+static void hudsonSpcEventSubEchoOff (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    char argDumpStr[256];
+
+    strcpy(argDumpStr, "(Echo Off)");
+    strcat(ev->note, argDumpStr);
+    strcat(ev->classStr, " ev-echooff");
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_REVERB, 0);
+}
+
+/** subcmd 03: rhythm channel on. */
+static void hudsonSpcEventSubRhythmOn (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    char argDumpStr[256];
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+
+    strcpy(argDumpStr, "(Rhythm Channel On)");
+    strcat(ev->note, argDumpStr);
+    strcat(ev->classStr, " ev-rhythmon");
+    tr->rhythmChannel = true;
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    // put program change to SMF (better than nothing)
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_BANKSELM, seq->ver.patchFix[255].bankSelM);
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_BANKSELL, seq->ver.patchFix[255].bankSelL);
+    smfInsertProgram(seq->smf, ev->tick, ev->track, ev->track, seq->ver.patchFix[255].patchNo);
+}
+
+/** subcmd 04: rhythm channel off. */
+static void hudsonSpcEventSubRhythmOff (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    char argDumpStr[256];
+    HudsonSpcTrackStat *tr = &seq->track[ev->track];
+
+    strcpy(argDumpStr, "(Rhythm Channel Off)");
+    strcat(ev->note, argDumpStr);
+    strcat(ev->classStr, " ev-rhythmoff");
+    tr->rhythmChannel = false;
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** subcmd 05,06,07: set vibrato type. */
+static void hudsonSpcEventSubVibratoType (HudsonSpcSeqStat *seq, SeqEventReport *ev)
+{
+    char argDumpStr[256];
+
+    sprintf(argDumpStr, "(Vibrato Type, type = %d)", ev->subcode - 0x05);
+    strcat(ev->note, argDumpStr);
+    strcat(ev->classStr, " ev-vibratotype");
+
+    if (!hudsonSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
 /** set pointers of each event. */
 static void hudsonSpcSetEventList (HudsonSpcSeqStat *seq)
 {
     int code;
     HudsonSpcEvent *event = seq->ver.event;
+    HudsonSpcEvent *subevent = seq->ver.subevent;
 
     // disable them all first
     for(code = 0x00; code <= 0xff; code++) {
         event[code] = (HudsonSpcEvent) hudsonSpcEventUnidentified;
+    }
+    for(code = 0x00; code <= 0xff; code++) {
+        subevent[code] = (HudsonSpcEvent) hudsonSpcEventSubUnidentified;
     }
 
     for (code = 0x00; code <= 0xcf; code++) {
@@ -2201,6 +2780,51 @@ static void hudsonSpcSetEventList (HudsonSpcSeqStat *seq)
     event[0xfd] = (HudsonSpcEvent) hudsonSpcEventNOP;
     event[0xfe] = (HudsonSpcEvent) hudsonSpcEventSubEvent;
     event[0xff] = (HudsonSpcEvent) hudsonSpcEventEndSubroutine;
+    subevent[0x00] = (HudsonSpcEvent) hudsonSpcEventSubEndOfTrack;
+    subevent[0x01] = (HudsonSpcEvent) hudsonSpcEventSubEchoOff;
+    subevent[0x02] = (HudsonSpcEvent) hudsonSpcEventSubUnknown0;
+    subevent[0x03] = (HudsonSpcEvent) hudsonSpcEventSubRhythmOn;
+    subevent[0x04] = (HudsonSpcEvent) hudsonSpcEventSubRhythmOff;
+    subevent[0x05] = (HudsonSpcEvent) hudsonSpcEventSubVibratoType;
+    subevent[0x06] = (HudsonSpcEvent) hudsonSpcEventSubVibratoType;
+    subevent[0x07] = (HudsonSpcEvent) hudsonSpcEventSubVibratoType;
+    subevent[0x08] = (HudsonSpcEvent) hudsonSpcEventSubUnknown0;
+    subevent[0x09] = (HudsonSpcEvent) hudsonSpcEventSubUnknown0;
+
+    if (seq->ver.id == SPC_VER_V2)
+    {
+        event[0xd0] = (HudsonSpcEvent) hudsonSpcEventUnknown0;
+        event[0xd7] = (HudsonSpcEvent) hudsonSpcEventNOP;
+        event[0xd8] = (HudsonSpcEvent) hudsonSpcEventNOP;
+        //event[0xe2] = (HudsonSpcEvent) hudsonSpcEventSetVibrato;
+        event[0xee] = (HudsonSpcEvent) hudsonSpcEventNOP;
+        event[0xf2] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
+        event[0xf3] = (HudsonSpcEvent) hudsonSpcEventUnknown1;
+        subevent[0x05] = (HudsonSpcEvent) hudsonSpcEventSubNOP;
+        subevent[0x06] = (HudsonSpcEvent) hudsonSpcEventSubNOP;
+        subevent[0x07] = (HudsonSpcEvent) hudsonSpcEventSubNOP;
+        subevent[0x0a] = (HudsonSpcEvent) hudsonSpcEventSubUnknown0;
+        subevent[0x0b] = (HudsonSpcEvent) hudsonSpcEventSubUnknown0;
+        subevent[0x0c] = (HudsonSpcEvent) hudsonSpcEventSubUnknown0;
+        subevent[0x0d] = (HudsonSpcEvent) hudsonSpcEventSubUnknown1;
+        subevent[0x0e] = (HudsonSpcEvent) hudsonSpcEventSubNOP;
+        subevent[0x0f] = (HudsonSpcEvent) hudsonSpcEventSubNOP;
+        subevent[0x10] = (HudsonSpcEvent) hudsonSpcEventSubMOVImm;
+        subevent[0x11] = (HudsonSpcEvent) hudsonSpcEventSubMOV;
+        subevent[0x12] = (HudsonSpcEvent) hudsonSpcEventSubCMPImm;
+        subevent[0x13] = (HudsonSpcEvent) hudsonSpcEventSubCMP;
+        subevent[0x14] = (HudsonSpcEvent) hudsonSpcEventSubBNE;
+        subevent[0x15] = (HudsonSpcEvent) hudsonSpcEventSubBEQ;
+        subevent[0x16] = (HudsonSpcEvent) hudsonSpcEventSubBCS;
+        subevent[0x17] = (HudsonSpcEvent) hudsonSpcEventSubBCC;
+        subevent[0x18] = (HudsonSpcEvent) hudsonSpcEventSubBMI;
+        subevent[0x19] = (HudsonSpcEvent) hudsonSpcEventSubBPL;
+        subevent[0x1a] = (HudsonSpcEvent) hudsonSpcEventSubSetAR;
+        subevent[0x1b] = (HudsonSpcEvent) hudsonSpcEventSubSetDR;
+        subevent[0x1c] = (HudsonSpcEvent) hudsonSpcEventSubSetSL;
+        subevent[0x1d] = (HudsonSpcEvent) hudsonSpcEventSubSetSR;
+        subevent[0x1e] = (HudsonSpcEvent) hudsonSpcEventSubSetRR;
+    }
 
     if (seq->ver.id == SPC_VER_UNKNOWN)
         return;
@@ -2280,7 +2904,7 @@ Smf* hudsonSpcARAMToMidi (const byte *aRAM)
                 //    evtr->prevTick = evtr->tick;
                 evtr->used = true;
                 // dispatch event
-                seq->ver.event[ev.code](seq, &ev, smf);
+                seq->ver.event[ev.code](seq, &ev);
 
                 // dump event report
                 if (hudsonSpcTextLoopMax == 0 || seq->looped < hudsonSpcTextLoopMax)

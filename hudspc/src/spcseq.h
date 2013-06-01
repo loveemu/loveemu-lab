@@ -22,6 +22,7 @@ typedef struct TagSeqEventReport {
     int addr;           // address of the event
     int size;           // size of the event
     int code;           // event type (first byte)
+    int subcode;        // sub event type (usually not used)
     bool unidentified;  // unidentified event or not
     char note[256];     // note of the event
     char classStr[256]; // html classes
