@@ -76,6 +76,7 @@ typedef struct TagKonamiSpcNoteParam {
     bool active;        // if the following params are used or not
     int tick;           // timing (tick)
     int dur;            // total length (tick)
+    int vel;            // note volume
     bool tied;          // if the note tied/slur
     int key;            // key
     int transpose;      // transpose
@@ -90,6 +91,7 @@ struct TagKonamiSpcTrackStat {
     int prevTick;           // previous timing (for pitch slide)
     KonamiSpcNoteParam note;     // current note param
     KonamiSpcNoteParam lastNote; // note params for last note
+    int lastNoteLen;        // last note length ($0230+x)
     int looped;             // how many times looped (internal)
     int patch;              // patch number (for pitch fix)
     int repCount1;          // loop: looped count #1 ($50+x)
@@ -98,6 +100,8 @@ struct TagKonamiSpcTrackStat {
     int repRetnAddr2;       // loop: return address #2 ($0160+x)
     int repRetnAddr3a;      // loop: return address #3-a ($0170+x)
     int repRetnAddr3b;      // loop: return address #3-b ($0180+x)
+    bool repCalled3a;       // loop: visited flag #1 ($0020 bit 6)
+    bool repCalled3b;       // loop: visited flag #2 ($0020 bit 7)
     bool subCalled;         // sub: during subroutine call
     int subRetnAddr;        // sub: return address
 };
@@ -114,8 +118,6 @@ struct TagKonamiSpcSeqStat {
     bool active;                // if the seq is still active
     KonamiSpcVerInfo ver;       // game version info
     KonamiSpcTrackStat track[SPC_TRACK_MAX]; // status of each tracks
-    bool loopCalled3a;          // loop: visited flag #1 ($0020 bit 6)
-    bool loopCalled3b;          // loop: visited flag #2 ($0020 bit 7)
 };
 
 static void konamiSpcSetEventList (KonamiSpcSeqStat *seq);
@@ -227,9 +229,12 @@ static void konamiSpcResetTrackParam (KonamiSpcSeqStat *seq, int track)
     tr->looped = 0;
     tr->note.transpose = 0;
     tr->lastNote.active = false;
+    tr->lastNoteLen = 0;
 
     tr->repCount1 = 0;
     tr->repCount2 = 0;
+    tr->repCalled3a = false;
+    tr->repCalled3b = false;
     tr->subCalled = false;
 }
 
@@ -241,13 +246,10 @@ static void konamiSpcResetParam (KonamiSpcSeqStat *seq)
 
     seq->tick = 0;
     seq->time = 0;
-    seq->tempo = 32; // TODO
+    seq->tempo = 0x40;
     seq->transpose = 0;
     seq->looped = 0;
     seq->active = true;
-
-    seq->loopCalled3a = false;
-    seq->loopCalled3b = false;
 
     // reset each track as well
     for (track = 0; track < SPC_TRACK_MAX; track++) {
@@ -298,6 +300,7 @@ static int konamiSpcCheckVer (KonamiSpcSeqStat *seq)
 static bool konamiSpcDetectSeq (KonamiSpcSeqStat *seq)
 {
     bool result = true;
+    int trackMax = SPC_TRACK_MAX;
     int tr;
 
     if (seq->ver.id == SPC_VER_UNKNOWN)
@@ -305,8 +308,17 @@ static bool konamiSpcDetectSeq (KonamiSpcSeqStat *seq)
 
     konamiSpcResetParam(seq);
     // track list
-    for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
-        seq->track[tr].pos = mget2l(&seq->aRAM[tr * 2 + seq->ver.seqHeaderAddr]);
+    for (tr = 0; tr < trackMax; tr++) {
+        int trackAddr = mget2l(&seq->aRAM[tr * 2 + seq->ver.seqHeaderAddr]);
+        seq->track[tr].pos = trackAddr;
+
+        // TODO: HACK to know proper track count
+        if (trackAddr < (SPC_TRACK_MAX * 2 + seq->ver.seqHeaderAddr) &&
+            trackAddr >= seq->ver.seqHeaderAddr)
+        {
+            trackMax = (trackAddr - seq->ver.seqHeaderAddr) / 2;
+        }
+
         seq->track[tr].active = true;
         result = true;
     }
@@ -436,7 +448,7 @@ static void printEventTableFooter (KonamiSpcSeqStat *seq, Smf* smf)
 /** convert SPC tempo into bpm. */
 static double konamiSpcTempo (KonamiSpcSeqStat *seq)
 {
-    return (double) seq->tempo * 60000000 / 24576000; // 24576000 = (timer0) 2ms * 48 * 256 // TODO
+    return (double) seq->tempo * 60000000 / 98304000; // 49152000 = (timer0) 4ms * 48 TPQN * 256
 }
 
 /** convert SPC velocity into MIDI one. */
@@ -552,7 +564,7 @@ static bool konamiSpcDequeueNote (KonamiSpcSeqStat *seq, int track)
     if (lastNote->active) {
         int dur;
         int key;
-        int vel = 100;
+        int vel;
 
         dur = lastNote->dur;
         if (dur == 0)
@@ -561,9 +573,9 @@ static bool konamiSpcDequeueNote (KonamiSpcSeqStat *seq, int track)
         key = lastNote->key + lastNote->transpose
             + seq->ver.patchFix[tr->lastNote.patch].key
             + SPC_NOTE_KEYSHIFT;
-        //vel = lastNote->vel;
-        //if (vel == 0)
-        //    vel++;
+        vel = lastNote->vel;
+        if (vel == 0)
+            vel++;
 
         result = smfInsertNote(seq->smf, lastNote->tick, track, track, key, vel, dur);
         lastNote->active = false;
@@ -760,53 +772,130 @@ static void konamiSpcEventNote (KonamiSpcSeqStat *seq, SeqEventReport *ev)
     int *p = &tr->pos;
     byte noteByte = ev->code;
     int note = noteByte & 0x7f;
-    bool rest = false;
-    int len, arg2, arg3, arg3_val;
+    int len, arg2, arg3, vel;
 
-    ev->size += 2;
-    len = seq->aRAM[*p];
-    (*p)++;
+    if ((noteByte & 0x80) == 0)
+    {
+        ev->size++;
+        len = seq->aRAM[*p];
+        tr->lastNoteLen = len;
+        (*p)++;
+    }
+    else
+    {
+        len = tr->lastNoteLen;
+    }
+
+    ev->size++;
     arg2 = seq->aRAM[*p];
     (*p)++;
     if ((arg2 & 0x80) == 0)
     {
        ev->size++;
        arg3 = seq->aRAM[*p];
-       arg3_val = arg3 & 0x7f;
+       vel = arg3 & 0x7f;
        (*p)++;
     }
     else
     {
-        arg3_val = arg2;
+        vel = arg2 & 0x7f;
     }
 
-    // TODO: serious implementation
-    if (rest)
-    {
-        strcpy(ev->note, "Rest");
-    }
-    else
-    {
-        getNoteName(ev->note, note + seq->transpose + tr->note.transpose
-            + seq->ver.patchFix[tr->note.patch].key
-            + SPC_NOTE_KEYSHIFT);
-        strcat(ev->note, " (Note)");
-    }
-    sprintf(argDumpStr, ", len = %d, arg3 = %d", len, arg3_val);
+    getNoteName(ev->note, note + seq->transpose + tr->note.transpose
+        + seq->ver.patchFix[tr->note.patch].key
+        + SPC_NOTE_KEYSHIFT);
+    sprintf(argDumpStr, ", len = %d", len);
     strcat(ev->note, argDumpStr);
     if ((arg2 & 0x80) == 0)
     {
         sprintf(argDumpStr, ", arg2 = %d", arg2);
         strcat(ev->note, argDumpStr);
     }
+    sprintf(argDumpStr, ", vel = %d", vel);
+    strcat(ev->note, argDumpStr);
     strcat(ev->classStr, " ev-note");
 
+    //if (!konamiSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    // output old note first
+    konamiSpcDequeueNote(seq, ev->track);
+
+    // set new note
+    tr->lastNote.tick = ev->tick;
+    tr->lastNote.dur = len;
+    tr->lastNote.key = note;
+    tr->lastNote.vel = vel;
+    tr->lastNote.transpose = seq->transpose + tr->note.transpose;
+    tr->lastNote.patch = tr->note.patch;
+    tr->lastNote.tied = false;
+    tr->lastNote.active = true;
+
+    tr->tick += len;
+}
+
+/** vcmd e0: unknown event (1 byte arg). */
+static void konamiSpcEventE0 (KonamiSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    KonamiSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    konamiSpcEventUnknownInline(seq, ev);
+    sprintf(argDumpStr, ", arg1 = %d", arg1);
+    strcat(ev->note, argDumpStr);
     if (!konamiSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 
-    // TODO: queue note
+    tr->lastNoteLen = arg1;
+    tr->tick += arg1;
+}
 
-    tr->tick += len;
+/** vcmd e1: unknown event (2 byte args). */
+static void konamiSpcEventE1 (KonamiSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    KonamiSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    konamiSpcEventUnknownInline(seq, ev);
+    sprintf(argDumpStr, ", arg1 = %d, arg2 = %d, arg1/2 = %d", arg1, arg2, arg2 * 256 + arg1);
+    strcat(ev->note, argDumpStr);
+    if (!konamiSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    tr->lastNoteLen = arg1;
+    tr->tick += arg1;
+}
+
+/** vcmd e2: set instrument. */
+static void konamiSpcEventInstrument (KonamiSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    KonamiSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    tr->note.patch = arg1;
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_BANKSELM, seq->ver.patchFix[arg1].bankSelM);
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_BANKSELL, seq->ver.patchFix[arg1].bankSelL);
+    smfInsertProgram(seq->smf, ev->tick, ev->track, ev->track, seq->ver.patchFix[arg1].patchNo);
+
+    sprintf(ev->note, "Set Instrument, patch = %d", arg1);
+    strcat(ev->classStr, " ev-patch");
 }
 
 /** vcmd e6: start loop. */
@@ -903,8 +992,8 @@ static void konamiSpcEventLoopExStart (KonamiSpcSeqStat *seq, SeqEventReport *ev
 
     // save return address
     tr->repRetnAddr3a = *p;
-    seq->loopCalled3a = false;
-    seq->loopCalled3b = false;
+    tr->repCalled3a = false;
+    tr->repCalled3b = false;
 
     sprintf(ev->note, "Loop Start Ex");
     strcat(ev->classStr, " ev-loopstartex");
@@ -916,11 +1005,11 @@ static void konamiSpcEventLoopExEnd (KonamiSpcSeqStat *seq, SeqEventReport *ev)
     KonamiSpcTrackStat *tr = &seq->track[ev->track];
     int *p = &tr->pos;
 
-    if (seq->loopCalled3a)
+    if (tr->repCalled3a)
     {
         // second time
-        seq->loopCalled3a = false;
-        seq->loopCalled3b = true;
+        tr->repCalled3a = false;
+        tr->repCalled3b = true;
         // save return address
         tr->repRetnAddr3b = *p;
         // jump
@@ -928,11 +1017,11 @@ static void konamiSpcEventLoopExEnd (KonamiSpcSeqStat *seq, SeqEventReport *ev)
 
         sprintf(ev->note, "Loop End Ex (Stage 2), dest = $%04X", *p);
     }
-    else if (seq->loopCalled3b)
+    else if (tr->repCalled3b)
     {
         // third time
-        seq->loopCalled3a = true;
-        seq->loopCalled3b = false;
+        tr->repCalled3a = true;
+        tr->repCalled3b = false;
         // jump
         *p = tr->repRetnAddr3b;
 
@@ -941,10 +1030,36 @@ static void konamiSpcEventLoopExEnd (KonamiSpcSeqStat *seq, SeqEventReport *ev)
     else
     {
         // first time
-        seq->loopCalled3a = true;
+        tr->repCalled3a = true;
         sprintf(ev->note, "Loop End Ex (Stage 1)");
     }
     strcat(ev->classStr, " ev-loopendex");
+}
+
+/** vcmd ea: set tempo. */
+static void konamiSpcEventSetTempo (KonamiSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    KonamiSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Set Tempo, tempo = %d (bpm %.1f)", arg1, konamiSpcTempo(seq));
+    strcat(ev->classStr, " ev-tempo");
+
+    if (ev->track == 0)
+    {
+        seq->tempo = arg1;
+        smfInsertTempoBPM(seq->smf, ev->tick, 0, konamiSpcTempo(seq));
+    }
+    else
+    {
+        if (!konamiSpcLessTextInSMF)
+            smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+    }
 }
 
 /** vcmd fd: jump. */
@@ -977,6 +1092,7 @@ static void konamiSpcEventSubroutine (KonamiSpcSeqStat *seq, SeqEventReport *ev)
 
     ev->size += 2;
     arg1 = mget2l(&seq->aRAM[*p]);
+    (*p) += 2;
 
     sprintf(ev->note, "Call Subroutine, dest = $%04X", arg1);
     strcat(ev->classStr, " ev-call");
@@ -1031,9 +1147,9 @@ static void konamiSpcSetEventList (KonamiSpcSeqStat *seq)
     for (code = 0x63; code <= 0x7f; code++) {
         event[code] = (KonamiSpcEvent) konamiSpcEventUnknown0;
     }
-    event[0xe0] = (KonamiSpcEvent) konamiSpcEventUnknown1;
-    event[0xe1] = (KonamiSpcEvent) konamiSpcEventUnknown2;
-    event[0xe2] = (KonamiSpcEvent) konamiSpcEventUnknown1;
+    event[0xe0] = (KonamiSpcEvent) konamiSpcEventE0;
+    event[0xe1] = (KonamiSpcEvent) konamiSpcEventE1;
+    event[0xe2] = (KonamiSpcEvent) konamiSpcEventInstrument;
     event[0xe3] = (KonamiSpcEvent) konamiSpcEventUnknown1;
     event[0xe4] = (KonamiSpcEvent) konamiSpcEventUnknown3;
     event[0xe5] = (KonamiSpcEvent) konamiSpcEventUnknown3;
@@ -1041,7 +1157,7 @@ static void konamiSpcSetEventList (KonamiSpcSeqStat *seq)
     event[0xe7] = (KonamiSpcEvent) konamiSpcEventLoopEnd;
     event[0xe8] = (KonamiSpcEvent) konamiSpcEventLoopStart2;
     event[0xe9] = (KonamiSpcEvent) konamiSpcEventLoopEnd2;
-    event[0xea] = (KonamiSpcEvent) konamiSpcEventUnknown1;
+    event[0xea] = (KonamiSpcEvent) konamiSpcEventSetTempo;
     event[0xeb] = (KonamiSpcEvent) konamiSpcEventUnknown2;
     event[0xec] = (KonamiSpcEvent) konamiSpcEventUnknown1;
     event[0xed] = (KonamiSpcEvent) konamiSpcEventUnknown1;
@@ -1059,7 +1175,7 @@ static void konamiSpcSetEventList (KonamiSpcSeqStat *seq)
     event[0xf9] = (KonamiSpcEvent) konamiSpcEventUnknown1;
     event[0xfa] = (KonamiSpcEvent) konamiSpcEventUnknown3;
     event[0xfb] = (KonamiSpcEvent) konamiSpcEventUnknown1;
-    event[0xfc] = (KonamiSpcEvent) konamiSpcEventUnknown3;
+    event[0xfc] = (KonamiSpcEvent) konamiSpcEventUnknown2;
     event[0xfd] = (KonamiSpcEvent) konamiSpcEventJump;
     event[0xfe] = (KonamiSpcEvent) konamiSpcEventSubroutine;
     event[0xff] = (KonamiSpcEvent) konamiSpcEventEndSubroutine;

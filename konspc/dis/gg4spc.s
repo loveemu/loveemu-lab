@@ -3208,7 +3208,7 @@
 1ac9: dw $1cf3  ; e7 - end loop
 1acb: dw $1d64  ; e8 - start loop #2
 1acd: dw $1d81  ; e9 - end loop #2
-1acf: dw $1de2  ; ea
+1acf: dw $1de2  ; ea - set tempo (per track)
 1ad1: dw $1dec  ; eb
 1ad3: dw $1dfd  ; ec
 1ad5: dw $1fca  ; ed
@@ -3579,7 +3579,7 @@
 1ddd: d4 31     mov   $31+x,a           ; back to return address
 1ddf: 5f e2 18  jmp   $18e2
 
-; vcmd ea
+; vcmd ea - set tempo (per track)
 1de2: d4 41     mov   $41+x,a
 1de4: e8 00     mov   a,#$00
 1de6: d5 c0 01  mov   $01c0+x,a
