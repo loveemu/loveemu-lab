@@ -16,7 +16,7 @@
 
 #define APPNAME "Konami SPC2MIDI"
 #define APPSHORTNAME "konspc"
-#define VERSION "[2013-06-03]"
+#define VERSION "[2013-06-04]"
 
 static int konamiSpcLoopMax = 2;            // maximum loop count of parser
 static int konamiSpcTextLoopMax = 1;        // maximum loop count of text output
@@ -898,6 +898,76 @@ static void konamiSpcEventInstrument (KonamiSpcSeqStat *seq, SeqEventReport *ev)
     strcat(ev->classStr, " ev-patch");
 }
 
+/** vcmd ee: set volume. */
+static void konamiSpcEventVolume (KonamiSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    KonamiSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Volume, vol = %d", arg1);
+    strcat(ev->classStr, " ev-vol");
+
+    //if (!konamiSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_VOLUME, konamiSpcMidiVolOf(arg1));
+}
+
+/** vcmd fc: set volume and instrument. */
+static void konamiSpcEventVolumeAndInstrument (KonamiSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    int *p = &seq->track[ev->track].pos;
+    KonamiSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    tr->note.patch = arg2;
+
+    sprintf(ev->note, "Volume And Instrument, vol = %d, patch = %d", arg1, arg2);
+    strcat(ev->classStr, " ev-vol ev-patch");
+
+    //if (!konamiSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_VOLUME, konamiSpcMidiVolOf(arg1));
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_BANKSELM, seq->ver.patchFix[arg1].bankSelM);
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_BANKSELL, seq->ver.patchFix[arg1].bankSelL);
+    smfInsertProgram(seq->smf, ev->tick, ev->track, ev->track, seq->ver.patchFix[arg1].patchNo);
+}
+
+/** vcmd f5: set echo delay, feedback, FIR. */
+static void konamiSpcEventEchoParam (KonamiSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2, arg3;
+    KonamiSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 3;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+    arg3 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Echo Param, delay = %d, feedback = %d, arg3 = %d (ignored)", arg1, arg2, arg3);
+    strcat(ev->classStr, " ev-echoparam");
+
+    if (!konamiSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
 /** vcmd e6: start loop. */
 static void konamiSpcEventLoopStart (KonamiSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -935,6 +1005,11 @@ static void konamiSpcEventLoopEnd (KonamiSpcSeqStat *seq, SeqEventReport *ev)
     {
         // repeat end
         tr->repCount1 = 0;
+    }
+
+    if (arg1 == 0)
+    {
+        konamiSpcAddTrackLoopCount(seq, ev->track, 1);
     }
 
     sprintf(ev->note, "Loop End, count = %d%s, arg2 = %d, arg3 = %d", arg1, (arg1 == 0) ? " (Infinite)" : "", arg2, arg3);
@@ -978,6 +1053,11 @@ static void konamiSpcEventLoopEnd2 (KonamiSpcSeqStat *seq, SeqEventReport *ev)
     {
         // repeat end
         tr->repCount2 = 0;
+    }
+
+    if (arg1 == 0)
+    {
+        konamiSpcAddTrackLoopCount(seq, ev->track, 1);
     }
 
     sprintf(ev->note, "Loop End #2, count = %d%s, arg2 = %d, arg3 = %d", arg1, (arg1 == 0) ? " (Infinite)" : "", arg2, arg3);
@@ -1060,6 +1140,26 @@ static void konamiSpcEventSetTempo (KonamiSpcSeqStat *seq, SeqEventReport *ev)
         if (!konamiSpcLessTextInSMF)
             smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
     }
+}
+
+/** vcmd ec: transpose (absolute). */
+static void konamiSpcEventTransposeAbs (KonamiSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    KonamiSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    tr->note.transpose = arg1;
+
+    sprintf(ev->note, "Transpose, key = %d", arg1);
+    strcat(ev->classStr, " ev-transpose");
+
+    //if (!konamiSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmd fd: jump. */
@@ -1159,23 +1259,23 @@ static void konamiSpcSetEventList (KonamiSpcSeqStat *seq)
     event[0xe9] = (KonamiSpcEvent) konamiSpcEventLoopEnd2;
     event[0xea] = (KonamiSpcEvent) konamiSpcEventSetTempo;
     event[0xeb] = (KonamiSpcEvent) konamiSpcEventUnknown2;
-    event[0xec] = (KonamiSpcEvent) konamiSpcEventUnknown1;
+    event[0xec] = (KonamiSpcEvent) konamiSpcEventTransposeAbs;
     event[0xed] = (KonamiSpcEvent) konamiSpcEventUnknown1;
-    event[0xee] = (KonamiSpcEvent) konamiSpcEventUnknown1;
+    event[0xee] = (KonamiSpcEvent) konamiSpcEventVolume;
     event[0xef] = (KonamiSpcEvent) konamiSpcEventUnknown2;
     event[0xf0] = (KonamiSpcEvent) konamiSpcEventUnknown1;
     event[0xf1] = (KonamiSpcEvent) konamiSpcEventUnknown5;
     event[0xf2] = (KonamiSpcEvent) konamiSpcEventUnknown1;
     event[0xf3] = (KonamiSpcEvent) konamiSpcEventUnknown5;
     event[0xf4] = (KonamiSpcEvent) konamiSpcEventUnknown3;
-    event[0xf5] = (KonamiSpcEvent) konamiSpcEventUnknown3;
+    event[0xf5] = (KonamiSpcEvent) konamiSpcEventEchoParam;
     event[0xf6] = (KonamiSpcEvent) konamiSpcEventLoopExStart;
     event[0xf7] = (KonamiSpcEvent) konamiSpcEventLoopExEnd;
     event[0xf8] = (KonamiSpcEvent) konamiSpcEventUnknown2;
     event[0xf9] = (KonamiSpcEvent) konamiSpcEventUnknown1;
     event[0xfa] = (KonamiSpcEvent) konamiSpcEventUnknown3;
     event[0xfb] = (KonamiSpcEvent) konamiSpcEventUnknown1;
-    event[0xfc] = (KonamiSpcEvent) konamiSpcEventUnknown2;
+    event[0xfc] = (KonamiSpcEvent) konamiSpcEventVolumeAndInstrument;
     event[0xfd] = (KonamiSpcEvent) konamiSpcEventJump;
     event[0xfe] = (KonamiSpcEvent) konamiSpcEventSubroutine;
     event[0xff] = (KonamiSpcEvent) konamiSpcEventEndSubroutine;

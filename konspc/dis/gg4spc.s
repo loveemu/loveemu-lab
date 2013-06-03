@@ -3200,7 +3200,7 @@
 ; vcmd dispatch table (e0-ff)
 1abb: dw $1b3b  ; e0
 1abd: dw $1b4f  ; e1
-1abf: dw $1b95  ; e2
+1abf: dw $1b95  ; e2 - set instrument
 1ac1: dw $1c4f  ; e3
 1ac3: dw $1c6b  ; e4
 1ac5: dw $1ccd  ; e5
@@ -3210,23 +3210,23 @@
 1acd: dw $1d81  ; e9 - end loop #2
 1acf: dw $1de2  ; ea - set tempo (per track)
 1ad1: dw $1dec  ; eb
-1ad3: dw $1dfd  ; ec
+1ad3: dw $1dfd  ; ec - transpose
 1ad5: dw $1fca  ; ed
-1ad7: dw $1e03  ; ee
+1ad7: dw $1e03  ; ee - set volume
 1ad9: dw $1e0d  ; ef
 1adb: dw $1e1d  ; f0
 1add: dw $1e24  ; f1
 1adf: dw $1e42  ; f2
 1ae1: dw $1e5d  ; f3
 1ae3: dw $1e6c  ; f4
-1ae5: dw $1e92  ; f5
+1ae5: dw $1e92  ; f5 - set echo params
 1ae7: dw $1f2d  ; f6 - start complexed loop
 1ae9: dw $1f3f  ; f7 - end complexed loop
 1aeb: dw $1f76  ; f8
 1aed: dw $1cb2  ; f9
 1aef: dw $1f86  ; fa
 1af1: dw $1fe0  ; fb
-1af3: dw $1feb  ; fc
+1af3: dw $1feb  ; fc - set volume and instrument
 1af5: dw $1ff8  ; fd - goto
 1af7: dw $2006  ; fe
 1af9: dw $201f  ; ff
@@ -3283,7 +3283,7 @@
 1b91: d5 b1 02  mov   $02b1+x,a
 1b94: 6f        ret
 
-; vcmd e2
+; vcmd e2 - set instrument
 1b95: 09 11 10  or    ($10),($11)
 1b98: fd        mov   y,a
 1b99: f5 a1 01  mov   a,$01a1+x
@@ -3593,11 +3593,11 @@
 1df7: d5 51 02  mov   $0251+x,a
 1dfa: 5f e2 18  jmp   $18e2
 
-; vcmd ec
+; vcmd ec - transpose
 1dfd: d5 21 02  mov   $0221+x,a
 1e00: 5f e2 18  jmp   $18e2
 
-; vcmd ee
+; vcmd ee - set volume
 1e03: d5 91 02  mov   $0291+x,a
 1e06: e8 00     mov   a,#$00
 1e08: d4 71     mov   $71+x,a
@@ -3671,7 +3671,7 @@
 1e8c: 3f 58 19  call  $1958
 1e8f: 5f e2 18  jmp   $18e2
 
-; vcmd f5
+; vcmd f5 - set echo params
 1e92: 78 00 14  cmp   $14,#$00
 1e95: f0 f2     beq   $1e89
 1e97: 28 0f     and   a,#$0f
@@ -3853,7 +3853,7 @@
 1fe7: e8 06     mov   a,#$06
 1fe9: 2f ec     bra   $1fd7
 
-; vcmd fc
+; vcmd fc - set volume and instrument
 1feb: d5 91 02  mov   $0291+x,a
 1fee: e8 00     mov   a,#$00
 1ff0: d4 71     mov   $71+x,a
