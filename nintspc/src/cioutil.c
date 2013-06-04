@@ -123,7 +123,7 @@ StringStreamBuf *newStringStreamBuf (void)
   StringStreamBuf *newBuf = (StringStreamBuf*) calloc(1, sizeof(StringStreamBuf));
 
   if (newBuf) {
-    char *buf = calloc(SBPRINTF_BLOCK_SIZE, sizeof(char));
+    char *buf = (char*) calloc(SBPRINTF_BLOCK_SIZE, sizeof(char));
 
     if (buf) {
       newBuf->s = buf;

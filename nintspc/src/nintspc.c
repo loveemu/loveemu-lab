@@ -16,7 +16,7 @@
 
 #define APPNAME         "Nintendo SPC2MIDI"
 #define APPSHORTNAME    "nintspc"
-#define VERSION         "[2009-09-03]"
+#define VERSION         "[2013-06-04]"
 #define AUTHOR          "loveemu"
 #define WEBSITE         "http://loveemu.yh.land.to/"
 
@@ -69,7 +69,15 @@ enum {
     SPC_VER_OLD,            // Super Mario World & Pilotwings
     SPC_VER_STD,            // vcmd e0-fa
     SPC_VER_STD_AT_LEAST,   // has the same spec as SPC_VER_STD, at least
+    SPC_VER_STD_MODIFIED,   // seems to be based on SPC_VER_STD, but it's somewhat different from original
     SPC_VER_EXT1,           // has vcmd fb-fe, Super Metroid family
+};
+
+const byte NINT_STD_EVT_LEN_TABLE[] = {
+    1, 1, 2, 3, 0, 1, 2, 1,
+    2, 1, 1, 3, 0, 1, 2, 3,
+    1, 3, 3, 0, 1, 3, 0, 3,
+    3, 3, 1,
 };
 
 // MIDI limitations
@@ -322,6 +330,8 @@ static const char *nintSpcVerToStrHtml (int version)
         return "Nintendo / Standard";
     case SPC_VER_STD_AT_LEAST:
         return "Nintendo / Unknown Extended Version";
+    case SPC_VER_STD_MODIFIED:
+        return "Nintendo / Unknown Modified Version";
     case SPC_VER_EXT1:
         return "Nintendo / Extended (Super Metroid family)";
     default:
@@ -513,12 +523,6 @@ static int nintSpcCheckVer (NintSpcSeqStat *seq)
     int vcmdLensAddr = -1;
     int vcmdListAddrAsm = -1;
     int vcmdLensAddrAsm = -1;
-    const byte stdLenTable[] = {
-        1, 1, 2, 3, 0, 1, 2, 1,
-        2, 1, 1, 3, 0, 1, 2, 3,
-        1, 3, 3, 0, 1, 3, 0, 3,
-        3, 3, 1,
-    };
 
     // standard params
     seq->ver.noteInfoType = SPC_NOTEPARAM_STD;
@@ -562,16 +566,29 @@ static int nintSpcCheckVer (NintSpcSeqStat *seq)
             vcmdLensAddr = vcmdLensAddrAsm + (vcmdStart & 0x7f);
 
             // check the lengths of standard vcmds
-            if (memcmp(&aRAM[vcmdLensAddr], stdLenTable, 0x1b) == 0) {
+            if (memcmp(&aRAM[vcmdLensAddr], NINT_STD_EVT_LEN_TABLE, countof(NINT_STD_EVT_LEN_TABLE)) == 0)
+            {
                 if (vcmdListAddr + 0x1b * 2 == vcmdLensAddr)
+                {
                     version = SPC_VER_STD;
+                }
                 else if (vcmdListAddr + 0x1f * 2 == vcmdLensAddr
                     && aRAM[vcmdLensAddr + 0x1b] == 0x02
                     && aRAM[vcmdLensAddr + 0x1c] == 0x00
                     && aRAM[vcmdLensAddr + 0x1d] == 0x00
-                    && aRAM[vcmdLensAddr + 0x1e] == 0x00
-                )
+                    && aRAM[vcmdLensAddr + 0x1e] == 0x00)
+                {
                     version = SPC_VER_EXT1;
+                }
+                else
+                {
+                    version = SPC_VER_STD_AT_LEAST;
+                }
+            }
+            else
+            {
+                // TODO: need more check...?
+                version = SPC_VER_STD_MODIFIED;
             }
         }
         // asl   a
@@ -621,11 +638,46 @@ static int nintSpcCheckVer (NintSpcSeqStat *seq)
     // incw  $..
     // mov   y,a
     // pop   a
-    // ret
-    if ((pos1 = indexOfHexPat(aRAM, (const byte *) "\x8d\\\x00\xf7.\x3a.\x2d\xf7.\x3a.\xfd\xae\x6f", SPC_ARAM_SIZE, NULL)) >= 0) {
+    if ((pos1 = indexOfHexPat(aRAM, (const byte *) "\x8d\\\x00\xf7.\x3a.\x2d\xf7.\x3a.\xfd\xae", SPC_ARAM_SIZE, NULL)) >= 0) {
         if (   aRAM[pos1 + 0x3] == aRAM[pos1 + 0x5]
             && aRAM[pos1 + 0x5] == aRAM[pos1 + 0x8]
             && aRAM[pos1 + 0x8] == aRAM[pos1 + 0xa]
+        )
+            seq->ver.blockPtrAddr = aRAM[pos1 + 0x3];
+    }
+    // variant: Gradius 3 (Konami)
+    // mov   y,#$00
+    // mov   a,($40)+y
+    // incw  $40
+    // push  a
+    // mov   a,($40)+y
+    // beq   $0737
+    // incw  $40
+    // mov   y,a
+    // pop   a
+    else if ((pos1 = indexOfHexPat(aRAM, (const byte *) "\x8d\\\x00\xf7.\x3a.\x2d\xf7.\\\xf0.\x3a.\xfd\xae", SPC_ARAM_SIZE, NULL)) >= 0) {
+        if (   aRAM[pos1 + 0x3] == aRAM[pos1 + 0x5]
+            && aRAM[pos1 + 0x5] == aRAM[pos1 + 0x8]
+            && aRAM[pos1 + 0x8] == aRAM[pos1 + 0xc]
+        )
+            seq->ver.blockPtrAddr = aRAM[pos1 + 0x3];
+    }
+    // variant: Dragon Ball Z: Super Butouden 2
+    // mov   y,#$00
+    // mov   a,($4d)+y
+    // mov   $00,a
+    // mov   $4f,a
+    // incw  $4d
+    // mov   a,($4d)+y
+    // mov   $01,a
+    // mov   $50,a
+    // incw  $4d
+    else if ((pos1 = indexOfHexPat(aRAM, (const byte *) "\x8d\\\x00\xf7.\xc4.\xc4.\x3a.\\\xf7.\xc4.\xc4.\x3a.", SPC_ARAM_SIZE, NULL)) >= 0) {
+        if (   aRAM[pos1 + 0x3] == aRAM[pos1 + 0x9]
+            && aRAM[pos1 + 0x9] == aRAM[pos1 + 0xb]
+            && aRAM[pos1 + 0x9] == aRAM[pos1 + 0x11]
+            && (aRAM[pos1 + 0x5] + 1) == aRAM[pos1 + 0xd]
+            && (aRAM[pos1 + 0x7] + 1) == aRAM[pos1 + 0xf]
         )
             seq->ver.blockPtrAddr = aRAM[pos1 + 0x3];
     }
@@ -642,11 +694,20 @@ static int nintSpcCheckVer (NintSpcSeqStat *seq)
         // mov   a,$....+y
         // mov   blockPtrAddr+1,a
         byte songLoad3[] = { 0xf6, '.', '.', 0xc4, '\\', '.', 0xf6, '.', '.', 0xc4, '\\', '.', 0 };
+        // variant: Gradius 3 (Konami)
+        // mov   x,a
+        // mov   a,$....+x
+        // beq   $..
+        // mov   y,a
+        // mov   a,$....+x
+        // movw  blockPtrAddr,ya
+        byte songLoad4[] = { 0xf5, '.', '.', 0xf0, '.', 0xfd, 0xf5, '.', '.', 0xda, '\\', '.', 0 };
 
         songLoad1[9]  = (byte) seq->ver.blockPtrAddr;
         songLoad2[16] = (byte) seq->ver.blockPtrAddr;
         songLoad3[5]  = (byte) seq->ver.blockPtrAddr;
         songLoad3[11] = (byte) (seq->ver.blockPtrAddr + 1);
+        songLoad4[11] = (byte) seq->ver.blockPtrAddr;
 
         if ((pos1 = indexOfHexPat(aRAM, songLoad1, SPC_ARAM_SIZE, NULL)) >= 0) {
             seq->ver.seqListAddr = mget2l(&aRAM[pos1 + 5]);
@@ -656,6 +717,9 @@ static int nintSpcCheckVer (NintSpcSeqStat *seq)
         }
         else if ((pos1 = indexOfHexPat(aRAM, songLoad3, SPC_ARAM_SIZE, NULL)) >= 0) {
             seq->ver.seqListAddr = mget2l(&aRAM[pos1 + 1]);
+        }
+        else if ((pos1 = indexOfHexPat(aRAM, songLoad4, SPC_ARAM_SIZE, NULL)) >= 0) {
+            seq->ver.seqListAddr = mget2l(&aRAM[pos1 + 7]);
         }
     }
 
@@ -671,6 +735,24 @@ static int nintSpcCheckVer (NintSpcSeqStat *seq)
     // mov   a,$....+y
     // mov   $....+x,a
     if ((pos1 = indexOfHexPat(aRAM, (const byte *) "\x2d\x9f\x28\x07\xfd\xf6..\xd5..\xae\x28\x0f\xfd\xf6..\xd5..", SPC_ARAM_SIZE, NULL)) >= 0) {
+        seq->ver.durTableAddr = mget2l(&aRAM[pos1 + 6]);
+        seq->ver.velTableAddr = mget2l(&aRAM[pos1 + 16]);
+    }
+    // variant: Gradius 3 (Konami)
+    // push  a
+    // xcn   a
+    // and   a,#$07
+    // mov   y,a
+    // mov   a,$....+y
+    // mov   $0201+x,a         ;   set dur% from high nybble
+    // pop   a
+    // and   a,#$0f
+    // mov   y,a
+    // mov   a,$....+y
+    // clrc
+    // adc   a,$....+x
+    // mov   $....+x,a         ;   set per-note vol from low nybble
+    else if ((pos1 = indexOfHexPat(aRAM, (const byte *) "\x2d\x9f\x28\x07\xfd\xf6..\xd5..\xae\x28\x0f\xfd\xf6..\x60\x95..\xd5..", SPC_ARAM_SIZE, NULL)) >= 0) {
         seq->ver.durTableAddr = mget2l(&aRAM[pos1 + 6]);
         seq->ver.velTableAddr = mget2l(&aRAM[pos1 + 16]);
     }
@@ -698,13 +780,14 @@ static int nintSpcCheckVer (NintSpcSeqStat *seq)
 
     if (seq->ver.seqListAddr == -1
         || seq->ver.blockPtrAddr == -1
-        || (seq->ver.noteInfoType != SPC_NOTEPARAM_DIR && (seq->ver.durTableAddr == -1 || seq->ver.velTableAddr == -1))
-    )
+        || (seq->ver.noteInfoType != SPC_NOTEPARAM_DIR && (seq->ver.durTableAddr == -1 || seq->ver.velTableAddr == -1)))
+    {
         version = SPC_VER_UNKNOWN;
-    else if (version == SPC_VER_UNKNOWN) {
-        version = SPC_VER_STD_AT_LEAST;
-        fprintf(stderr, "Warning: Collected enough info, but couldn't guess version info exactly.\n");
     }
+    //else if (version == SPC_VER_UNKNOWN) {
+    //    version = SPC_VER_STD_AT_LEAST;
+    //    fprintf(stderr, "Warning: Collected enough info, but couldn't guess version info exactly.\n");
+    //}
 
     // individualities
     switch (version) {
@@ -869,8 +952,18 @@ bool nintSpcReadNewBlock (NintSpcSeqStat *seq)
     }
 
     for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
-        int newPos = mget2l(&aRAM[blockAddr + tr * 2]);
-        memset(&seq->aRAMRef[blockAddr + tr * 2], 0x7f, 2);
+        int newPos;
+        int newPosPtr = blockAddr + tr * 2;
+
+        if (newPosPtr >= 0xffff)
+        {
+            fprintf(stderr, "Error: Access violation during reading track %d pointer at $%04X.\n", tr + 1, newPosPtr);
+            seq->active = false;
+            return false;
+        }
+
+        newPos = mget2l(&aRAM[newPosPtr]);
+        memset(&seq->aRAMRef[newPosPtr], 0x7f, 2);
 
         // cancel repeats
         seq->track[tr].loopCount = 0;
@@ -986,7 +1079,7 @@ static NintSpcSeqStat *newNintSpcSeq (const byte *aRAM)
 
         newSeq->aRAM = aRAM;
 
-        newSeq->aRAMRef = (byte *) calloc(1, SPC_ARAM_SIZE);
+        newSeq->aRAMRef = (byte *) calloc(SPC_ARAM_SIZE, sizeof(byte));
         if (!newSeq->aRAMRef) {
             free(newSeq);
             return NULL;
@@ -1006,6 +1099,7 @@ static NintSpcSeqStat *newNintSpcSeq (const byte *aRAM)
                 for (; tr >= 0; tr--) {
                     delStringStreamBuf(newSeq->track[tr].mml);
                 }
+                free(newSeq->aRAMRef);
                 free(newSeq);
                 return NULL;
             }
@@ -1485,6 +1579,141 @@ static void nintSpcEventUnknown3 (NintSpcSeqStat *seq, SeqEventReport *ev)
 
     nintSpcEventUnknownInline(seq, ev);
     sprintf(argDumpStr, ", arg1 = %d, arg2 = %d, arg3 = %d", arg1, arg2, arg3);
+    strcat(ev->note, argDumpStr);
+    if (!nintSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd: unknown event (4 byte args). */
+static void nintSpcEventUnknown4 (NintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2, arg3, arg4;
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 4;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+    arg3 = seq->aRAM[*p];
+    (*p)++;
+    arg4 = seq->aRAM[*p];
+    (*p)++;
+
+    nintSpcEventUnknownInline(seq, ev);
+    sprintf(argDumpStr, ", arg1 = %d, arg2 = %d, arg3 = %d, arg4 = %d", arg1, arg2, arg3, arg4);
+    strcat(ev->note, argDumpStr);
+    if (!nintSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd: unknown event (5 byte args). */
+static void nintSpcEventUnknown5 (NintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2, arg3, arg4, arg5;
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 5;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+    arg3 = seq->aRAM[*p];
+    (*p)++;
+    arg4 = seq->aRAM[*p];
+    (*p)++;
+    arg5 = seq->aRAM[*p];
+    (*p)++;
+
+    nintSpcEventUnknownInline(seq, ev);
+    sprintf(argDumpStr, ", arg1 = %d, arg2 = %d, arg3 = %d, arg4 = %d, arg5 = %d", arg1, arg2, arg3, arg4, arg5);
+    strcat(ev->note, argDumpStr);
+    if (!nintSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd: unknown event (6 byte args). */
+static void nintSpcEventUnknown6 (NintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2, arg3, arg4, arg5, arg6;
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 6;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+    arg3 = seq->aRAM[*p];
+    (*p)++;
+    arg4 = seq->aRAM[*p];
+    (*p)++;
+    arg5 = seq->aRAM[*p];
+    (*p)++;
+    arg6 = seq->aRAM[*p];
+    (*p)++;
+
+    nintSpcEventUnknownInline(seq, ev);
+    sprintf(argDumpStr, ", arg1 = %d, arg2 = %d, arg3 = %d, arg4 = %d, arg5 = %d, arg6 = %d", arg1, arg2, arg3, arg4, arg5, arg6);
+    strcat(ev->note, argDumpStr);
+    if (!nintSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd: unknown event (7 byte args). */
+static void nintSpcEventUnknown7 (NintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2, arg3, arg4, arg5, arg6, arg7;
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 7;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+    arg3 = seq->aRAM[*p];
+    (*p)++;
+    arg4 = seq->aRAM[*p];
+    (*p)++;
+    arg5 = seq->aRAM[*p];
+    (*p)++;
+    arg6 = seq->aRAM[*p];
+    (*p)++;
+    arg7 = seq->aRAM[*p];
+    (*p)++;
+
+    nintSpcEventUnknownInline(seq, ev);
+    sprintf(argDumpStr, ", arg1 = %d, arg2 = %d, arg3 = %d, arg4 = %d, arg5 = %d, arg6 = %d, arg7 = %d", arg1, arg2, arg3, arg4, arg5, arg6, arg7);
+    strcat(ev->note, argDumpStr);
+    if (!nintSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd: unknown event (8 byte args). */
+static void nintSpcEventUnknown8 (NintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8;
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 8;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+    arg3 = seq->aRAM[*p];
+    (*p)++;
+    arg4 = seq->aRAM[*p];
+    (*p)++;
+    arg5 = seq->aRAM[*p];
+    (*p)++;
+    arg6 = seq->aRAM[*p];
+    (*p)++;
+    arg7 = seq->aRAM[*p];
+    (*p)++;
+    arg8 = seq->aRAM[*p];
+    (*p)++;
+
+    nintSpcEventUnknownInline(seq, ev);
+    sprintf(argDumpStr, ", arg1 = %d, arg2 = %d, arg3 = %d, arg4 = %d, arg5 = %d, arg6 = %d, arg7 = %d, arg8 = %d", arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
     strcat(ev->note, argDumpStr);
     if (!nintSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
@@ -2634,21 +2863,42 @@ static void nintSpcSetEventList (NintSpcSeqStat *seq)
     }
 
     // autoguess
-    if (seq->ver.id == SPC_VER_STD_AT_LEAST && vcmdLensAddr >= 0 && vcmdStart == 0xe0) {
+    if ((seq->ver.id == SPC_VER_STD_AT_LEAST || seq->ver.id == SPC_VER_STD_MODIFIED)
+        && vcmdLensAddr >= 0 && vcmdStart == 0xe0) {
         int sizeOfs = aRAM[vcmdLensAddr+0x00] - 1;
         int vcmdIndex;
         int vcmdLen;
+        int vcmdIndexMin = (seq->ver.id == SPC_VER_STD_AT_LEAST) ? 0x1b : 0;
 
-        for (vcmdIndex = 0x1b; vcmdStart + vcmdIndex <= 0xff; vcmdIndex++) {
+        for (vcmdIndex = vcmdIndexMin; vcmdStart + vcmdIndex <= 0xff; vcmdIndex++)
+        {
+            int vcmdCode = vcmdStart+vcmdIndex;
+
             vcmdLen = aRAM[vcmdLensAddr+vcmdIndex] - sizeOfs;
-            if (vcmdLen < 0 || vcmdLen > 3)
-                break;
-            switch (vcmdLen) {
-                case 0: event[vcmdStart+vcmdIndex] = (NintSpcEvent) nintSpcEventUnknown0; break;
-                case 1: event[vcmdStart+vcmdIndex] = (NintSpcEvent) nintSpcEventUnknown1; break;
-                case 2: event[vcmdStart+vcmdIndex] = (NintSpcEvent) nintSpcEventUnknown2; break;
-                case 3: event[vcmdStart+vcmdIndex] = (NintSpcEvent) nintSpcEventUnknown3; break;
+            if (vcmdIndex < countof(NINT_STD_EVT_LEN_TABLE) && vcmdLen == NINT_STD_EVT_LEN_TABLE[vcmdIndex])
+            {
+                continue;
             }
+
+            if (vcmdLen < 0 || vcmdLen > 8)
+            {
+                fprintf(stderr, "Warning: Event %02X cannot be supported.\n", vcmdCode);
+                event[vcmdCode] = (NintSpcEvent) nintSpcEventUnidentified;
+                continue;
+            }
+
+            switch (vcmdLen) {
+                case 0: event[vcmdCode] = (NintSpcEvent) nintSpcEventUnknown0; break;
+                case 1: event[vcmdCode] = (NintSpcEvent) nintSpcEventUnknown1; break;
+                case 2: event[vcmdCode] = (NintSpcEvent) nintSpcEventUnknown2; break;
+                case 3: event[vcmdCode] = (NintSpcEvent) nintSpcEventUnknown3; break;
+                case 4: event[vcmdCode] = (NintSpcEvent) nintSpcEventUnknown4; break;
+                case 5: event[vcmdCode] = (NintSpcEvent) nintSpcEventUnknown5; break;
+                case 6: event[vcmdCode] = (NintSpcEvent) nintSpcEventUnknown6; break;
+                case 7: event[vcmdCode] = (NintSpcEvent) nintSpcEventUnknown7; break;
+                case 8: event[vcmdCode] = (NintSpcEvent) nintSpcEventUnknown8; break;
+            }
+            fprintf(stderr, "Warning: Event Length Mismatch! Replaced Event %02X (%d bytes)\n", vcmdCode, vcmdLen);
         }
     }
 }
