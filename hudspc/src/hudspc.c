@@ -17,7 +17,7 @@
 
 #define APPNAME "Hudson SPC2MIDI"
 #define APPSHORTNAME "hudspc"
-#define VERSION "[2013-05-31]"
+#define VERSION "[2013-06-04]"
 
 static int hudsonSpcLoopMax = 2;            // maximum loop count of parser
 static int hudsonSpcTextLoopMax = 1;        // maximum loop count of text output
@@ -1326,6 +1326,8 @@ static void hudsonSpcEventNote (HudsonSpcSeqStat *seq, SeqEventReport *ev)
 
     int lenBits = noteByte & 7;
     bool tieBit = (noteByte & 8) != 0;
+    bool slur;
+    bool tie;
     int keyBits = noteByte >> 4;
 
     if (lenBits != 0) {
@@ -1366,31 +1368,39 @@ static void hudsonSpcEventNote (HudsonSpcSeqStat *seq, SeqEventReport *ev)
         note = (tr->octave * 12) + (keyBits - 1);
     }
 
+    slur = (!rest && tr->lastNote.active && tr->lastNote.tied &&
+        tr->lastNote.key != note);
+    tie = (!rest && tr->lastNote.active && tr->lastNote.tied &&
+        tr->lastNote.key == note);
+
     if (rest) {
-        sprintf(ev->note, "Rest%s, len = %d", tieBit ? " (Tied)" : "", len);
+        sprintf(ev->note, "Rest%s, len = %d", tieBit ? (slur ? " (Slur)" : " (Tied)") : "", len);
         strcat(ev->classStr, " ev-rest");
     }
     else {
         getNoteName(ev->note, note + seq->transpose + tr->note.transpose
             + seq->ver.patchFix[tr->note.patch].key
             + (tr->rhythmChannel ? 0 : SPC_NOTE_KEYSHIFT));
-        sprintf(argDumpStr, "%s, len = %d", tieBit ? " (Tied)" : "", len);
+        sprintf(argDumpStr, "%s, len = %d", tieBit ? (slur ? " (Slur)" : " (Tied)") : "", len);
         strcat(ev->note, argDumpStr);
         strcat(ev->classStr, " ev-note");
     }
 
-    //if (!hudsonSpcLessTextInSMF)
-    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+    if (!rest && slur)
+    {
+        if (!hudsonSpcLessTextInSMF)
+           smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+    }
 
     // output old note first
-    if (!tr->lastNote.tied)
+    if (!tie)
     {
         hudsonSpcDequeueNote(seq, ev->track);
     }
 
     // set new note
     if (!rest) {
-        if (tr->lastNote.active && tr->lastNote.tied) {
+        if (tie) {
             tr->lastNote.dur += dur;
         }
         else {
