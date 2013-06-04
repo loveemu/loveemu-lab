@@ -49,6 +49,13 @@ enum {
     SPC_VER_GG4,
 };
 
+const int GG4_EVENT_LENGTH_TABLE[] = {
+    0x0001, 0x0002, 0x0001, 0x0001, 0x0003, 0x0003, 0x0000, 0x0003,
+    0x0000, 0x0003, 0x0001, 0x0002, 0x0001, 0x0001, 0x0001, 0x0002,
+    0x0001, 0x0003, 0x0001, 0x0003, 0x0003, 0x0003, 0x0000, 0x0000,
+    0x0002, 0x0001, 0x0003, 0x0001, 0x0001, 0x0002, 0x0002, 0x0000,
+};
+
 // MIDI/SMF limitations
 #define SMF_PITCHBENDSENS_DEFAULT   2
 #define SMF_PITCHBENDSENS_MAX       24
@@ -67,9 +74,11 @@ typedef struct TagKonamiSpcVerInfo {
     int seqListAddr;
     int songIndex;
     int seqHeaderAddr;
+    int vcmdLenTableAddr;
     KonamiSpcEvent event[256];
     PatchFixInfo patchFix[256];
     bool seqDetected;
+    bool needsRelocateEvent;
 } KonamiSpcVerInfo;
 
 typedef struct TagKonamiSpcNoteParam {
@@ -280,16 +289,51 @@ static void konamiSpcResetParam (KonamiSpcSeqStat *seq)
 static int konamiSpcCheckVer (KonamiSpcSeqStat *seq)
 {
     int version = SPC_VER_UNKNOWN;
+    int songLdCodeAddr;
+    int vcmdCallCodeAddr;
+    int evtIndex;
 
     seq->timebase = konamiSpcTimeBase;
     seq->ver.seqListAddr = -1;
     seq->ver.songIndex = -1;
     seq->ver.seqHeaderAddr = -1;
+    seq->ver.vcmdLenTableAddr = -1;
     seq->ver.seqDetected = false;
 
-    // TODO: check driver version
-    seq->ver.seqHeaderAddr = 0x3900;
-    version = SPC_VER_GG4;
+    // mov   $06,#$..
+    // mov   $0a,#$..
+    // mov   $0b,#$..
+    // mov   x,#$00
+    songLdCodeAddr = indexOfHexPat(seq->aRAM, "\x8f.\x06\x8f.\x0a\x8f.\x0b\xcd\\\x00", SPC_ARAM_SIZE, NULL);
+    if (songLdCodeAddr != -1)
+    {
+        // asl   a
+        // mov   y,a
+        // mov   a,$....+y
+        // push  a
+        // mov   a,$....+y
+        // push  a
+        // mov   a,$....+y
+        // beq   $....
+        vcmdCallCodeAddr = indexOfHexPat(seq->aRAM, "\x1c\\\xfd\\\xf6..\x2d\\\xf6..\x2d\\\xf6..\\\xf0.", SPC_ARAM_SIZE, NULL);
+        if (vcmdCallCodeAddr != -1)
+        {
+            int vcmdLenTableAddr = mget2l(&seq->aRAM[vcmdCallCodeAddr + 11]);
+
+            seq->ver.seqHeaderAddr = seq->aRAM[songLdCodeAddr + 4] | (seq->aRAM[songLdCodeAddr + 7] << 8); // $0a/b
+            seq->ver.vcmdLenTableAddr = vcmdLenTableAddr;
+            version = SPC_VER_GG4;
+
+            // verify length table
+            for (evtIndex = 0; evtIndex < countof(GG4_EVENT_LENGTH_TABLE); evtIndex++)
+            {
+                if (seq->aRAM[evtIndex * 2 + vcmdLenTableAddr] != GG4_EVENT_LENGTH_TABLE[evtIndex])
+                {
+                    seq->ver.needsRelocateEvent = true;
+                }
+            }
+        }
+    }
 
     seq->ver.id = version;
     konamiSpcSetEventList(seq);
@@ -378,13 +422,14 @@ static void printHtmlInfoList (KonamiSpcSeqStat *seq)
     if (seq == NULL)
         return;
 
-    myprintf("          <li>Version: %s</li>\n", konamiSpcVerToStrHtml(seq));
+    myprintf("          <li>Version: %s%s</li>\n", konamiSpcVerToStrHtml(seq), seq->ver.needsRelocateEvent ? " (modified)" : "");
 
     if (seq->ver.id == SPC_VER_UNKNOWN)
         return;
 
     //myprintf("          <li>Song List: $%04X</li>\n", seq->ver.seqListAddr);
     myprintf("          <li>Song Entry: $%04X", seq->ver.seqHeaderAddr);
+    myprintf("          <li>Voice Cmd Length Table: $%04X", seq->ver.vcmdLenTableAddr);
     //myprintf(" (Song $%02x)", seq->ver.songIndex);
     myprintf("</li>\n");
 }
@@ -728,6 +773,30 @@ static void konamiSpcEventUnknown3 (KonamiSpcSeqStat *seq, SeqEventReport *ev)
 
     konamiSpcEventUnknownInline(seq, ev);
     sprintf(argDumpStr, ", arg1 = %d, arg2 = %d, arg3 = %d", arg1, arg2, arg3);
+    strcat(ev->note, argDumpStr);
+    if (!konamiSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd: unknown event (4 byte args). */
+static void konamiSpcEventUnknown4 (KonamiSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2, arg3, arg4;
+    KonamiSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    ev->size += 4;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+    arg3 = seq->aRAM[*p];
+    (*p)++;
+    arg4 = seq->aRAM[*p];
+    (*p)++;
+
+    konamiSpcEventUnknownInline(seq, ev);
+    sprintf(argDumpStr, ", arg1 = %d, arg2 = %d, arg3 = %d, arg4 = %d", arg1, arg2, arg3, arg4);
     strcat(ev->note, argDumpStr);
     if (!konamiSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
@@ -1279,6 +1348,46 @@ static void konamiSpcSetEventList (KonamiSpcSeqStat *seq)
     event[0xfd] = (KonamiSpcEvent) konamiSpcEventJump;
     event[0xfe] = (KonamiSpcEvent) konamiSpcEventSubroutine;
     event[0xff] = (KonamiSpcEvent) konamiSpcEventEndSubroutine;
+
+    if (seq->ver.needsRelocateEvent)
+    {
+        int vcmdLenTableAddr = seq->ver.vcmdLenTableAddr;
+        int evtIndex;
+
+        for (evtIndex = 0; evtIndex < countof(GG4_EVENT_LENGTH_TABLE); evtIndex++)
+        {
+            int evtActualLength = seq->aRAM[evtIndex * 2 + vcmdLenTableAddr];
+            int evtCode = 0xe0 + evtIndex;
+            if (evtActualLength != GG4_EVENT_LENGTH_TABLE[evtIndex])
+            {
+                fprintf(stderr, "Warning: Event Length Mismatch! Replaced Event %02X (%d -> %d bytes)\n", evtCode, GG4_EVENT_LENGTH_TABLE[evtIndex], evtActualLength);
+                switch(evtActualLength)
+                {
+                case 0:
+                    event[evtCode] = (KonamiSpcEvent) konamiSpcEventUnknown0;
+                    break;
+                case 1:
+                    event[evtCode] = (KonamiSpcEvent) konamiSpcEventUnknown1;
+                    break;
+                case 2:
+                    event[evtCode] = (KonamiSpcEvent) konamiSpcEventUnknown2;
+                    break;
+                case 3:
+                    event[evtCode] = (KonamiSpcEvent) konamiSpcEventUnknown3;
+                    break;
+                case 4:
+                    event[evtCode] = (KonamiSpcEvent) konamiSpcEventUnknown4;
+                    break;
+                case 5:
+                    event[evtCode] = (KonamiSpcEvent) konamiSpcEventUnknown5;
+                    break;
+                default:
+                    event[evtCode] = (KonamiSpcEvent) konamiSpcEventUnidentified;
+                    break;
+                }
+            }
+        }
+    }
 
     if (seq->ver.id == SPC_VER_UNKNOWN)
         return;
