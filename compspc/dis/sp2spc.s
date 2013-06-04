@@ -573,7 +573,7 @@
 09dd: dw $0b23  ; 9c
 09df: dw $0ba6  ; 9d
 09e1: dw $0b1b  ; 9e
-09e3: dw $0bda  ; 9f
+09e3: dw $0bda  ; 9f - set volume envelope?
 09e5: dw $0baa  ; a0 - set sample
 09e7: dw $0b92  ; a1 - slur on
 09e9: dw $0b9a  ; a2 - slur off
@@ -886,7 +886,7 @@
 0bd5: d5 80 01  mov   $0180+x,a
 0bd8: ee        pop   y
 0bd9: 6f        ret
-; vcmd 9F
+; vcmd 9F - set volume envelope?
 0bda: d5 b0 03  mov   $03b0+x,a
 0bdd: 6f        ret
 ; vcmd 97 - tuning
@@ -1974,3 +1974,38 @@
 13ff: f0 03     beq   $1404
 1401: 5f 29 13  jmp   $1329
 1404: 6f        ret
+
+27d6: 8f e0
+27d8: ff e5
+27da: df ef
+27dc: ff f1
+27de: 9f 3f
+27e0: ff f7
+27e2: ff f4
+27e4: df f1
+27e6: 9f bf
+27e8: df f3
+27ea: bf bf
+27ec: ff ea
+27ee: ff 8c
+27f0: db eb
+27f2: ff 4d
+27f4: ff f3
+27f6: df 8c
+27f8: df ea
+27fa: df f3
+27fc: df 89
+27fe: da e9
+2800: ee 2e
+2802: fa e5
+
+2804: 18 28
+2806: 20 28
+2808: 2c 28
+280a: 34 28
+280c: 40 28
+280e: 50 28
+2810: 58 28
+2812: 68 28
+2814: 74 28
+2816: 80 28

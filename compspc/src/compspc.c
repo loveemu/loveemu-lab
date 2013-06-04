@@ -436,8 +436,6 @@ static void printHtmlInfoList (CompSpcSeqStat *seq)
 /** output seq info list detail for valid seq. */
 static void printHtmlInfoListMore (CompSpcSeqStat *seq)
 {
-    int track;
-
     if (seq == NULL)
         return;
 
@@ -1718,7 +1716,6 @@ int main (int argc, char *argv[])
     Smf* smf;
     FILE *htmlFile = NULL;
     bool result;
-    char tmpPath[PATH_MAX];
     char spcPath[PATH_MAX];
     char midPath[PATH_MAX];
     char htmlPath[PATH_MAX];
