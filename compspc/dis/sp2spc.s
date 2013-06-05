@@ -194,7 +194,7 @@
 06cd: b0 02     bcs   $06d1
 06cf: 08 20     or    a,#$20
 06d1: 8f 6c f2  mov   $f2,#$6c
-06d4: c4 f3     mov   $f3,a             ;; DSP reg FLG
+06d4: c4 f3     mov   $f3,a             ; set FLG
 ; CPU cmd E0-EF
 06d6: 5f 5d 05  jmp   $055d
 ; CPU cmd FE - reset
@@ -320,7 +320,7 @@
 07cc: 75 10 04  cmp   a,$0410+x
 07cf: d0 03     bne   $07d4             ; wait for duration
 07d1: 3f bd 0c  call  $0cbd             ; do vcmds
-07d4: 3f c5 0e  call  $0ec5
+07d4: 3f c5 0e  call  $0ec5             ; read ADSR
 07d7: 3f 0b 0f  call  $0f0b
 07da: f4 90     mov   a,$90+x
 07dc: 10 03     bpl   $07e1
@@ -409,7 +409,7 @@
 088a: 04 42     or    a,$42
 088c: 04 40     or    a,$40
 088e: 8f 5c f2  mov   $f2,#$5c
-0891: c4 f3     mov   $f3,a             ;; DSP reg KOF
+0891: c4 f3     mov   $f3,a             ; set KOF
 0893: 5f 59 05  jmp   $0559
 ;
 0896: 8d 00     mov   y,#$00
@@ -440,17 +440,17 @@
 08c2: 28 5f     and   a,#$5f
 08c4: 08 20     or    a,#$20
 08c6: 8f 6c f2  mov   $f2,#$6c
-08c9: c4 f3     mov   $f3,a             ;; DSP reg FLG, disable mute, enable echo
+08c9: c4 f3     mov   $f3,a             ; set #$6c to FLG (disable mute, enable echo)
 08cb: e4 46     mov   a,$46
 08cd: 8f 3d f2  mov   $f2,#$3d
-08d0: c4 f3     mov   $f3,a             ;; DSP reg NON
+08d0: c4 f3     mov   $f3,a             ; set $46 to NON
 08d2: e4 40     mov   a,$40
 08d4: 8f 4c f2  mov   $f2,#$4c
-08d7: c4 f3     mov   $f3,a             ;; DSP reg KON
+08d7: c4 f3     mov   $f3,a             ; set $40 to KON
 08d9: 6f        ret
 ;
 08da: 8f 6c f2  mov   $f2,#$6c
-08dd: 8f 60 f3  mov   $f3,#$60          ; FLG, mute all voices, disable echo
+08dd: 8f 60 f3  mov   $f3,#$60          ; set #$6c to FLG (mute all voices, disable echo)
 08e0: e4 01     mov   a,$01
 08e2: 28 4c     and   a,#$4c
 08e4: c4 01     mov   $01,a
@@ -489,7 +489,7 @@
 0933: c4 5f     mov   $5f,a             ; set $5E/F to $180C/D
 0935: 8f 5d f2  mov   $f2,#$5d
 0938: e5 0e 18  mov   a,$180e
-093b: c4 f3     mov   $f3,a             ; set sample dir from $180E
+093b: c4 f3     mov   $f3,a             ; set $180E to SRCN
 093d: e5 0f 18  mov   a,$180f
 0940: c4 3d     mov   $3d,a             ; set $3D to $180F
 0942: e5 12 18  mov   a,$1812
@@ -573,7 +573,7 @@
 09dd: dw $0b23  ; 9c
 09df: dw $0ba6  ; 9d
 09e1: dw $0b1b  ; 9e
-09e3: dw $0bda  ; 9f - set volume envelope?
+09e3: dw $0bda  ; 9f - set ADSR
 09e5: dw $0baa  ; a0 - set sample
 09e7: dw $0b92  ; a1 - slur on
 09e9: dw $0b9a  ; a2 - slur off
@@ -886,7 +886,7 @@
 0bd5: d5 80 01  mov   $0180+x,a
 0bd8: ee        pop   y
 0bd9: 6f        ret
-; vcmd 9F - set volume envelope?
+; vcmd 9F - set ADSR
 0bda: d5 b0 03  mov   $03b0+x,a
 0bdd: 6f        ret
 ; vcmd 97 - tuning
@@ -1284,7 +1284,7 @@
 0ec1: d4 d0     mov   $d0+x,a           ; zero $C0/D0+X
 0ec3: ee        pop   y
 0ec4: 6f        ret
-;
+; read ADSR from $5e[$03b0+x] to $3b/c
 0ec5: f5 b0 03  mov   a,$03b0+x
 0ec8: 1c        asl   a
 0ec9: b0 0b     bcs   $0ed6
@@ -1295,10 +1295,12 @@
 0ed1: f7 5e     mov   a,($5e)+y
 0ed3: c4 3c     mov   $3c,a
 0ed5: 6f        ret
+; reset ADSR if the index >= 0x80
 0ed6: 8f 00 3b  mov   $3b,#$00
 0ed9: d0 04     bne   $0edf
 0edb: 8f 7f 3c  mov   $3c,#$7f
 0ede: 6f        ret
+;
 0edf: fd        mov   y,a
 0ee0: f7 5c     mov   a,($5c)+y
 0ee2: c4 36     mov   $36,a
@@ -1806,7 +1808,7 @@
 1290: 90 03     bcc   $1295
 1292: 48 ff     eor   a,#$ff
 1294: bc        inc   a
-1295: d6 00 02  mov   $0200+y,a
+1295: d6 00 02  mov   $0200+y,a         ; set VOL(L)
 1298: eb 36     mov   y,$36
 129a: f5 c0 03  mov   a,$03c0+x
 129d: 48 7f     eor   a,#$7f
@@ -1817,18 +1819,18 @@
 12a5: 90 03     bcc   $12aa
 12a7: 48 ff     eor   a,#$ff
 12a9: bc        inc   a
-12aa: d6 01 02  mov   $0201+y,a
+12aa: d6 01 02  mov   $0201+y,a         ; set VOL(R)
 12ad: e4 28     mov   a,$28
-12af: d6 02 02  mov   $0202+y,a
+12af: d6 02 02  mov   $0202+y,a         ; set P(L)
 12b2: e4 29     mov   a,$29
-12b4: d6 03 02  mov   $0203+y,a
+12b4: d6 03 02  mov   $0203+y,a         ; set P(H)
 12b7: f5 a0 03  mov   a,$03a0+x
-12ba: d6 04 02  mov   $0204+y,a
+12ba: d6 04 02  mov   $0204+y,a         ; set $03a0+x to SRCN
 12bd: e4 3b     mov   a,$3b
-12bf: d6 05 02  mov   $0205+y,a
+12bf: d6 05 02  mov   $0205+y,a         ; set $3b to ADSR(1)
 12c2: e4 3c     mov   a,$3c
-12c4: d6 06 02  mov   $0206+y,a
-12c7: d6 07 02  mov   $0207+y,a
+12c4: d6 06 02  mov   $0206+y,a         ; set $3c to ADSR(2)
+12c7: d6 07 02  mov   $0207+y,a         ; set $3c to GAIN
 12ca: e4 3e     mov   a,$3e
 12cc: 04 38     or    a,$38
 12ce: c4 3e     mov   $3e,a
