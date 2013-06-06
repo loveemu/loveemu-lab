@@ -768,7 +768,7 @@
 0b6a: dw $0c6c  ; 85
 0b6c: dw $0c16  ; 86
 0b6e: dw $0c50  ; 87 - set volume
-0b70: dw $0c2a  ; 88
+0b70: dw $0c2a  ; 88 - set software volume envelope
 0b72: dw $0c2e  ; 89 - transpose (relative)
 0b74: dw $0c39  ; 8a - increase/decrease volume
 0b76: dw $0d0c  ; 8b
@@ -803,7 +803,7 @@
 0bb0: dw $0e33  ; a8
 0bb2: dw $0e3f  ; a9
 0bb4: dw $0e47  ; aa
-0bb6: dw $0e16  ; ab
+0bb6: dw $0e16  ; ab - set panpot
 0bb8: dw $0d08  ; ac
 0bba: dw $0be3  ; ad - conditional loop
 0bbc: dw $0e64  ; ae
@@ -881,7 +881,7 @@
 ; vcmd 83 - set vibrato
 0c26: d5 40 03  mov   $0340+x,a
 0c29: 6f        ret
-; vcmd 88
+; vcmd 88 - set software volume envelope
 0c2a: d5 30 03  mov   $0330+x,a
 0c2d: 6f        ret
 ; vcmd 89 - transpose (relative)
@@ -1173,7 +1173,7 @@
 0e11: d4 90     mov   $90+x,a
 0e13: fc        inc   y
 0e14: f7 34     mov   a,($34)+y
-; vcmd AB
+; vcmd AB - set panpot
 0e16: d5 c0 03  mov   $03c0+x,a
 0e19: e4 01     mov   a,$01
 0e1b: 28 04     and   a,#$04
@@ -1583,7 +1583,7 @@
 1100: f7 36     mov   a,($36)+y
 1102: c4 3c     mov   $3c,a
 1104: 6f        ret
-;
+; read software envelope params
 1105: f5 30 03  mov   a,$0330+x
 1108: d0 06     bne   $1110
 110a: f5 20 03  mov   a,$0320+x

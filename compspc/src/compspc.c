@@ -16,7 +16,7 @@
 
 #define APPNAME         "Compile SPC2MIDI"
 #define APPSHORTNAME    "compspc"
-#define VERSION         "[2009-01-01]"
+#define VERSION         "[2013-06-07]"
 #define AUTHOR          "loveemu"
 #define WEBSITE         "http://loveemu.yh.land.to/"
 
@@ -1075,6 +1075,24 @@ static void compSpcEventVolume (CompSpcSeqStat *seq, SeqEventReport *ev)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
+/** vcmd 88: set software volume envelope (1 byte arg). */
+static void compSpcEventSoftVolEnvelope (CompSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    CompSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Volume Envelope, index = %d", arg1);
+    strcat(ev->classStr, " ev-adsr");
+
+    if (!compSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
 /** vcmd 89: per-voice transpose (relative). */
 static void compSpcEventTranspose (CompSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -1290,6 +1308,24 @@ static void compSpcEventPortamentoOff (CompSpcSeqStat *seq, SeqEventReport *ev)
     //smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_PORTAMENTO, 0);
 }
 
+/** vcmd ab: set panpot (1 byte arg). */
+static void compSpcEventPanpot (CompSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    CompSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    ev->size++;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    sprintf(ev->note, "Panpot, pan = %d", arg1);
+    strcat(ev->classStr, " ev-panpot");
+
+    if (!compSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
 /** vcmd ad: loop break. */
 static void compSpcEventLoopBreak (CompSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -1332,7 +1368,7 @@ static void compSpcSetEventList (CompSpcSeqStat *seq)
     // vcmd 85 - sa/jc | others
     // vcmd 86 - Unknown0? no version differences
     event[0x87] = (CompSpcEvent) compSpcEventVolume;
-    event[0x88] = (CompSpcEvent) compSpcEventUnknown1;
+    event[0x88] = (CompSpcEvent) compSpcEventSoftVolEnvelope;
     event[0x89] = (CompSpcEvent) compSpcEventTranspose;
     event[0x8a] = (CompSpcEvent) compSpcEventVolumeAdd;
     event[0x8b] = (CompSpcEvent) compSpcEventUnknown2;
@@ -1364,7 +1400,7 @@ static void compSpcSetEventList (CompSpcSeqStat *seq)
 //    event[0xa5] = (CompSpcEvent) compSpcEventUnknown3; // conditional jump
     event[0xa6] = (CompSpcEvent) compSpcEventUnknown1;
     event[0xa7] = (CompSpcEvent) compSpcEventUnknown1;
-    event[0xab] = (CompSpcEvent) compSpcEventUnknown1;
+    event[0xab] = (CompSpcEvent) compSpcEventPanpot;
     event[0xac] = (CompSpcEvent) compSpcEventUnknown1;
     event[0xad] = (CompSpcEvent) compSpcEventLoopBreak;
     event[0xae] = (CompSpcEvent) compSpcEventUnknown0;
