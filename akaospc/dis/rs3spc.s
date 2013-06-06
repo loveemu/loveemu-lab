@@ -1449,34 +1449,34 @@
 0d4f: c4 d1     mov   $d1,a
 0d51: 8f 01 47  mov   $47,#$01
 0d54: 8f ff 48  mov   $48,#$ff
-0d57: eb ba     mov   y,$ba
+0d57: eb ba     mov   y,$ba             ; usually #$10, sometimes #$20
 0d59: cd 10     mov   x,#$10
 0d5b: f6 03 22  mov   a,$2203+y
-0d5e: d4 01     mov   $01+x,a
+0d5e: d4 01     mov   $01+x,a           ; read 16 bytes from $2204+y to $02 (score location)
 0d60: dc        dec   y
 0d61: 1d        dec   x
 0d62: d0 f7     bne   $0d5b
-0d64: e5 00 22  mov   a,$2200
+0d64: e5 00 22  mov   a,$2200           ; $2200 - header start address
 0d67: c4 00     mov   $00,a
 0d69: e5 01 22  mov   a,$2201
-0d6c: c4 01     mov   $01,a
+0d6c: c4 01     mov   $01,a             ; header 00/1 - ROM address base
 0d6e: e8 24     mov   a,#$24
-0d70: 8d 22     mov   y,#$22
+0d70: 8d 22     mov   y,#$22            ; $2224 - ARAM address base
 0d72: 9a 00     subw  ya,$00
-0d74: da 00     movw  $00,ya
-0d76: cd 0e     mov   x,#$0e
-0d78: 8f 80 92  mov   $92,#$80
+0d74: da 00     movw  $00,ya            ; $00/1 - offset from ROM to ARAM address
+0d76: cd 0e     mov   x,#$0e            ; read from last, 8 channels
+0d78: 8f 80 92  mov   $92,#$80          ; channel bit flag
 0d7b: e5 02 22  mov   a,$2202
-0d7e: ec 03 22  mov   y,$2203
-0d81: da 9c     movw  $9c,ya
+0d7e: ec 03 22  mov   y,$2203           ; header 02/3 - song end address (start address + size)
+0d81: da 9c     movw  $9c,ya            ; set song end address to $9c/d
 0d83: f4 02     mov   a,$02+x
 0d85: fb 03     mov   y,$03+x
-0d87: 5a 9c     cmpw  ya,$9c
-0d89: f0 11     beq   $0d9c
+0d87: 5a 9c     cmpw  ya,$9c            ; channel address
+0d89: f0 11     beq   $0d9c             ; when it points the song end, channel is not used
 0d8b: 09 92 53  or    ($53),($92)
 0d8e: 7a 00     addw  ya,$00
 0d90: d4 02     mov   $02+x,a
-0d92: db 03     mov   $03+x,y
+0d92: db 03     mov   $03+x,y           ; convert ROM address to ARAM address
 0d94: 3f d6 0c  call  $0cd6
 0d97: e8 ff     mov   a,#$ff
 0d99: d5 20 f2  mov   $f220+x,a
@@ -1490,14 +1490,17 @@
 0da5: e8 80     mov   a,#$80
 0da7: 8d c0     mov   y,#$c0
 0da9: 2f 16     bra   $0dc1
+;
 0dab: cd 1a     mov   x,#$1a
 0dad: e8 20     mov   a,#$20
 0daf: 8d 30     mov   y,#$30
 0db1: 2f 0e     bra   $0dc1
+;
 0db3: cd 16     mov   x,#$16
 0db5: e8 08     mov   a,#$08
 0db7: 8d 0c     mov   y,#$0c
 0db9: 2f 06     bra   $0dc1
+;
 0dbb: cd 12     mov   x,#$12
 0dbd: e8 02     mov   a,#$02
 0dbf: 8d 03     mov   y,#$03
@@ -1515,7 +1518,7 @@
 0dd7: e8 00     mov   a,#$00
 0dd9: 8d 31     mov   y,#$31
 0ddb: 7a 94     addw  ya,$94
-0ddd: da 94     movw  $94,ya
+0ddd: da 94     movw  $94,ya            ; $3100 + ($8f) * 4
 0ddf: 8d 03     mov   y,#$03
 0de1: 8f 00 a5  mov   $a5,#$00
 0de4: f7 94     mov   a,($94)+y
@@ -1619,7 +1622,7 @@
 0ec1: e8 1e     mov   a,#$1e
 0ec3: d4 03     mov   $03+x,a
 0ec5: e8 8c     mov   a,#$8c
-0ec7: d4 02     mov   $02+x,a
+0ec7: d4 02     mov   $02+x,a           ; $1e8c
 0ec9: e8 00     mov   a,#$00
 0ecb: d5 51 01  mov   $0151+x,a
 0ece: d5 c1 f4  mov   $f4c1+x,a
@@ -1828,7 +1831,7 @@
 1053: e8 8c     mov   a,#$8c
 1055: d4 02     mov   $02+x,a
 1057: e8 1e     mov   a,#$1e
-1059: d4 03     mov   $03+x,a
+1059: d4 03     mov   $03+x,a           ; $1e8c
 105b: e8 02     mov   a,#$02
 105d: d4 26     mov   $26+x,a
 105f: 1d        dec   x
