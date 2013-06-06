@@ -763,14 +763,14 @@
 0b60: dw $0bc4  ; 80 - goto
 0b62: dw $0bcf  ; 81 - loop end
 0b64: dw $0c1b  ; 82 - halt
-0b66: dw $0c26  ; 83
+0b66: dw $0c26  ; 83 - set vibrato
 0b68: dw $0c54  ; 84
 0b6a: dw $0c6c  ; 85
 0b6c: dw $0c16  ; 86
-0b6e: dw $0c50  ; 87
+0b6e: dw $0c50  ; 87 - set volume
 0b70: dw $0c2a  ; 88
-0b72: dw $0c2e  ; 89
-0b74: dw $0c39  ; 8a
+0b72: dw $0c2e  ; 89 - transpose (relative)
+0b74: dw $0c39  ; 8a - increase/decrease volume
 0b76: dw $0d0c  ; 8b
 0b78: dw $0d4b  ; 8c - nop
 0b7a: dw $0c0b  ; 8d - loop begin
@@ -791,10 +791,10 @@
 0b98: dw $0cde  ; 9c
 0b9a: dw $0d61  ; 9d
 0b9c: dw $0cd6  ; 9e
-0b9e: dw $0d95  ; 9f
+0b9e: dw $0d95  ; 9f - set ADSR
 0ba0: dw $0d65  ; a0 - set sample
-0ba2: dw $0d4d  ; a1 - portamento on
-0ba4: dw $0d55  ; a2 - portamento off
+0ba2: dw $0d4d  ; a1 - slur on
+0ba4: dw $0d55  ; a2 - slur off
 0ba6: dw $0ddb  ; a3
 0ba8: dw $0c03  ; a4
 0baa: dw $0bf7  ; a5
@@ -878,13 +878,13 @@
 0c21: ae        pop   a
 0c22: ae        pop   a
 0c23: 5f 2e 08  jmp   $082e
-; vcmd 83
+; vcmd 83 - set vibrato
 0c26: d5 40 03  mov   $0340+x,a
 0c29: 6f        ret
 ; vcmd 88
 0c2a: d5 30 03  mov   $0330+x,a
 0c2d: 6f        ret
-; vcmd 89
+; vcmd 89 - transpose (relative)
 0c2e: 60        clrc
 0c2f: 95 50 03  adc   a,$0350+x
 0c32: d5 50 03  mov   $0350+x,a
@@ -892,7 +892,7 @@
 ; vcmd 90
 0c36: d4 80     mov   $80+x,a
 0c38: 6f        ret
-; vcmd 8A
+; vcmd 8A - increase/decrease volume
 0c39: 60        clrc
 0c3a: 30 0d     bmi   $0c49
 0c3c: 95 20 03  adc   a,$0320+x
@@ -904,7 +904,7 @@
 0c49: 95 20 03  adc   a,$0320+x
 0c4c: b0 f7     bcs   $0c45
 0c4e: e8 00     mov   a,#$00
-; vcmd 87
+; vcmd 87 - set volume
 0c50: d5 20 03  mov   $0320+x,a
 0c53: 6f        ret
 ; vcmd 84
@@ -1057,12 +1057,12 @@
 ; vcmd 8C - nop
 0d4b: dc        dec   y
 0d4c: 6f        ret
-; vcmd A1 - portamento on
+; vcmd A1 - slur on
 0d4d: f4 80     mov   a,$80+x
 0d4f: 08 10     or    a,#$10
 0d51: d4 80     mov   $80+x,a
 0d53: 2f f0     bra   $0d45
-; vcmd A2 - portamento off
+; vcmd A2 - slur off
 0d55: f4 80     mov   a,$80+x
 0d57: 28 ef     and   a,#$ef
 0d59: d4 80     mov   $80+x,a
@@ -1104,7 +1104,7 @@
 0d90: d5 80 01  mov   $0180+x,a
 0d93: ee        pop   y
 0d94: 6f        ret
-; vcmd 9F
+; vcmd 9F - set ADSR
 0d95: d5 b0 03  mov   $03b0+x,a
 0d98: 6f        ret
 ; vcmd 97 - tuning
@@ -1544,7 +1544,7 @@
 10bb: d4 d0     mov   $d0+x,a
 10bd: ee        pop   y
 10be: 6f        ret
-;
+; read ADSR from $5e[$03b0+x] to $3b/c
 10bf: f5 b0 03  mov   a,$03b0+x
 10c2: 1c        asl   a
 10c3: b0 0b     bcs   $10d0
@@ -1555,10 +1555,12 @@
 10cb: f7 5e     mov   a,($5e)+y
 10cd: c4 3c     mov   $3c,a
 10cf: 6f        ret
+; reset ADSR if the index >= 0x80
 10d0: 8f 00 3b  mov   $3b,#$00
 10d3: d0 04     bne   $10d9
 10d5: 8f 7f 3c  mov   $3c,#$7f
 10d8: 6f        ret
+;
 10d9: fd        mov   y,a
 10da: f7 5c     mov   a,($5c)+y
 10dc: c4 36     mov   $36,a
@@ -1743,6 +1745,7 @@
 1239: f5 40 03  mov   a,$0340+x
 123c: d0 01     bne   $123f
 123e: 6f        ret
+; read vibrato params
 123f: 1c        asl   a
 1240: fd        mov   y,a
 1241: f7 58     mov   a,($58)+y

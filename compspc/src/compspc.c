@@ -1021,6 +1021,24 @@ static void compSpcEventEndOfTrack (CompSpcSeqStat *seq, SeqEventReport *ev)
     compSpcInactiveTrack(seq, ev->track);
 }
 
+/** vcmd 83: set vibrato (1 byte arg). */
+static void compSpcEventVibrato (CompSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    CompSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Vibrato, index = %d", arg1);
+    strcat(ev->classStr, " ev-vibrato");
+
+    if (!compSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
 /** vcmd 84: portamento time. */
 static void compSpcEventPortamentoTime (CompSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -1039,6 +1057,24 @@ static void compSpcEventPortamentoTime (CompSpcSeqStat *seq, SeqEventReport *ev)
     smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_PORTAMENTOTIME, min(tr->note.ptmntTime, 127));
 }
 
+/** vcmd 87: set volume (1 byte arg). */
+static void compSpcEventVolume (CompSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    CompSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Volume, vol = %d", arg1);
+    strcat(ev->classStr, " ev-volume");
+
+    if (!compSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
 /** vcmd 89: per-voice transpose (relative). */
 static void compSpcEventTranspose (CompSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -1054,6 +1090,24 @@ static void compSpcEventTranspose (CompSpcSeqStat *seq, SeqEventReport *ev)
     strcat(ev->classStr, " ev-vtranspose");
 
     tr->note.transpose += arg1;
+}
+
+/** vcmd 8a: set volume (1 byte arg). */
+static void compSpcEventVolumeAdd (CompSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    CompSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    ev->size++;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    sprintf(ev->note, "Add Volume, vol += %d", arg1);
+    strcat(ev->classStr, " ev-volume");
+
+    if (!compSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmd 8d: set repeat count. */
@@ -1104,8 +1158,9 @@ static void compSpcEventTempo (CompSpcSeqStat *seq, SeqEventReport *ev)
 
     sprintf(ev->note, "Tempo, bpm = %f", compSpcTempo(seq));
     strcat(ev->classStr, " ev-tempo");
-    if (!compSpcLessTextInSMF)
-        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    //if (!compSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmd 97: tuning. */
@@ -1187,6 +1242,24 @@ static void compSpcEventInstrument (CompSpcSeqStat *seq, SeqEventReport *ev)
     strcat(ev->classStr, " ev-patch");
 }
 
+/** vcmd 9f: set ADSR. */
+static void compSpcEventSetADSR (CompSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    CompSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Set ADSR, index = %d", arg1);
+    strcat(ev->classStr, " ev-adsr");
+
+    if (!compSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
 /** vcmd a1: portamento on. */
 static void compSpcEventPortamentoOn (CompSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -1196,6 +1269,9 @@ static void compSpcEventPortamentoOn (CompSpcSeqStat *seq, SeqEventReport *ev)
     strcat(ev->classStr, " ev-portamento-on");
 
     tr->note.portamento = true;
+
+    if (!compSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
     //smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_PORTAMENTO, 127);
 }
 
@@ -1208,6 +1284,9 @@ static void compSpcEventPortamentoOff (CompSpcSeqStat *seq, SeqEventReport *ev)
     strcat(ev->classStr, " ev-portamento-off");
 
     tr->note.portamento = false;
+
+    if (!compSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
     //smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_PORTAMENTO, 0);
 }
 
@@ -1248,14 +1327,14 @@ static void compSpcSetEventList (CompSpcSeqStat *seq)
     event[0x80] = (CompSpcEvent) compSpcEventJump;
     event[0x81] = (CompSpcEvent) compSpcEventLoop;
     event[0x82] = (CompSpcEvent) compSpcEventEndOfTrack;
-    event[0x83] = (CompSpcEvent) compSpcEventUnknown1;
+    event[0x83] = (CompSpcEvent) compSpcEventVibrato;
     event[0x84] = (CompSpcEvent) compSpcEventPortamentoTime;
     // vcmd 85 - sa/jc | others
     // vcmd 86 - Unknown0? no version differences
-    event[0x87] = (CompSpcEvent) compSpcEventUnknown1; // vol (abs)
+    event[0x87] = (CompSpcEvent) compSpcEventVolume;
     event[0x88] = (CompSpcEvent) compSpcEventUnknown1;
     event[0x89] = (CompSpcEvent) compSpcEventTranspose;
-    event[0x8a] = (CompSpcEvent) compSpcEventUnknown1; // vol (rel)
+    event[0x8a] = (CompSpcEvent) compSpcEventVolumeAdd;
     event[0x8b] = (CompSpcEvent) compSpcEventUnknown2;
     event[0x8c] = (CompSpcEvent) compSpcEventNOP1;
     event[0x8d] = (CompSpcEvent) compSpcEventSetLoopCnt;
@@ -1276,7 +1355,7 @@ static void compSpcSetEventList (CompSpcSeqStat *seq)
     // vcmd 9c -  no version differences
     event[0x9d] = (CompSpcEvent) compSpcEventUnknown1;
     // vcmd 9e -  no version differences
-    event[0x9f] = (CompSpcEvent) compSpcEventUnknown1;
+    event[0x9f] = (CompSpcEvent) compSpcEventSetADSR;
     event[0xa0] = (CompSpcEvent) compSpcEventInstrument;
     event[0xa1] = (CompSpcEvent) compSpcEventPortamentoOn;
     event[0xa2] = (CompSpcEvent) compSpcEventPortamentoOff;

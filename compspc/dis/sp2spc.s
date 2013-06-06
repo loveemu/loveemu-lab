@@ -545,14 +545,14 @@
 09a5: dw $0a09  ; 80 - jump
 09a7: dw $0a14  ; 81 - loop end
 09a9: dw $0a60  ; 82 - halt
-09ab: dw $0a6b  ; 83
+09ab: dw $0a6b  ; 83 - set vibrato
 09ad: dw $0a99  ; 84
 09af: dw $0ab1  ; 85
 09b1: dw $0a5b  ; 86
-09b3: dw $0a95  ; 87
+09b3: dw $0a95  ; 87 - set volume
 09b5: dw $0a6f  ; 88
-09b7: dw $0a73  ; 89 - transpose
-09b9: dw $0a7e  ; 8a
+09b7: dw $0a73  ; 89 - transpose (relative)
+09b9: dw $0a7e  ; 8a - increase/decrease volume
 09bb: dw $0b51  ; 8b
 09bd: dw $0b90  ; 8c - nop
 09bf: dw $0a50  ; 8d - loop begin
@@ -564,7 +564,7 @@
 09cb: dw $0ae1  ; 93
 09cd: dw $0b5d  ; 94
 09cf: dw $0b0e  ; 95
-09d1: dw $0b3f  ; 96 - tempo
+09d1: dw $0b3f  ; 96 - set tempo
 09d3: dw $0bde  ; 97 - tuning
 09d5: dw $0ba2  ; 98
 09d7: dw $0b80  ; 99
@@ -660,13 +660,13 @@
 0a66: ae        pop   a
 0a67: ae        pop   a
 0a68: 5f 35 08  jmp   $0835
-; vcmd 83
+; vcmd 83 - set vibrato
 0a6b: d5 40 03  mov   $0340+x,a
 0a6e: 6f        ret
 ; vcmd 88
 0a6f: d5 30 03  mov   $0330+x,a
 0a72: 6f        ret
-; vcmd 89 - transpose
+; vcmd 89 - transpose (relative)
 0a73: 60        clrc
 0a74: 95 50 03  adc   a,$0350+x
 0a77: d5 50 03  mov   $0350+x,a         ; add arg1 (semitones)
@@ -674,7 +674,7 @@
 ; vcmd 90 - set $80+X
 0a7b: d4 80     mov   $80+x,a
 0a7d: 6f        ret
-; vcmd 8A
+; vcmd 8A - increase/decrease volume
 0a7e: 60        clrc
 0a7f: 30 0d     bmi   $0a8e
 0a81: 95 20 03  adc   a,$0320+x
@@ -686,7 +686,7 @@
 0a8e: 95 20 03  adc   a,$0320+x
 0a91: b0 f7     bcs   $0a8a
 0a93: e8 00     mov   a,#$00
-; vcmd 87
+; vcmd 87 - set volume
 0a95: d5 20 03  mov   $0320+x,a
 0a98: 6f        ret
 ; vcmd 84
@@ -788,7 +788,7 @@
 0b38: 95 50 03  adc   a,$0350+x
 0b3b: d5 50 03  mov   $0350+x,a
 0b3e: 6f        ret
-; vcmd 96 - tempo
+; vcmd 96 - set tempo
 0b3f: d5 60 03  mov   $0360+x,a
 0b42: 6f        ret
 ; vcmd 8E
@@ -1485,6 +1485,7 @@
 103f: f5 40 03  mov   a,$0340+x
 1042: d0 01     bne   $1045
 1044: 6f        ret
+; read vibrato params
 1045: 1c        asl   a
 1046: fd        mov   y,a
 1047: f7 58     mov   a,($58)+y
