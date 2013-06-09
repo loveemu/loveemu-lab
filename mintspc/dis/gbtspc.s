@@ -507,9 +507,9 @@
 06bf: dw $07a4  ; c8 - echo on
 06c1: dw $07ab  ; c9 - echo off
 06c3: dw $07b2  ; ca - set echo params
-06c5: dw $07cd  ; cb - jump (relative)
-06c7: dw $07e8  ; cc
-06c9: dw $0814  ; cd
+06c5: dw $07cd  ; cb - jump
+06c7: dw $07e8  ; cc - call subroutine
+06c9: dw $0814  ; cd - end subroutine
 06cb: dw $0827  ; ce
 06cd: dw $084d  ; cf
 06cf: dw $0876  ; d0
@@ -683,7 +683,7 @@
 07cb: ee        pop   y
 07cc: 6f        ret
 
-; vcmd cb - jump (relative)
+; vcmd cb - jump
 07cd: dd        mov   a,y
 07ce: 8d 00     mov   y,#$00
 07d0: 7a 2d     addw  ya,$2d
@@ -701,11 +701,11 @@
 07e5: 8d 00     mov   y,#$00            ; prevent to skip more bytes
 07e7: 6f        ret
 
-; vcmd cc
+; vcmd cc - call subroutine
 07e8: dd        mov   a,y
 07e9: 8d 00     mov   y,#$00
 07eb: 7a 2d     addw  ya,$2d
-07ed: da 2d     movw  $2d,ya
+07ed: da 2d     movw  $2d,ya            ; skip vcmd itself
 07ef: 8d 00     mov   y,#$00
 07f1: f7 2d     mov   a,($2d)+y
 07f3: 3a 2d     incw  $2d
@@ -718,17 +718,17 @@
 07ff: d6 46 10  mov   $1046+y,a
 0802: fc        inc   y
 0803: e4 2e     mov   a,$2e
-0805: d6 46 10  mov   $1046+y,a
+0805: d6 46 10  mov   $1046+y,a         ; save return address
 0808: fc        inc   y
 0809: db 68     mov   $68+x,y
 080b: ee        pop   y
 080c: ae        pop   a
 080d: 7a 2d     addw  ya,$2d
-080f: da 2d     movw  $2d,ya
+080f: da 2d     movw  $2d,ya            ; jump to arg1/2 (relative)
 0811: 8d 00     mov   y,#$00
 0813: 6f        ret
 
-; vcmd cd
+; vcmd cd - end subroutine
 0814: fb 68     mov   y,$68+x
 0816: dc        dec   y
 0817: f6 46 10  mov   a,$1046+y
