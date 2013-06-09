@@ -96,6 +96,7 @@ struct TagMintSpcTrackStat {
     int lastNoteLen;        // last note length ($0230+x)
     int looped;             // how many times looped (internal)
     int patch;              // patch number (for pitch fix)
+    byte volume;            // voice volume
 };
 
 struct TagMintSpcSeqStat {
@@ -219,6 +220,7 @@ static void mintSpcResetTrackParam (MintSpcSeqStat *seq, int track)
     tr->used = false;
     tr->prevTick = tr->tick;
     tr->looped = 0;
+    tr->volume = 200;
     tr->note.transpose = 0;
     tr->lastNote.active = false;
     tr->lastNoteLen = 0;
@@ -232,7 +234,7 @@ static void mintSpcResetParam (MintSpcSeqStat *seq)
 
     seq->tick = 0;
     seq->time = 0;
-    seq->tempo = 0x40; // TODO
+    seq->tempo = 0x20;
     seq->transpose = 0;
     seq->looped = 0;
     seq->active = true;
@@ -274,54 +276,74 @@ static int mintSpcCheckVer (MintSpcSeqStat *seq)
     seq->ver.seqHeaderAddr = -1;
     seq->ver.seqDetected = false;
 
-    // (Gokinjo Bouken Tai)
-    // asl   a
-    // mov   y,a
-    // mov   a,TBL+y
-    // mov   PTR,a
-    // mov   a,(TBL+1)+y
-    // mov   PTR+1,a           ; set song header ptr
-    // mov   y,#$00
-    // mov   a,(PTR)+y         ; read first byte
-    songLdCodeAddr = indexOfHexPat(seq->aRAM, "\x1c\xfd\xf6..\xc4.\xf6..\xc4.\x8d\\\x00\xf7.", SPC_ARAM_SIZE, NULL);
-    if (songLdCodeAddr != -1 &&
-        ((mget2l(&seq->aRAM[songLdCodeAddr + 3]) + 1) & 0xffff) == mget2l(&seq->aRAM[songLdCodeAddr + 8]) &&
-        ((seq->aRAM[songLdCodeAddr + 6] + 1) & 0xff) == seq->aRAM[songLdCodeAddr + 11] &&
-        seq->aRAM[songLdCodeAddr + 6] == seq->aRAM[songLdCodeAddr + 15])
+    if (mintSpcForceSongListAddr != -1)
     {
-        seq->ver.seqListAddr = mget2l(&seq->aRAM[songLdCodeAddr + 3]);
+        seq->ver.seqListAddr = mintSpcForceSongListAddr;
     }
-
+    else
+    {
+        // (Gokinjo Bouken Tai)
+        // asl   a
+        // mov   y,a
+        // mov   a,TBL+y
+        // mov   PTR,a
+        // mov   a,(TBL+1)+y
+        // mov   PTR+1,a           ; set song header ptr
+        // mov   y,#$00
+        // mov   a,(PTR)+y         ; read first byte
+        songLdCodeAddr = indexOfHexPat(seq->aRAM, "\x1c\xfd\xf6..\xc4.\xf6..\xc4.\x8d\\\x00\xf7.", SPC_ARAM_SIZE, NULL);
+        if (songLdCodeAddr != -1 &&
+            ((mget2l(&seq->aRAM[songLdCodeAddr + 3]) + 1) & 0xffff) == mget2l(&seq->aRAM[songLdCodeAddr + 8]) &&
+            ((seq->aRAM[songLdCodeAddr + 6] + 1) & 0xff) == seq->aRAM[songLdCodeAddr + 11] &&
+            seq->aRAM[songLdCodeAddr + 6] == seq->aRAM[songLdCodeAddr + 15])
+        {
+            seq->ver.seqListAddr = mget2l(&seq->aRAM[songLdCodeAddr + 3]);
+        }
+    }
+/*
+	static int mintSpcForceSongIndex = -1;
+static int mintSpcForceSongListAddr = -1;
+*/
     if (seq->ver.seqListAddr != -1)
     {
-        int songSearchIndexMax = 4;
-
-        // lazy song search
-        for (seq->ver.songIndex = 0; seq->ver.songIndex < songSearchIndexMax; seq->ver.songIndex++)
+        if (mintSpcForceSongIndex != -1)
         {
-            int seqHeaderAddrPtr = seq->ver.seqListAddr + (seq->ver.songIndex * 2);
-            int seqHeaderAddrCandidate;
-
-            if (seqHeaderAddrPtr >= SPC_ARAM_SIZE)
+            if (seq->ver.seqListAddr + (mintSpcForceSongIndex * 2) + 1 < SPC_ARAM_SIZE)
             {
-                break;
-            }
-            seqHeaderAddrCandidate = mget2l(&seq->aRAM[seqHeaderAddrPtr]);
-
-            if (seqHeaderAddrCandidate != 0 && seqHeaderAddrCandidate != (SPC_ARAM_SIZE - 1))
-            {
-                seq->ver.seqHeaderAddr = seqHeaderAddrCandidate;
-                break;
+                seq->ver.songIndex = mintSpcForceSongIndex;
             }
         }
-        if (seq->ver.seqHeaderAddr == -1)
+        else
         {
-            seq->ver.songIndex = -1;
+            int songSearchIndexMax = 4;
+
+            // lazy song search
+            for (seq->ver.songIndex = 0; seq->ver.songIndex < songSearchIndexMax; seq->ver.songIndex++)
+            {
+                int seqHeaderAddrPtr = seq->ver.seqListAddr + (seq->ver.songIndex * 2);
+                int seqHeaderAddrCandidate;
+
+                if (seqHeaderAddrPtr >= SPC_ARAM_SIZE)
+                {
+                    break;
+                }
+                seqHeaderAddrCandidate = mget2l(&seq->aRAM[seqHeaderAddrPtr]);
+
+                if (seqHeaderAddrCandidate != 0 && seqHeaderAddrCandidate != (SPC_ARAM_SIZE - 1))
+                {
+                    break;
+                }
+            }
+            if (seq->ver.songIndex == songSearchIndexMax)
+            {
+                seq->ver.songIndex = -1;
+            }
         }
     }
 
-    if (seq->ver.seqHeaderAddr != -1)
+    if (seq->ver.songIndex != -1)
     {
+        seq->ver.seqHeaderAddr = mget2l(&seq->aRAM[seq->ver.seqListAddr + (seq->ver.songIndex * 2)]);
         version = SPC_VER_GBT;
     }
 
@@ -517,7 +539,7 @@ static void printEventTableFooter (MintSpcSeqStat *seq, Smf* smf)
 /** convert SPC tempo into bpm. */
 static double mintSpcTempo (MintSpcSeqStat *seq)
 {
-    return (double) seq->tempo * 60000000 / 98304000; // 49152000 = (timer0) 4ms * 48 TPQN * 256
+    return (double) seq->tempo * 60000000 / 12134400; // 12134400 = (timer0) 9.875ms * 100 * 48 TPQN * 256
 }
 
 /** convert SPC velocity into MIDI one. */
@@ -858,6 +880,130 @@ static void mintSpcEventNOP (MintSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
     sprintf(ev->note, "NOP");
 }
 
+/** vcmd c3: set tempo. */
+static void mintSpcEventSetTempo (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Set Tempo, tempo = %d (bpm %.1f)", arg1, mintSpcTempo(seq));
+    strcat(ev->classStr, " ev-tempo");
+
+    if (ev->track == 0)
+    {
+        seq->tempo = arg1;
+        smfInsertTempoBPM(seq->smf, ev->tick, 0, mintSpcTempo(seq));
+    }
+    else
+    {
+        if (!mintSpcLessTextInSMF)
+            smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+    }
+}
+
+/** vcmd c5: set volume. */
+static void mintSpcEventVolume (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    tr->volume = arg1;
+
+    sprintf(ev->note, "Volume, vol = %d", arg1);
+    strcat(ev->classStr, " ev-vol");
+
+    //if (!mintSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_VOLUME, mintSpcMidiVolOf(tr->volume));
+}
+
+/** vcmd dc: add volume. */
+static void mintSpcEventAddVolume (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int newVolume;
+    int *p = &seq->track[ev->track].pos;
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    newVolume = tr->volume + arg1;
+    if (newVolume < 0) {
+        newVolume = 0;
+    }
+    else if (newVolume > 0xff) {
+    	newVolume = 0xff;
+    }
+    tr->volume = newVolume;
+
+    sprintf(ev->note, "Volume (Add), vol += %d", arg1);
+    strcat(ev->classStr, " ev-vol");
+
+    //if (!mintSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_VOLUME, mintSpcMidiVolOf(tr->volume));
+}
+
+/** vcmd c8: echo on. */
+static void mintSpcEventEchoOn (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Echo On");
+    strcat(ev->classStr, " ev-echoon");
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_REVERB, 100);
+}
+
+/** vcmd c9: echo off. */
+static void mintSpcEventEchoOff (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Echo Off");
+    strcat(ev->classStr, " ev-echooff");
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_REVERB, 0);
+}
+
+/** vcmd ca: set echo delay, volume, feedback, FIR. */
+static void mintSpcEventEchoParam (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2, arg3, arg4;
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 4;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+    arg3 = seq->aRAM[*p];
+    (*p)++;
+    arg4 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Echo Param, delay = %d, volume = %d, feedback = %d, FIR = %d", arg1, arg2, arg3, arg4);
+    strcat(ev->classStr, " ev-echoparam");
+
+    if (!mintSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
 /** set pointers of each event. */
 static void mintSpcSetEventList (MintSpcSeqStat *seq)
 {
@@ -873,7 +1019,19 @@ static void mintSpcSetEventList (MintSpcSeqStat *seq)
     for(code = 0x00; code <= 0xbf; code++) {
         event[code] = (MintSpcEvent) mintSpcEventUnidentified;
     }
-    event[0xc0] = (MintSpcEvent) mintSpcEventUnidentified;
+    event[0xc0] = (MintSpcEvent) mintSpcEventUnknown2;
+    event[0xc1] = (MintSpcEvent) mintSpcEventUnknown1;
+    event[0xc2] = (MintSpcEvent) mintSpcEventUnknown1;
+    event[0xc3] = (MintSpcEvent) mintSpcEventSetTempo;
+    event[0xc5] = (MintSpcEvent) mintSpcEventVolume;
+    event[0xc6] = (MintSpcEvent) mintSpcEventUnknown1;
+    event[0xc8] = (MintSpcEvent) mintSpcEventEchoOn;
+    event[0xc9] = (MintSpcEvent) mintSpcEventEchoOff;
+    event[0xca] = (MintSpcEvent) mintSpcEventEchoParam;
+    event[0xd5] = (MintSpcEvent) mintSpcEventUnknown1;
+    event[0xdc] = (MintSpcEvent) mintSpcEventAddVolume;
+    event[0xe4] = (MintSpcEvent) mintSpcEventUnknown1;
+    event[0xe6] = (MintSpcEvent) mintSpcEventUnknown1;
 
     if (seq->ver.id == SPC_VER_UNKNOWN)
         return;
