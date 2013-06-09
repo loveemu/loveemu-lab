@@ -525,7 +525,7 @@
 06e3: dw $089d  ; da
 06e5: dw $0899  ; db
 06e7: dw $0793  ; dc - add volume
-06e9: dw $08a1  ; dd
+06e9: dw $08a1  ; dd - pitch bend
 06eb: dw $091e  ; de
 06ed: dw $094a  ; df
 06ef: dw $0958  ; e0
@@ -822,7 +822,7 @@
 089d: 09 11 12  or    ($12),($11)
 08a0: 6f        ret
 
-; vcmd dd
+; vcmd dd - pitch bend
 08a1: f7 2d     mov   a,($2d)+y
 08a3: 6d        push  y
 08a4: c4 03     mov   $03,a

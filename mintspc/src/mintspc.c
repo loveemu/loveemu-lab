@@ -957,7 +957,7 @@ static void mintSpcEventNote (MintSpcSeqStat *seq, SeqEventReport *ev)
     MintSpcTrackStat *tr = &seq->track[ev->track];
     int *p = &tr->pos;
     byte noteByte = ev->code;
-    bool hasParam = (noteByte >= 0xa1 && noteByte <= 0xb0);
+    bool hasParam = (noteByte >= 0xa1 && noteByte <= 0xbf);
     int keyOffset, arg1;
     int len, key;
 
@@ -1263,6 +1263,33 @@ static void mintSpcEventEchoParam (MintSpcSeqStat *seq, SeqEventReport *ev)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
+/** vcmd cb: goto. */
+static void mintSpcEventJump (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+    int dest;
+
+    ev->size += 2;
+    arg1 = mget2l(&seq->aRAM[*p]);
+    (*p) += 2;
+
+    dest = (*p + arg1) & 0xffff;
+
+    sprintf(ev->note, "Jump, dest = $%04X", dest);
+    strcat(ev->classStr, " ev-jump");
+
+    // assumes backjump = loop
+    if (dest < *p) {
+        mintSpcAddTrackLoopCount(seq, ev->track, 1);
+    }
+    *p = dest;
+
+    //if (!mintSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
 /** set pointers of each event. */
 static void mintSpcSetEventList (MintSpcSeqStat *seq)
 {
@@ -1296,6 +1323,7 @@ static void mintSpcSetEventList (MintSpcSeqStat *seq)
     event[0xd5] = (MintSpcEvent) mintSpcEventUnknown1;
     event[0xd6] = (MintSpcEvent) mintSpcEventUnknown1;
     event[0xdc] = (MintSpcEvent) mintSpcEventAddVolume;
+    event[0xdd] = (MintSpcEvent) mintSpcEventUnknown1;
     event[0xe4] = (MintSpcEvent) mintSpcEventUnknown1;
     event[0xe6] = (MintSpcEvent) mintSpcEventUnknown1;
 
