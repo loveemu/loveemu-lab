@@ -198,6 +198,7 @@
 046a: d4 7a     mov   $7a+x,a
 046c: 6f        ret
 
+; handle note byte
 046d: 6d        push  y
 046e: c4 33     mov   $33,a
 0470: f4 8c     mov   a,$8c+x
@@ -510,8 +511,8 @@
 06c5: dw $07cd  ; cb - jump
 06c7: dw $07e8  ; cc - call subroutine
 06c9: dw $0814  ; cd - end subroutine
-06cb: dw $0827  ; ce
-06cd: dw $084d  ; cf
+06cb: dw $0827  ; ce - repeat start
+06cd: dw $084d  ; cf - repeat end
 06cf: dw $0876  ; d0
 06d1: dw $076a  ; d1 - set note key
 06d3: dw $0771  ; d2 - octave up
@@ -534,7 +535,7 @@
 06f5: dw $0785  ; e3
 06f7: dw $0739  ; e4 - set panpot from table
 06f9: dw $096b  ; e5
-06fb: dw $097a  ; e6
+06fb: dw $097a  ; e6 - set timebase
                 ; e7-ff - undefined
 
 ; vcmd d4 - rest
@@ -740,13 +741,13 @@
 0824: 8d 00     mov   y,#$00
 0826: 6f        ret
 
-; vcmd ce
+; vcmd ce - repeat start
 0827: dd        mov   a,y
 0828: 8d 00     mov   y,#$00
 082a: 7a 2d     addw  ya,$2d
-082c: da 2d     movw  $2d,ya
+082c: da 2d     movw  $2d,ya            ; skip vcmd itself
 082e: 8d 00     mov   y,#$00
-0830: f7 2d     mov   a,($2d)+y
+0830: f7 2d     mov   a,($2d)+y         ; arg1 - repeat count
 0832: 3a 2d     incw  $2d
 0834: 2d        push  a
 0835: fb 68     mov   y,$68+x
@@ -754,16 +755,16 @@
 0839: d6 46 10  mov   $1046+y,a
 083c: fc        inc   y
 083d: e4 2e     mov   a,$2e
-083f: d6 46 10  mov   $1046+y,a
+083f: d6 46 10  mov   $1046+y,a         ; save return address
 0842: fc        inc   y
 0843: ae        pop   a
-0844: d6 46 10  mov   $1046+y,a
+0844: d6 46 10  mov   $1046+y,a         ; save repeat count
 0847: fc        inc   y
 0848: db 68     mov   $68+x,y
 084a: 8d 00     mov   y,#$00
 084c: 6f        ret
 
-; vcmd cf
+; vcmd cf - repeat end
 084d: dd        mov   a,y
 084e: 8d 00     mov   y,#$00
 0850: 7a 2d     addw  ya,$2d
@@ -773,6 +774,7 @@
 0857: f6 46 10  mov   a,$1046+y
 085a: 9c        dec   a
 085b: f0 12     beq   $086f
+; repeat continue
 085d: d6 46 10  mov   $1046+y,a
 0860: dc        dec   y
 0861: f6 46 10  mov   a,$1046+y
@@ -782,7 +784,7 @@
 086a: c4 2d     mov   $2d,a
 086c: 8d 00     mov   y,#$00
 086e: 6f        ret
-
+; repeat end
 086f: dc        dec   y
 0870: dc        dec   y
 0871: db 68     mov   $68+x,y
@@ -950,7 +952,7 @@
 0978: fc        inc   y
 0979: 6f        ret
 
-; vcmd e6
+; vcmd e6 - set timebase
 097a: f7 2d     mov   a,($2d)+y
 097c: c4 43     mov   $43,a
 097e: fc        inc   y

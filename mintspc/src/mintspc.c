@@ -95,6 +95,9 @@ struct TagMintSpcTrackStat {
     MintSpcNoteParam lastNote; // note params for last note
     int looped;             // how many times looped (internal)
     int patch;              // patch number (for pitch fix)
+    byte callStack[0x100];  // subroutine stack
+    int callStackPtr;       // subroutine stack ptr
+    int callStackSize;      // subroutine stack size
     byte noteKey;           // key of note
     byte noteDur;           // duration of note
     byte noteVel;           // velocity of note
@@ -114,8 +117,9 @@ struct TagMintSpcSeqStat {
     int transpose;              // global transpose
     int looped;                 // how many times the song looped (internal)
     bool active;                // if the seq is still active
-    MintSpcVerInfo ver;       // game version info
+    MintSpcVerInfo ver;         // game version info
     MintSpcTrackStat track[MINTSPC_TRACK_MAX]; // status of each tracks
+    bool timebaseHiRes;         // internal timebase quality (1x/0.5x)
 };
 
 static void mintSpcSetEventList (MintSpcSeqStat *seq);
@@ -234,6 +238,8 @@ static void mintSpcResetTrackParam (MintSpcSeqStat *seq, int track)
     tr->noteLen = 0;
     tr->noteWaitLen = 0;
     tr->viaNoteParam = false;
+    tr->callStackPtr = 0;
+    tr->callStackSize = 0x0a;
 }
 
 /** reset before play/convert song. */
@@ -248,6 +254,8 @@ static void mintSpcResetParam (MintSpcSeqStat *seq)
     seq->transpose = 0;
     seq->looped = 0;
     seq->active = true;
+
+    seq->timebaseHiRes = false;
 
     // reset each track as well
     for (track = 0; track < MINTSPC_TRACK_MAX; track++) {
@@ -549,7 +557,7 @@ static void printEventTableFooter (MintSpcSeqStat *seq, Smf* smf)
 /** convert SPC tempo into bpm. */
 static double mintSpcTempo (MintSpcSeqStat *seq)
 {
-    return (double) seq->tempo * 60000000 / 121344000; // 121344000 = (timer0) 9.875ms * 48 TPQN * 256
+    return (double) seq->tempo * 60000000 / (121344000 / (seq->timebaseHiRes ? 2 : 1)); // 121344000 = (timer0) 9.875ms * 48 TPQN * 256
 }
 
 /** convert SPC velocity into MIDI one. */
@@ -668,8 +676,8 @@ static bool mintSpcDequeueNote (MintSpcSeqStat *seq, int track)
         int vel;
 
         dur = lastNote->dur;
-        //if (dur == 0)
-        //    dur++;
+        if (dur == 0)
+            dur++;
 
         key = lastNote->key + lastNote->transpose
             + seq->ver.patchFix[tr->lastNote.patch].key
@@ -996,7 +1004,7 @@ static void mintSpcEventNote (MintSpcSeqStat *seq, SeqEventReport *ev)
 
     // set new note
     tr->lastNote.tick = ev->tick;
-    tr->lastNote.dur = tr->noteDur;
+    tr->lastNote.dur = (tr->noteDur != 0) ? tr->noteDur : len; // TODO just a hack
     tr->lastNote.key = key;
     tr->lastNote.vel = tr->noteVel;
     tr->lastNote.transpose = seq->transpose + tr->note.transpose;
@@ -1290,6 +1298,159 @@ static void mintSpcEventJump (MintSpcSeqStat *seq, SeqEventReport *ev)
     //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
+/** vcmd cc: call subroutine. */
+static void mintSpcEventSubroutine (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+    int dest;
+
+    ev->size += 2;
+    arg1 = mget2l(&seq->aRAM[*p]);
+    (*p) += 2;
+
+    dest = (*p + arg1) & 0xffff;
+
+    sprintf(ev->note, "Call Subroutine, dest = $%04X", dest);
+    strcat(ev->classStr, " ev-call");
+
+    if (tr->callStackPtr + 2 > tr->callStackSize) {
+        fprintf(stderr, "Call Stack Access Violation, sp = %d\n", tr->callStackPtr);
+        mintSpcInactiveTrack(seq, ev->track);
+        return;
+    }
+
+    //if (!mintSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    tr->callStack[tr->callStackPtr++] = (byte)(*p);
+    tr->callStack[tr->callStackPtr++] = (byte)((*p) >> 8);
+    *p = dest;
+}
+
+/** vcmd cd: end subroutine. */
+static void mintSpcEventEndSubroutine (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    if (tr->callStackPtr == 0) {
+        fprintf(stderr, "Call Stack Access Violation, sp = %d\n", tr->callStackPtr);
+        mintSpcInactiveTrack(seq, ev->track);
+        return;
+    }
+    else {
+        sprintf(ev->note, "End Subroutine");
+        strcat(ev->classStr, " ev-ret");
+
+        if (tr->callStackPtr < 2) {
+            fprintf(stderr, "Call Stack Access Violation, sp = %d\n", tr->callStackPtr);
+            mintSpcInactiveTrack(seq, ev->track);
+            return;
+        }
+
+        tr->callStackPtr -= 2;
+        *p = mget2l(&tr->callStack[tr->callStackPtr]);
+    }
+
+    //if (!mintSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd ce: loop start. */
+static void mintSpcEventLoopStart (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Loop Start, count = %d", arg1);
+    strcat(ev->classStr, " ev-loopstart");
+
+    if (tr->callStackPtr + 3 > tr->callStackSize) {
+        fprintf(stderr, "Call Stack Access Violation, sp = %d\n", tr->callStackPtr);
+        mintSpcInactiveTrack(seq, ev->track);
+        return;
+    }
+
+    tr->callStack[tr->callStackPtr++] = (byte)(*p);
+    tr->callStack[tr->callStackPtr++] = (byte)((*p) >> 8);
+    tr->callStack[tr->callStackPtr++] = arg1;
+
+    //if (!mintSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd cf: loop end. */
+static void mintSpcEventLoopEnd (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+    byte loopCount;
+
+    sprintf(ev->note, "Loop End/Continue");
+    strcat(ev->classStr, " ev-loopend");
+
+    if (tr->callStackPtr == 0) {
+        fprintf(stderr, "Call Stack Access Violation, sp = %d\n", tr->callStackPtr);
+        mintSpcInactiveTrack(seq, ev->track);
+        return;
+    }
+
+    loopCount = tr->callStack[tr->callStackPtr - 1];
+    if (--loopCount == 0) {
+        // repeat end, fall through
+        sprintf(ev->note, "Loop End");
+        if (tr->callStackPtr < 3) {
+            fprintf(stderr, "Call Stack Access Violation, sp = %d\n", tr->callStackPtr);
+            mintSpcInactiveTrack(seq, ev->track);
+            return;
+        }
+        tr->callStackPtr -= 3;
+    }
+    else {
+        // repeat again
+        sprintf(ev->note, "Loop Continue, count = %d", loopCount);
+        tr->callStack[tr->callStackPtr - 1] = loopCount;
+        *p = mget2l(&tr->callStack[tr->callStackPtr - 3]);
+    }
+
+    //if (!mintSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd e6: set timebase quality. */
+static void mintSpcEventTimebaseHiRes (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+    bool timebaseHiResOld = seq->timebaseHiRes;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    seq->timebaseHiRes = ((arg1 & 1) != 0);
+
+    sprintf(ev->note, "Set Timebase, doubled = %s", seq->timebaseHiRes ? "true" : "false");
+    strcat(ev->classStr, " ev-timebase");
+
+    if (!mintSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    if ((!timebaseHiResOld &&  seq->timebaseHiRes) ||
+        ( timebaseHiResOld && !seq->timebaseHiRes))
+    {
+        smfInsertTempoBPM(seq->smf, ev->tick, 0, mintSpcTempo(seq));
+    }
+}
+
 /** set pointers of each event. */
 static void mintSpcSetEventList (MintSpcSeqStat *seq)
 {
@@ -1317,6 +1478,10 @@ static void mintSpcSetEventList (MintSpcSeqStat *seq)
     event[0xc9] = (MintSpcEvent) mintSpcEventEchoOff;
     event[0xca] = (MintSpcEvent) mintSpcEventEchoParam;
     event[0xcb] = (MintSpcEvent) mintSpcEventJump;
+    event[0xcc] = (MintSpcEvent) mintSpcEventSubroutine;
+    event[0xcd] = (MintSpcEvent) mintSpcEventEndSubroutine;
+    event[0xce] = (MintSpcEvent) mintSpcEventLoopStart;
+    event[0xcf] = (MintSpcEvent) mintSpcEventLoopEnd;
     event[0xd1] = (MintSpcEvent) mintSpcEventSetNoteKey;
     event[0xd2] = (MintSpcEvent) mintSpcEventOctaveUp;
     event[0xd3] = (MintSpcEvent) mintSpcEventOctaveDown;
@@ -1326,7 +1491,7 @@ static void mintSpcSetEventList (MintSpcSeqStat *seq)
     event[0xdc] = (MintSpcEvent) mintSpcEventAddVolume;
     event[0xdd] = (MintSpcEvent) mintSpcEventUnknown1;
     event[0xe4] = (MintSpcEvent) mintSpcEventUnknown1;
-    event[0xe6] = (MintSpcEvent) mintSpcEventUnknown1;
+    event[0xe6] = (MintSpcEvent) mintSpcEventTimebaseHiRes;
 
     if (seq->ver.id == SPC_VER_UNKNOWN)
         return;
