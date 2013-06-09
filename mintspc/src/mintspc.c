@@ -1484,6 +1484,7 @@ static void mintSpcSetEventList (MintSpcSeqStat *seq)
     event[0xcd] = (MintSpcEvent) mintSpcEventEndSubroutine;
     event[0xce] = (MintSpcEvent) mintSpcEventLoopStart;
     event[0xcf] = (MintSpcEvent) mintSpcEventLoopEnd;
+    event[0xd0] = (MintSpcEvent) mintSpcEventUnknown0;
     event[0xd1] = (MintSpcEvent) mintSpcEventSetNoteKey;
     event[0xd2] = (MintSpcEvent) mintSpcEventOctaveUp;
     event[0xd3] = (MintSpcEvent) mintSpcEventOctaveDown;
