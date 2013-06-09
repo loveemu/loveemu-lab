@@ -58,7 +58,7 @@ enum {
 #define SPC_NOTE_KEYSHIFT   24
 #define SPC_ARAM_SIZE       0x10000
 
-#define MINTSPC_TRACK_MAX   10
+#define MINTSPC_TRACK_MAX   16
 
 typedef struct TagMintSpcTrackStat MintSpcTrackStat;
 typedef struct TagMintSpcSeqStat MintSpcSeqStat;
