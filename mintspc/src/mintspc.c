@@ -1472,8 +1472,10 @@ static void mintSpcSetEventList (MintSpcSeqStat *seq)
     event[0xc1] = (MintSpcEvent) mintSpcEventPanpot;
     event[0xc2] = (MintSpcEvent) mintSpcEventUnknown1;
     event[0xc3] = (MintSpcEvent) mintSpcEventSetTempo;
+    event[0xc4] = (MintSpcEvent) mintSpcEventUnknown1;
     event[0xc5] = (MintSpcEvent) mintSpcEventVolume;
     event[0xc6] = (MintSpcEvent) mintSpcEventUnknown1;
+    event[0xc7] = (MintSpcEvent) mintSpcEventUnknown1;
     event[0xc8] = (MintSpcEvent) mintSpcEventEchoOn;
     event[0xc9] = (MintSpcEvent) mintSpcEventEchoOff;
     event[0xca] = (MintSpcEvent) mintSpcEventEchoParam;
@@ -1488,9 +1490,20 @@ static void mintSpcSetEventList (MintSpcSeqStat *seq)
     event[0xd4] = (MintSpcEvent) mintSpcEventRest;
     event[0xd5] = (MintSpcEvent) mintSpcEventUnknown1;
     event[0xd6] = (MintSpcEvent) mintSpcEventUnknown1;
+    event[0xd7] = (MintSpcEvent) mintSpcEventUnknown1;
+    event[0xd8] = (MintSpcEvent) mintSpcEventUnknown1;
+    event[0xd9] = (MintSpcEvent) mintSpcEventUnknown1;
+    event[0xda] = (MintSpcEvent) mintSpcEventUnknown0;
+    event[0xdb] = (MintSpcEvent) mintSpcEventUnknown0;
     event[0xdc] = (MintSpcEvent) mintSpcEventAddVolume;
     event[0xdd] = (MintSpcEvent) mintSpcEventUnknown1;
+    event[0xdf] = (MintSpcEvent) mintSpcEventUnknown1;
+    event[0xe0] = (MintSpcEvent) mintSpcEventUnknown1;
+    event[0xe1] = (MintSpcEvent) mintSpcEventUnknown1;
+    event[0xe2] = (MintSpcEvent) mintSpcEventUnknown1;
+    event[0xe3] = (MintSpcEvent) mintSpcEventUnknown1;
     event[0xe4] = (MintSpcEvent) mintSpcEventUnknown1;
+    event[0xe5] = (MintSpcEvent) mintSpcEventUnknown1;
     event[0xe6] = (MintSpcEvent) mintSpcEventTimebaseHiRes;
 
     if (seq->ver.id == SPC_VER_UNKNOWN)
