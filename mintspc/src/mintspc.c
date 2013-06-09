@@ -55,10 +55,10 @@ enum {
 
 // any changes are not needed normally
 #define SPC_TRACK_MAX       8
-#define SPC_NOTE_KEYSHIFT   24
+#define SPC_NOTE_KEYSHIFT   12
 #define SPC_ARAM_SIZE       0x10000
 
-#define MINTSPC_TRACK_MAX   16
+#define MINTSPC_TRACK_MAX   10
 
 typedef struct TagMintSpcTrackStat MintSpcTrackStat;
 typedef struct TagMintSpcSeqStat MintSpcSeqStat;
@@ -93,9 +93,14 @@ struct TagMintSpcTrackStat {
     int prevTick;           // previous timing (for pitch slide)
     MintSpcNoteParam note;     // current note param
     MintSpcNoteParam lastNote; // note params for last note
-    int lastNoteLen;        // last note length ($0230+x)
     int looped;             // how many times looped (internal)
     int patch;              // patch number (for pitch fix)
+    byte noteKey;           // key of note
+    byte noteDur;           // duration of note
+    byte noteVel;           // velocity of note
+    byte noteLen;           // note length
+    byte noteWaitLen;       // actual wait amount (tick)
+    bool viaNoteParam;      // previous vcmd is note param
     byte volume;            // voice volume
 };
 
@@ -220,10 +225,15 @@ static void mintSpcResetTrackParam (MintSpcSeqStat *seq, int track)
     tr->used = false;
     tr->prevTick = tr->tick;
     tr->looped = 0;
+    tr->noteKey = 0;
+    tr->noteDur = 0;
+    tr->noteVel = 0;
     tr->volume = 200;
     tr->note.transpose = 0;
     tr->lastNote.active = false;
-    tr->lastNoteLen = 0;
+    tr->noteLen = 0;
+    tr->noteWaitLen = 0;
+    tr->viaNoteParam = false;
 }
 
 /** reset before play/convert song. */
@@ -539,7 +549,7 @@ static void printEventTableFooter (MintSpcSeqStat *seq, Smf* smf)
 /** convert SPC tempo into bpm. */
 static double mintSpcTempo (MintSpcSeqStat *seq)
 {
-    return (double) seq->tempo * 60000000 / 12134400; // 12134400 = (timer0) 9.875ms * 100 * 48 TPQN * 256
+    return (double) seq->tempo * 60000000 / 121344000; // 121344000 = (timer0) 9.875ms * 48 TPQN * 256
 }
 
 /** convert SPC velocity into MIDI one. */
@@ -593,7 +603,7 @@ static Smf *mintSpcCreateSmf (MintSpcSeqStat *seq)
     smfInsertTempoBPM(smf, 0, 0, mintSpcTempo(seq));
 
     // put track name first
-    for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
+    for (tr = 0; tr < MINTSPC_TRACK_MAX; tr++) {
         if (!seq->track[tr].active)
             continue;
 
@@ -602,14 +612,14 @@ static Smf *mintSpcCreateSmf (MintSpcSeqStat *seq)
     }
 
     // put initial info for each track
-    for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
+    for (tr = 0; tr < MINTSPC_TRACK_MAX; tr++) {
         if (!seq->track[tr].active)
             continue;
 
         //smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_VOLUME, mintSpcMidiVolOf(seq->track[tr].volume));
         smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_REVERB, 0);
         //smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_RELEASETIME, 64 + 6);
-        smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_MONO, 127);
+        //smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_MONO, 127);
     }
     return smf;
 }
@@ -640,7 +650,7 @@ static void mintSpcTruncateNoteAll (MintSpcSeqStat *seq)
 {
     int tr;
 
-    for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
+    for (tr = 0; tr < MINTSPC_TRACK_MAX; tr++) {
         mintSpcTruncateNote(seq, tr);
     }
 }
@@ -658,17 +668,20 @@ static bool mintSpcDequeueNote (MintSpcSeqStat *seq, int track)
         int vel;
 
         dur = lastNote->dur;
-        if (dur == 0)
-            dur++;
+        //if (dur == 0)
+        //    dur++;
 
         key = lastNote->key + lastNote->transpose
             + seq->ver.patchFix[tr->lastNote.patch].key
             + SPC_NOTE_KEYSHIFT;
-        vel = lastNote->vel;
+        vel = mintSpcMidiVelOf(lastNote->vel);
         if (vel == 0)
             vel++;
 
-        result = smfInsertNote(seq->smf, lastNote->tick, track, track, key, vel, dur);
+        if (dur != 0)
+        {
+            result = smfInsertNote(seq->smf, lastNote->tick, track, track, key, vel, dur);
+        }
         lastNote->active = false;
     }
     return result;
@@ -679,7 +692,7 @@ static void mintSpcDequeueNoteAll (MintSpcSeqStat *seq)
 {
     int tr;
 
-    for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
+    for (tr = 0; tr < MINTSPC_TRACK_MAX; tr++) {
         mintSpcDequeueNote(seq, tr);
     }
 }
@@ -690,7 +703,7 @@ static void mintSpcInactiveTrack(MintSpcSeqStat *seq, int track)
     int tr;
 
     seq->track[track].active = false;
-    for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
+    for (tr = 0; tr < MINTSPC_TRACK_MAX; tr++) {
         if (seq->track[tr].active)
             return;
     }
@@ -704,7 +717,7 @@ static void mintSpcAddTrackLoopCount(MintSpcSeqStat *seq, int track, int count)
 
     seq->track[track].looped += count;
     seq->looped = (mintSpcLoopMax > 0) ? mintSpcLoopMax : 0xffff;
-    for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
+    for (tr = 0; tr < MINTSPC_TRACK_MAX; tr++) {
         if (seq->track[tr].active)
             seq->looped = min(seq->looped, seq->track[tr].looped);
     }
@@ -720,7 +733,7 @@ static void mintSpcSeqAdvTick(MintSpcSeqStat *seq)
     int minTickStep = 0;
     int tr;
 
-    for (tr = SPC_TRACK_MAX - 1; tr >= 0; tr--) {
+    for (tr = MINTSPC_TRACK_MAX - 1; tr >= 0; tr--) {
         if (seq->track[tr].active) {
             if (minTickStep == 0)
                 minTickStep = seq->track[tr].tick - seq->tick;
@@ -880,6 +893,259 @@ static void mintSpcEventNOP (MintSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
     sprintf(ev->note, "NOP");
 }
 
+/** vcmd 00-7f: set note param. */
+static void mintSpcEventNoteParam (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+    byte noteByte = ev->code;
+    int arg1, arg2;
+
+    // read arguments (variable length)
+    if (seq->aRAM[*p] <= 0x7f)
+    {
+        ev->size++;
+        arg1 = seq->aRAM[*p];
+        (*p)++;
+
+        if (seq->aRAM[*p] <= 0x7f)
+        {
+            ev->size++;
+            arg2 = seq->aRAM[*p];
+            (*p)++;
+        }
+    }
+
+    if (ev->size > 1)
+    {
+        tr->noteDur = arg1;
+
+        if (ev->size > 2)
+        {
+            tr->noteVel = arg2;
+        }
+    }
+
+    sprintf(ev->note, "Note Param, len = %d", noteByte);
+    if (ev->size > 1)
+    {
+        sprintf(argDumpStr, ", dur = %d", arg1);
+        strcat(ev->note, argDumpStr);
+    }
+    if (ev->size > 2)
+    {
+        sprintf(argDumpStr, ", arg2 = %d", arg2);
+        strcat(ev->note, argDumpStr);
+    }
+    strcat(ev->classStr, " ev-note");
+
+    //if (!mintSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    // note: do not add tr->tick here, because
+    // wait occurs just after the next vcmd (must be 80-ff)
+    if (noteByte != 0)
+    {
+        tr->noteLen = noteByte;
+        tr->noteWaitLen = tr->noteLen;
+    }
+}
+
+/** vcmd 80-b0, b1-bf: note. */
+static void mintSpcEventNote (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+    byte noteByte = ev->code;
+    bool hasParam = (noteByte >= 0xa1 && noteByte <= 0xb0);
+    int keyOffset, arg1;
+    int len, key;
+
+    keyOffset = noteByte & 0x1f;
+
+    len = tr->noteLen;
+    key = tr->noteKey + keyOffset;
+
+    if (hasParam)
+    {
+        ev->size++;
+        arg1 = seq->aRAM[*p];
+        (*p)++;
+
+        if (arg1 <= 0x7f)
+        {
+            tr->noteDur = arg1;
+            strcat(ev->note, argDumpStr);
+        }
+        else
+        {
+            tr->noteVel = (arg1 & 0x7f);
+        }
+    }
+    getNoteName(argDumpStr, key + seq->transpose + tr->note.transpose
+        + seq->ver.patchFix[tr->note.patch].key
+        + SPC_NOTE_KEYSHIFT);
+    sprintf(ev->note, "%s, len = %d, dur = %d, vel = %d", argDumpStr, len, tr->noteDur, tr->noteVel);
+    strcat(ev->classStr, " ev-note");
+
+    //if (!mintSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    // output old note first
+    mintSpcDequeueNote(seq, ev->track);
+
+    // set new note
+    tr->lastNote.tick = ev->tick;
+    tr->lastNote.dur = tr->noteDur;
+    tr->lastNote.key = key;
+    tr->lastNote.vel = tr->noteVel;
+    tr->lastNote.transpose = seq->transpose + tr->note.transpose;
+    tr->lastNote.patch = tr->note.patch;
+    tr->lastNote.tied = false;
+    tr->lastNote.active = true;
+
+    // prevent double processing
+    if (!tr->viaNoteParam)
+    {
+        tr->noteWaitLen = len;
+    }
+}
+
+/** vcmd d1: set note key. */
+static void mintSpcEventSetNoteKey (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    tr->noteKey = arg1;
+
+    getNoteName(argDumpStr, tr->noteKey + seq->transpose + tr->note.transpose
+        + seq->ver.patchFix[tr->note.patch].key
+        + SPC_NOTE_KEYSHIFT);
+    sprintf(ev->note, "Set Note Key, key = %s", argDumpStr);
+    strcat(ev->classStr, " ev-notekey");
+
+    //if (!mintSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd d2: octave up. */
+static void mintSpcEventOctaveUp (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    tr->noteKey += 12;
+
+    getNoteName(argDumpStr, tr->noteKey + seq->transpose + tr->note.transpose
+        + seq->ver.patchFix[tr->note.patch].key
+        + SPC_NOTE_KEYSHIFT);
+    sprintf(ev->note, "Octave Up, key = %s", argDumpStr);
+    strcat(ev->classStr, " ev-octaveup");
+
+    //if (!mintSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd d3: octave down. */
+static void mintSpcEventOctaveDown (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    tr->noteKey -= 12;
+
+    getNoteName(argDumpStr, tr->noteKey + seq->transpose + tr->note.transpose
+        + seq->ver.patchFix[tr->note.patch].key
+        + SPC_NOTE_KEYSHIFT);
+    sprintf(ev->note, "Octave Down, key = %s", argDumpStr);
+    strcat(ev->classStr, " ev-octavedown");
+
+    //if (!mintSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd d4: rest. */
+static void mintSpcEventRest (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    tr->noteWaitLen = tr->noteLen;
+
+    sprintf(ev->note, "Rest, len = %d", tr->noteWaitLen);
+    strcat(ev->classStr, " ev-rest");
+
+    //if (!mintSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd c0: set instrument. */
+static void mintSpcEventInstrument (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+    int instrItemAddr;
+
+    ev->size += 2;
+    arg1 = mget2l(&seq->aRAM[*p]);
+    (*p) += 2;
+
+    instrItemAddr = (*p + arg1) & 0xffff;
+
+    sprintf(ev->note, "Set Instrument, patch = $%04X", instrItemAddr);
+    strcat(ev->classStr, " ev-patch");
+
+    if (!mintSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd c1: set panpot. */
+static void mintSpcEventPanpot (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    if (arg1 >= 0)
+    {
+        sprintf(ev->note, "Panpot, balance = %d/32", arg1);
+
+        if (arg1 <= 32)
+        {
+            int panValue = arg1 * 4;
+            if (panValue > 127)
+            {
+                panValue = 127;
+            }
+            smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_PANPOT, panValue);
+        }
+        else
+        {
+            if (!mintSpcLessTextInSMF)
+                smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+        }
+    }
+    else
+    {
+        sprintf(ev->note, "Panpot, balance = (random)");
+
+        if (!mintSpcLessTextInSMF)
+            smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+    }
+    strcat(ev->classStr, " ev-pan");
+}
+
 /** vcmd c3: set tempo. */
 static void mintSpcEventSetTempo (MintSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -891,19 +1157,12 @@ static void mintSpcEventSetTempo (MintSpcSeqStat *seq, SeqEventReport *ev)
     arg1 = seq->aRAM[*p];
     (*p)++;
 
+    seq->tempo = arg1;
+
     sprintf(ev->note, "Set Tempo, tempo = %d (bpm %.1f)", arg1, mintSpcTempo(seq));
     strcat(ev->classStr, " ev-tempo");
 
-    if (ev->track == 0)
-    {
-        seq->tempo = arg1;
-        smfInsertTempoBPM(seq->smf, ev->tick, 0, mintSpcTempo(seq));
-    }
-    else
-    {
-        if (!mintSpcLessTextInSMF)
-            smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
-    }
+    smfInsertTempoBPM(seq->smf, ev->tick, 0, mintSpcTempo(seq));
 }
 
 /** vcmd c5: set volume. */
@@ -1015,12 +1274,14 @@ static void mintSpcSetEventList (MintSpcSeqStat *seq)
         event[code] = (MintSpcEvent) mintSpcEventUnidentified;
     }
 
-    // TODO: assign events
-    for(code = 0x00; code <= 0xbf; code++) {
-        event[code] = (MintSpcEvent) mintSpcEventUnidentified;
+    for (code = 0x00; code <= 0x7f; code++) {
+        event[code] = (MintSpcEvent) mintSpcEventNoteParam;
     }
-    event[0xc0] = (MintSpcEvent) mintSpcEventUnknown2;
-    event[0xc1] = (MintSpcEvent) mintSpcEventUnknown1;
+    for (code = 0x80; code <= 0xbf; code++) {
+        event[code] = (MintSpcEvent) mintSpcEventNote;
+    }
+    event[0xc0] = (MintSpcEvent) mintSpcEventInstrument;
+    event[0xc1] = (MintSpcEvent) mintSpcEventPanpot;
     event[0xc2] = (MintSpcEvent) mintSpcEventUnknown1;
     event[0xc3] = (MintSpcEvent) mintSpcEventSetTempo;
     event[0xc5] = (MintSpcEvent) mintSpcEventVolume;
@@ -1028,7 +1289,12 @@ static void mintSpcSetEventList (MintSpcSeqStat *seq)
     event[0xc8] = (MintSpcEvent) mintSpcEventEchoOn;
     event[0xc9] = (MintSpcEvent) mintSpcEventEchoOff;
     event[0xca] = (MintSpcEvent) mintSpcEventEchoParam;
+    event[0xd1] = (MintSpcEvent) mintSpcEventSetNoteKey;
+    event[0xd2] = (MintSpcEvent) mintSpcEventOctaveUp;
+    event[0xd3] = (MintSpcEvent) mintSpcEventOctaveDown;
+    event[0xd4] = (MintSpcEvent) mintSpcEventRest;
     event[0xd5] = (MintSpcEvent) mintSpcEventUnknown1;
+    event[0xd6] = (MintSpcEvent) mintSpcEventUnknown1;
     event[0xdc] = (MintSpcEvent) mintSpcEventAddVolume;
     event[0xe4] = (MintSpcEvent) mintSpcEventUnknown1;
     event[0xe6] = (MintSpcEvent) mintSpcEventUnknown1;
@@ -1083,7 +1349,7 @@ Smf* mintSpcARAMToMidi (const byte *aRAM)
 
         SeqEventReport ev;
 
-        for (ev.track = 0; ev.track < SPC_TRACK_MAX; ev.track++) {
+        for (ev.track = 0; ev.track < MINTSPC_TRACK_MAX; ev.track++) {
 
             MintSpcTrackStat *evtr = &seq->track[ev.track];
 
@@ -1112,6 +1378,17 @@ Smf* mintSpcARAMToMidi (const byte *aRAM)
                 evtr->used = true;
                 // dispatch event
                 seq->ver.event[ev.code](seq, &ev);
+                // add tick (mintspc-specific)
+                if (seq->ver.event[ev.code] != mintSpcEventNoteParam)
+                {
+                    evtr->tick += evtr->noteWaitLen;
+                    evtr->noteWaitLen = 0;
+                    evtr->viaNoteParam = false;
+                }
+                else
+                {
+                    evtr->viaNoteParam = true;
+                }
 
                 // dump event report
                 if (mintSpcTextLoopMax == 0 || seq->looped < mintSpcTextLoopMax)
@@ -1127,7 +1404,7 @@ Smf* mintSpcARAMToMidi (const byte *aRAM)
         // end of seq, quit
         if (!seq->active) {
             // rewind tracks to end point
-            for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
+            for (tr = 0; tr < MINTSPC_TRACK_MAX; tr++) {
                 seq->track[tr].tick = seq->tick;
                 if (seq->track[tr].used)
                     smfSetEndTimingOfTrack(seq->smf, tr, seq->tick);

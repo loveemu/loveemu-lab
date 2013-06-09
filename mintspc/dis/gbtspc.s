@@ -19,7 +19,7 @@
 0304: e8 04     mov   a,#$04
 0306: 3f f4 0f  call  $0ff4
 0309: 3f bf 0f  call  $0fbf
-030c: 8d 64     mov   y,#$64            ; timer scaler for tick generator (100)
+030c: 8d 64     mov   y,#$64
 030e: e4 fd     mov   a,$fd
 0310: f0 fc     beq   $030e
 0312: dc        dec   y
@@ -138,55 +138,60 @@
 0402: 8d 00     mov   y,#$00
 0404: f7 2d     mov   a,($2d)+y
 0406: 30 1d     bmi   $0425
-0408: f0 03     beq   $040d
-040a: d5 a2 02  mov   $02a2+x,a
-040d: 3f 66 04  call  $0466
+0408: f0 03     beq   $040d             ; vcmd 00 - keep note length
+; vcmd 00-7f - set note params
+040a: d5 a2 02  mov   $02a2+x,a         ; set note length (vcmd itself)
+040d: 3f 66 04  call  $0466             ; set wait counter
 0410: fc        inc   y
 0411: f7 2d     mov   a,($2d)+y
-0413: 30 0e     bmi   $0423
-0415: d5 2c 02  mov   $022c+x,a
+0413: 30 0e     bmi   $0423             ; arg1 must be in [00...7f]
+0415: d5 2c 02  mov   $022c+x,a         ; arg1 - duration
 0418: fc        inc   y
 0419: f7 2d     mov   a,($2d)+y
-041b: 30 06     bmi   $0423
-041d: d5 d2 00  mov   $00d2+x,a
+041b: 30 06     bmi   $0423             ; arg2 must be in [00...7f]
+041d: d5 d2 00  mov   $00d2+x,a         ; arg2 - velocity
 0420: fc        inc   y
 0421: f7 2d     mov   a,($2d)+y
-0423: 2f 08     bra   $042d
+0423: 2f 08     bra   $042d             ; dispatch next vcmd (must be 80-ff) with no wait
+; (80-ff)
 0425: 2d        push  a
-0426: f5 a2 02  mov   a,$02a2+x
-0429: 3f 66 04  call  $0466
+0426: f5 a2 02  mov   a,$02a2+x         ; get last note length
+0429: 3f 66 04  call  $0466             ; set wait counter
 042c: ae        pop   a
 042d: fc        inc   y
 042e: 68 c0     cmp   a,#$c0
 0430: b0 1c     bcs   $044e
 0432: 68 a0     cmp   a,#$a0
 0434: 90 11     bcc   $0447
+; vcmd a1-bf - note with param
 0436: 2d        push  a
 0437: f7 2d     mov   a,($2d)+y
 0439: 10 07     bpl   $0442
 043b: 28 7f     and   a,#$7f
-043d: d5 d2 00  mov   $00d2+x,a
+043d: d5 d2 00  mov   $00d2+x,a         ; (80-ff) velocity
 0440: 2f 03     bra   $0445
-0442: d5 2c 02  mov   $022c+x,a
+0442: d5 2c 02  mov   $022c+x,a         ; (00-7f) duration
 0445: fc        inc   y
 0446: ae        pop   a
-0447: 28 1f     and   a,#$1f
+; vcmd 80-a0 - note
+0447: 28 1f     and   a,#$1f            ; key (see vcmd d1-d3)
 0449: 3f 6d 04  call  $046d
 044c: 2f 09     bra   $0457
+; (c0-ff)
 044e: 2d        push  a
 044f: e8 00     mov   a,#$00
 0451: d4 7a     mov   $7a+x,a
 0453: ae        pop   a
 0454: 3f 9d 06  call  $069d             ; dispatch vcmd (c0-ff)
 0457: f4 7a     mov   a,$7a+x
-0459: f0 a9     beq   $0404
+0459: f0 a9     beq   $0404             ; continue if wait counter is not set
 045b: dd        mov   a,y
 045c: 8d 00     mov   y,#$00
 045e: 7a 2d     addw  ya,$2d            ; skip Y bytes
 0460: d4 44     mov   $44+x,a
 0462: dd        mov   a,y
-0463: d4 56     mov   $56+x,a           ; update
-0465: 6f        ret
+0463: d4 56     mov   $56+x,a           ; update voice ptr
+0465: 6f        ret                     ; process next track
 
 0466: 13 43 01  bbc0  $43,$046a
 0469: 5c        lsr   a
@@ -491,8 +496,8 @@
 06ac: eb 02     mov   y,$02
 06ae: 6f        ret
 
-06af: dw $0704  ; c0
-06b1: dw $0735  ; c1
+06af: dw $0704  ; c0 - set instrument
+06b1: dw $0735  ; c1 - set panpot
 06b3: dw $074c  ; c2
 06b5: dw $0754  ; c3 - set tempo
 06b7: dw $0763  ; c4
@@ -508,10 +513,10 @@
 06cb: dw $0827  ; ce
 06cd: dw $084d  ; cf
 06cf: dw $0876  ; d0
-06d1: dw $076a  ; d1
-06d3: dw $0771  ; d2
-06d5: dw $077b  ; d3
-06d7: dw $06fd  ; d4
+06d1: dw $076a  ; d1 - set note key
+06d3: dw $0771  ; d2 - octave up
+06d5: dw $077b  ; d3 - octave down
+06d7: dw $06fd  ; d4 - rest
 06d9: dw $0884  ; d5
 06db: dw $0892  ; d6
 06dd: dw $0911  ; d7
@@ -527,17 +532,17 @@
 06f1: dw $095c  ; e1
 06f3: dw $0901  ; e2
 06f5: dw $0785  ; e3
-06f7: dw $0739  ; e4
+06f7: dw $0739  ; e4 - set panpot from table
 06f9: dw $096b  ; e5
 06fb: dw $097a  ; e6
                 ; e7-ff - undefined
 
-; vcmd d4
+; vcmd d4 - rest
 06fd: f5 a2 02  mov   a,$02a2+x
 0700: 3f 66 04  call  $0466
 0703: 6f        ret
 
-; vcmd c0
+; vcmd c0 - set instrument
 0704: dd        mov   a,y
 0705: 8d 00     mov   y,#$00
 0707: 7a 2d     addw  ya,$2d
@@ -559,16 +564,16 @@
 0724: d4 8c     mov   $8c+x,a
 0726: 3a 02     incw  $02
 0728: e4 02     mov   a,$02
-072a: d5 36 02  mov   $0236+x,a
+072a: d5 36 02  mov   $0236+x,a         ; set instrument address (lo)
 072d: e4 03     mov   a,$03
-072f: d5 48 02  mov   $0248+x,a
+072f: d5 48 02  mov   $0248+x,a         ; set instrument address (hi)
 0732: 8d 00     mov   y,#$00            ; prevent to skip more bytes
 0734: 6f        ret
 
-; vcmd c1
+; vcmd c1 - set panpot
 0735: f7 2d     mov   a,($2d)+y
 0737: 2f 08     bra   $0741
-; vcmd e4
+; vcmd e4 - set panpot from table
 0739: 6d        push  y
 073a: f7 2d     mov   a,($2d)+y
 073c: fd        mov   y,a
@@ -606,20 +611,20 @@
 0768: fc        inc   y
 0769: 6f        ret
 
-; vcmd d1
+; vcmd d1 - set note key
 076a: f7 2d     mov   a,($2d)+y
 076c: fc        inc   y
 076d: d5 5a 02  mov   $025a+x,a
 0770: 6f        ret
 
-; vcmd d2
+; vcmd d2 - octave up
 0771: f5 5a 02  mov   a,$025a+x
 0774: 60        clrc
 0775: 88 0c     adc   a,#$0c
 0777: d5 5a 02  mov   $025a+x,a
 077a: 6f        ret
 
-; vcmd d3
+; vcmd d3 - octave down
 077b: f5 5a 02  mov   a,$025a+x
 077e: 80        setc
 077f: a8 0c     sbc   a,#$0c
