@@ -16,7 +16,7 @@
 
 #define APPNAME "Mint SPC2MIDI"
 #define APPSHORTNAME "mintspc"
-#define VERSION "[2013-06-09]"
+#define VERSION "[2013-06-10]"
 
 static int mintSpcLoopMax = 2;            // maximum loop count of parser
 static int mintSpcTextLoopMax = 1;        // maximum loop count of text output
@@ -965,14 +965,25 @@ static void mintSpcEventNote (MintSpcSeqStat *seq, SeqEventReport *ev)
     MintSpcTrackStat *tr = &seq->track[ev->track];
     int *p = &tr->pos;
     byte noteByte = ev->code;
-    bool hasParam = (noteByte >= 0xa1 && noteByte <= 0xbf);
+    bool hasParam = (noteByte >= 0xa0 && noteByte <= 0xbf);
     int keyOffset, arg1;
-    int len, key;
+    int len, key, dur;
+    bool tieNote;
+    bool tie;
 
     keyOffset = noteByte & 0x1f;
 
     len = tr->noteLen;
     key = tr->noteKey + keyOffset;
+    tieNote = (tr->noteDur == 0);
+    dur = tieNote ? len : tr->noteDur;
+    if (dur > len)
+    {
+        dur = len; // really? I thought so when I listen Nanako's Theme of Gokinjo Bouken Tai
+    }
+
+    tie = (tr->lastNote.active && tr->lastNote.tied &&
+        tr->lastNote.key == key);
 
     if (hasParam)
     {
@@ -993,23 +1004,35 @@ static void mintSpcEventNote (MintSpcSeqStat *seq, SeqEventReport *ev)
     getNoteName(argDumpStr, key + seq->transpose + tr->note.transpose
         + seq->ver.patchFix[tr->note.patch].key
         + SPC_NOTE_KEYSHIFT);
-    sprintf(ev->note, "%s, len = %d, dur = %d, vel = %d", argDumpStr, len, tr->noteDur, tr->noteVel);
+    sprintf(ev->note, "%s, len = %d, dur = %d%s, vel = %d", argDumpStr, len, dur, tieNote ? " (tie)" : "", tr->noteVel);
     strcat(ev->classStr, " ev-note");
 
-    //if (!mintSpcLessTextInSMF)
-    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+    if (tieNote)
+    {
+        if (!mintSpcLessTextInSMF)
+            smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+    }
 
     // output old note first
-    mintSpcDequeueNote(seq, ev->track);
+    tie = false; // TODO: NYI because the current mechanism cannot support chords
+    if (!tie)
+    {
+        mintSpcDequeueNote(seq, ev->track);
+    }
 
     // set new note
-    tr->lastNote.tick = ev->tick;
-    tr->lastNote.dur = (tr->noteDur != 0) ? tr->noteDur : len; // TODO just a hack
-    tr->lastNote.key = key;
-    tr->lastNote.vel = tr->noteVel;
-    tr->lastNote.transpose = seq->transpose + tr->note.transpose;
-    tr->lastNote.patch = tr->note.patch;
-    tr->lastNote.tied = false;
+    if (tie) {
+        tr->lastNote.dur += dur;
+    }
+    else {
+        tr->lastNote.tick = ev->tick;
+        tr->lastNote.dur = dur;
+        tr->lastNote.key = key;
+        tr->lastNote.vel = tr->noteVel;
+        tr->lastNote.transpose = seq->transpose + tr->note.transpose;
+        tr->lastNote.patch = tr->note.patch;
+    }
+    tr->lastNote.tied = tieNote;
     tr->lastNote.active = true;
 
     // prevent double processing
@@ -1424,6 +1447,21 @@ static void mintSpcEventLoopEnd (MintSpcSeqStat *seq, SeqEventReport *ev)
     //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
+/** vcmd d0: end of track. */
+static void mintSpcEventEndOfTrack (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    sprintf(ev->note, "End of Track");
+    strcat(ev->classStr, " ev-end");
+
+    mintSpcInactiveTrack(seq, ev->track);
+
+    //if (!mintSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
 /** vcmd e6: set timebase quality. */
 static void mintSpcEventTimebaseHiRes (MintSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -1484,7 +1522,7 @@ static void mintSpcSetEventList (MintSpcSeqStat *seq)
     event[0xcd] = (MintSpcEvent) mintSpcEventEndSubroutine;
     event[0xce] = (MintSpcEvent) mintSpcEventLoopStart;
     event[0xcf] = (MintSpcEvent) mintSpcEventLoopEnd;
-    event[0xd0] = (MintSpcEvent) mintSpcEventUnknown0;
+    event[0xd0] = (MintSpcEvent) mintSpcEventEndOfTrack;
     event[0xd1] = (MintSpcEvent) mintSpcEventSetNoteKey;
     event[0xd2] = (MintSpcEvent) mintSpcEventOctaveUp;
     event[0xd3] = (MintSpcEvent) mintSpcEventOctaveDown;

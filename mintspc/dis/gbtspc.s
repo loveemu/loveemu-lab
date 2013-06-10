@@ -163,7 +163,7 @@
 0430: b0 1c     bcs   $044e
 0432: 68 a0     cmp   a,#$a0
 0434: 90 11     bcc   $0447
-; vcmd a1-bf - note with param
+; vcmd a0-bf - note with param
 0436: 2d        push  a
 0437: f7 2d     mov   a,($2d)+y
 0439: 10 07     bpl   $0442
@@ -173,7 +173,7 @@
 0442: d5 2c 02  mov   $022c+x,a         ; (00-7f) duration
 0445: fc        inc   y
 0446: ae        pop   a
-; vcmd 80-a0 - note
+; vcmd 80-9f - note
 0447: 28 1f     and   a,#$1f            ; key (see vcmd d1-d3)
 0449: 3f 6d 04  call  $046d
 044c: 2f 09     bra   $0457
