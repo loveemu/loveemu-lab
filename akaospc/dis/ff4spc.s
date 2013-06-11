@@ -1,40 +1,40 @@
-0800: 20        clrp
-0801: c0        di
+0800: 20        clrp                    ; clear direct page flag
+0801: c0        di                      ; disable interrupts
 0802: cd cf     mov   x,#$cf
-0804: bd        mov   sp,x
+0804: bd        mov   sp,x              ; set stack pointer to $CF
 0805: e8 00     mov   a,#$00
 0807: 5d        mov   x,a
 0808: af        mov   (x)+,a
-0809: c8 e0     cmp   x,#$e0
+0809: c8 e0     cmp   x,#$e0            ; zero $00-$DF
 080b: d0 fb     bne   $0808
 080d: a2 8a     set5  $8a
-080f: 8f 01 7a  mov   $7a,#$01
+080f: 8f 01 7a  mov   $7a,#$01          ; set $7A to #$01
 0812: 3f 82 10  call  $1082
 0815: e8 00     mov   a,#$00
 0817: 8d 0c     mov   y,#$0c
-0819: 3f e9 10  call  $10e9
+0819: 3f e9 10  call  $10e9             ; set master volume L = 0
 081c: 8d 1c     mov   y,#$1c
-081e: 3f e9 10  call  $10e9
+081e: 3f e9 10  call  $10e9             ; set master volume R = 0
 0821: 8d 2d     mov   y,#$2d
-0823: 3f e9 10  call  $10e9
+0823: 3f e9 10  call  $10e9             ; clear pitch mod bits
 0826: 8d 3d     mov   y,#$3d
-0828: 3f e9 10  call  $10e9
+0828: 3f e9 10  call  $10e9             ; clear noise bits
 082b: e8 1e     mov   a,#$1e
 082d: 8d 5d     mov   y,#$5d
-082f: 3f e9 10  call  $10e9
+082f: 3f e9 10  call  $10e9             ; set sample directory to $1E00
 0832: e8 f0     mov   a,#$f0
-0834: c4 f1     mov   $f1,a
+0834: c4 f1     mov   $f1,a             ; clear ports, stop timers
 0836: e8 24     mov   a,#$24
-0838: c4 fa     mov   $fa,a
+0838: c4 fa     mov   $fa,a             ; set timer 0 latch to #$24 (222.2 Hz)
 083a: e8 80     mov   a,#$80
-083c: c4 fb     mov   $fb,a
+083c: c4 fb     mov   $fb,a             ; set timer 1 latch to #$80 (62.5 Hz)
 083e: e8 03     mov   a,#$03
-0840: c4 f1     mov   $f1,a
+0840: c4 f1     mov   $f1,a             ; start timers 0 and 1
 0842: e8 40     mov   a,#$40
 0844: 8d 0c     mov   y,#$0c
-0846: 3f e9 10  call  $10e9
+0846: 3f e9 10  call  $10e9             ; set master volume L = 50%
 0849: 8d 1c     mov   y,#$1c
-084b: 3f e9 10  call  $10e9
+084b: 3f e9 10  call  $10e9             ; set master volume R = 50%
 084e: e8 00     mov   a,#$00
 0850: c5 01 02  mov   $0201,a
 0853: e8 00     mov   a,#$00
@@ -44,10 +44,11 @@
 085b: e8 ff     mov   a,#$ff
 085d: c4 37     mov   $37,a
 085f: c4 38     mov   $38,a
+; begin main idle loop
 0861: e3 7b 07  bbs7  $7b,$086b
 0864: e4 8a     mov   a,$8a
 0866: 8d 6c     mov   y,#$6c
-0868: 3f e9 10  call  $10e9
+0868: 3f e9 10  call  $10e9             ; set voice control from $8A
 086b: 69 7a 7b  cmp   ($7b),($7a)
 086e: f0 08     beq   $0878
 0870: eb fe     mov   y,$fe
@@ -57,26 +58,26 @@
 0878: e4 40     mov   a,$40
 087a: 5c        lsr   a
 087b: 8d 2c     mov   y,#$2c
-087d: 3f e9 10  call  $10e9
+087d: 3f e9 10  call  $10e9             ; set echo volume L from $40 / 2
 0880: 8d 3c     mov   y,#$3c
-0882: 3f e9 10  call  $10e9
+0882: 3f e9 10  call  $10e9             ; set echo volume R from $40 / 2
 0885: e4 79     mov   a,$79
 0887: 8d 0d     mov   y,#$0d
-0889: 3f e9 10  call  $10e9
+0889: 3f e9 10  call  $10e9             ; set echo feedback bits from $79
 088c: e4 7e     mov   a,$7e
 088e: 8d 4d     mov   y,#$4d
-0890: 3f e9 10  call  $10e9
-0893: e4 fd     mov   a,$fd
+0890: 3f e9 10  call  $10e9             ; set echo enable bits from $7E
+0893: e4 fd     mov   a,$fd             ; get counter 0 value
 0895: 0d        push  psw
-0896: 3f c2 13  call  $13c2
+0896: 3f c2 13  call  $13c2             ; process commands from main CPU
 0899: 8e        pop   psw
-089a: f0 f7     beq   $0893
+089a: f0 f7     beq   $0893             ; call it till we get a nonzero timer
 089c: e4 89     mov   a,$89
 089e: 8d 5c     mov   y,#$5c
-08a0: 3f e9 10  call  $10e9
+08a0: 3f e9 10  call  $10e9             ; set key-off bits from $89
 08a3: e4 88     mov   a,$88
 08a5: 8d 4c     mov   y,#$4c
-08a7: 3f e9 10  call  $10e9
+08a7: 3f e9 10  call  $10e9             ; set key-on  bits from $88
 08aa: 8f 00 88  mov   $88,#$00
 08ad: 8f 00 89  mov   $89,#$00
 08b0: fa 43 28  mov   ($28),($43)
@@ -606,6 +607,9 @@
 0cdb: 2f b3     bra   $0c90
 0cdd: 6f        ret
 
+; vcmd da - set octave
+; vcmd e1 - increment octave
+; vcmd e2 - decrement octave
 0cde: f5 c0 02  mov   a,$02c0+x
 0ce1: 78 e1 26  cmp   $26,#$e1
 0ce4: 90 08     bcc   $0cee
@@ -618,6 +622,7 @@
 0cf0: d5 c0 02  mov   $02c0+x,a
 0cf3: 6f        ret
 
+; vcmd d2 - set/fade tempo
 0cf4: c4 30     mov   $30,a
 0cf6: 3f 85 0c  call  $0c85
 0cf9: c4 31     mov   $31,a
@@ -660,16 +665,19 @@
 0d44: c4 36     mov   $36,a
 0d46: 6f        ret
 
+; vcmd d3
 0d47: 3f 85 0c  call  $0c85
 0d4a: 3f 85 0c  call  $0c85
 0d4d: 6f        ret
 
+; vcmd d4 - echo volume
 0d4e: c8 10     cmp   x,#$10
 0d50: b0 fb     bcs   $0d4d
 0d52: c4 41     mov   $41,a
 0d54: c4 40     mov   $40,a
 0d56: 6f        ret
 
+; vcmd f2 - volume
 0d57: c4 30     mov   $30,a
 0d59: 3f 85 0c  call  $0c85
 0d5c: c4 31     mov   $31,a
@@ -712,6 +720,7 @@
 0dad: d5 00 02  mov   $0200+x,a
 0db0: 6f        ret
 
+; vcmd f3 - panpot
 0db1: c4 30     mov   $30,a
 0db3: 3f 85 0c  call  $0c85
 0db6: c4 31     mov   $31,a
@@ -754,6 +763,7 @@
 0e07: d5 20 02  mov   $0220+x,a
 0e0a: 6f        ret
 
+; vcmd d5 - echo feedback, etc.
 0e0b: c4 79     mov   $79,a
 0e0d: 3f 82 10  call  $1082
 0e10: 3f 85 0c  call  $0c85
@@ -774,6 +784,7 @@
 0e28: f8 27     mov   x,$27
 0e2a: 6f        ret
 
+; vcmd ea - echo on
 0e2b: c8 10     cmp   x,#$10
 0e2d: 90 05     bcc   $0e34
 0e2f: 09 8d 82  or    ($82),($8d)
@@ -788,6 +799,7 @@
 0e44: c4 7e     mov   $7e,a
 0e46: 6f        ret
 
+; vcmd eb - echo off
 0e47: e4 8d     mov   a,$8d
 0e49: c8 10     cmp   x,#$10
 0e4b: 90 05     bcc   $0e52
@@ -799,6 +811,8 @@
 0e59: c4 40     mov   $40,a
 0e5b: a2 8a     set5  $8a
 0e5d: 2f dd     bra   $0e3c
+
+; vcmd d6 - portamento
 0e5f: bc        inc   a
 0e60: d5 21 04  mov   $0421+x,a
 0e63: 3f 85 0c  call  $0c85
@@ -817,9 +831,11 @@
 0e86: d5 01 06  mov   $0601+x,a
 0e89: 6f        ret
 
+; vcmd e6 - portamento off
 0e8a: d5 61 04  mov   $0461+x,a
 0e8d: 6f        ret
 
+; vcmd d7 - tremolo
 0e8e: bc        inc   a
 0e8f: d5 a1 03  mov   $03a1+x,a
 0e92: 3f 85 0c  call  $0c85
@@ -840,9 +856,11 @@
 0eb8: d5 01 05  mov   $0501+x,a
 0ebb: 6f        ret
 
+; vcmd e7
 0ebc: d5 c1 03  mov   $03c1+x,a
 0ebf: 6f        ret
 
+; vcmd d8 - vibrato
 0ec0: bc        inc   a
 0ec1: d5 e1 03  mov   $03e1+x,a
 0ec4: 3f 85 0c  call  $0c85
@@ -860,9 +878,11 @@
 0ee1: d5 61 05  mov   $0561+x,a
 0ee4: 6f        ret
 
+; vcmd e8
 0ee5: d5 01 04  mov   $0401+x,a
 0ee8: 6f        ret
 
+; vcmd d9 - panpot LFO
 0ee9: bc        inc   a
 0eea: d5 61 03  mov   $0361+x,a
 0eed: 3f 85 0c  call  $0c85
@@ -880,15 +900,18 @@
 0f0b: d5 a1 04  mov   $04a1+x,a
 0f0e: 6f        ret
 
+; vcmd e9
 0f0f: d5 81 03  mov   $0381+x,a
 0f12: 6f        ret
 
+; vcmd db - set instrument
 0f13: d5 c1 02  mov   $02c1+x,a
 0f16: fd        mov   y,a
 0f17: f6 00 ff  mov   a,$ff00+y
 0f1a: d5 00 03  mov   $0300+x,a
 0f1d: 6f        ret
 
+; vcmd dc
 0f1e: 1c        asl   a
 0f1f: fd        mov   y,a
 0f20: f6 00 1d  mov   a,$1d00+y
@@ -897,12 +920,14 @@
 0f29: d5 21 03  mov   $0321+x,a
 0f2c: 6f        ret
 
+; vcmd dd
 0f2d: 28 1f     and   a,#$1f
 0f2f: fd        mov   y,a
 0f30: f6 c0 18  mov   a,$18c0+y
 0f33: d5 e1 02  mov   $02e1+x,a
 0f36: 6f        ret
 
+; vcmd de - set duration rate
 0f37: 68 64     cmp   a,#$64
 0f39: f0 0e     beq   $0f49
 0f3b: 90 04     bcc   $0f41
@@ -916,6 +941,7 @@
 0f49: d5 01 03  mov   $0301+x,a
 0f4c: 6f        ret
 
+; vcmd df - set noise frequency
 0f4d: 28 1f     and   a,#$1f
 0f4f: c8 10     cmp   x,#$10
 0f51: 90 06     bcc   $0f59
@@ -925,19 +951,20 @@
 0f59: c4 7c     mov   $7c,a
 0f5b: e8 6c     mov   a,#$6c
 0f5d: c4 f2     mov   $f2,a
-0f5f: e4 f3     mov   a,$f3
-0f61: 28 e0     and   a,#$e0
+0f5f: e4 f3     mov   a,$f3             ; read voice ctl register
+0f61: 28 e0     and   a,#$e0            ; look at voice ctl bits
 0f63: 13 87 04  bbc0  $87,$0f6a
 0f66: 04 7d     or    a,$7d
 0f68: 2f 02     bra   $0f6c
 0f6a: 04 7c     or    a,$7c
-0f6c: c4 f3     mov   $f3,a
+0f6c: c4 f3     mov   $f3,a             ; set bits from 7C or 7D
 0f6e: 38 e0 8a  and   $8a,#$e0
 0f71: 28 1f     and   a,#$1f
 0f73: 04 8a     or    a,$8a
 0f75: c4 8a     mov   $8a,a
 0f77: 6f        ret
 
+; vcmd e0 - repeat start
 0f78: f5 81 06  mov   a,$0681+x
 0f7b: bc        inc   a
 0f7c: d5 81 06  mov   $0681+x,a
@@ -957,6 +984,7 @@
 0f97: d6 e1 06  mov   $06e1+y,a
 0f9a: 6f        ret
 
+; vcmd f0 - repeat end
 0f9b: f5 81 06  mov   a,$0681+x
 0f9e: fd        mov   y,a
 0f9f: f6 a0 06  mov   a,$06a0+y
@@ -977,6 +1005,7 @@
 0fbc: d4 03     mov   $03+x,a
 0fbe: 6f        ret
 
+; vcmd f5
 0fbf: f5 81 06  mov   a,$0681+x
 0fc2: fd        mov   y,a
 0fc3: f6 80 07  mov   a,$0780+y
@@ -1002,22 +1031,27 @@
 0fed: d4 03     mov   $03+x,a
 0fef: 6f        ret
 
+; vcmd f6
 0ff0: f5 60 07  mov   a,$0760+x
 0ff3: d4 02     mov   $02+x,a
 0ff5: f5 61 07  mov   a,$0761+x
 0ff8: d4 03     mov   $03+x,a
 0ffa: 6f        ret
 
+; vcmd f4
 0ffb: fd        mov   y,a
 0ffc: 3f 85 0c  call  $0c85
 0fff: db 02     mov   $02+x,y
 1001: d4 03     mov   $03+x,a
 1003: 6f        ret
 
+; vcmd e4 - nop
 1004: 6f        ret
 
+; vcmd e5 - nop
 1005: 6f        ret
 
+; vcmd ec - noise on
 1006: c8 10     cmp   x,#$10
 1008: 90 05     bcc   $100f
 100a: 09 8d 84  or    ($84),($8d)
@@ -1027,9 +1061,10 @@
 1014: 48 ff     eor   a,#$ff
 1016: 24 83     and   a,$83
 1018: 04 84     or    a,$84
-101a: 8d 3d     mov   y,#$3d
+101a: 8d 3d     mov   y,#$3d            ; set noise enable bits from ($78 ^ #$FF)&$83|$84
 101c: 5f e9 10  jmp   $10e9
 
+; vcmd ed - noise off
 101f: e4 8d     mov   a,$8d
 1021: c8 10     cmp   x,#$10
 1023: 90 09     bcc   $102e
@@ -1039,6 +1074,8 @@
 102c: 2f e4     bra   $1012
 102e: 4e 83 00  tclr1 $0083
 1031: 2f df     bra   $1012
+
+; vcmd ee - pitch modulation on
 1033: c8 10     cmp   x,#$10
 1035: 90 05     bcc   $103c
 1037: 09 8d 86  or    ($86),($8d)
@@ -1048,9 +1085,10 @@
 1041: 48 ff     eor   a,#$ff
 1043: 24 85     and   a,$85
 1045: 04 86     or    a,$86
-1047: 8d 2d     mov   y,#$2d
+1047: 8d 2d     mov   y,#$2d            ; set pitch mod from $78^#$FF & $85 | $86
 1049: 5f e9 10  jmp   $10e9
 
+; vcmd ef - pitch modulation off
 104c: e4 8d     mov   a,$8d
 104e: c8 10     cmp   x,#$10
 1050: 90 05     bcc   $1057
@@ -1058,8 +1096,10 @@
 1055: 2f e8     bra   $103f
 1057: 4e 85 00  tclr1 $0085
 105a: 2f e3     bra   $103f
+; vcmd e3 - nop
 105c: 6f        ret
 
+; vcmd f1,f7-ff - end of track
 105d: ae        pop   a
 105e: ae        pop   a
 105f: e8 00     mov   a,#$00
@@ -1081,26 +1121,26 @@
 
 1082: e8 7d     mov   a,#$7d
 1084: c4 f2     mov   $f2,a
-1086: e4 f3     mov   a,$f3
-1088: 64 7a     cmp   a,$7a
-108a: f0 29     beq   $10b5
+1086: e4 f3     mov   a,$f3             ; read DSP reg $7D (echo delay enable bits)
+1088: 64 7a     cmp   a,$7a             ; same as $7A?
+108a: f0 29     beq   $10b5             ; yes, skip register init
 108c: 8f f0 7b  mov   $7b,#$f0
 108f: e4 8a     mov   a,$8a
 1091: 08 20     or    a,#$20
 1093: 8d 6c     mov   y,#$6c
-1095: 3f e9 10  call  $10e9
+1095: 3f e9 10  call  $10e9             ; set echo off
 1098: e8 00     mov   a,#$00
 109a: 8d 4d     mov   y,#$4d
-109c: 3f e9 10  call  $10e9
+109c: 3f e9 10  call  $10e9             ; clear all echo enable bits
 109f: 8d 0d     mov   y,#$0d
-10a1: 3f e9 10  call  $10e9
+10a1: 3f e9 10  call  $10e9             ; and feedback bits
 10a4: 8d 2c     mov   y,#$2c
-10a6: 3f e9 10  call  $10e9
+10a6: 3f e9 10  call  $10e9             ; echo volume L = 0
 10a9: 8d 3c     mov   y,#$3c
-10ab: 3f e9 10  call  $10e9
+10ab: 3f e9 10  call  $10e9             ; echo volume R = 0
 10ae: e4 7a     mov   a,$7a
 10b0: 8d 7d     mov   y,#$7d
-10b2: 3f e9 10  call  $10e9
+10b2: 3f e9 10  call  $10e9             ; set echo delay enable from $7A
 10b5: e4 7a     mov   a,$7a
 10b7: 1c        asl   a
 10b8: 1c        asl   a
@@ -1109,8 +1149,8 @@
 10bc: 80        setc
 10bd: 88 f8     adc   a,#$f8
 10bf: 8d 6d     mov   y,#$6d
-10c1: 3f e9 10  call  $10e9
-10c4: e4 fe     mov   a,$fe
+10c1: 3f e9 10  call  $10e9             ; set echo sample directory from $7A
+10c4: e4 fe     mov   a,$fe             ; return value of counter 1
 10c6: 6f        ret
 
 10c7: cd 00     mov   x,#$00
@@ -1132,6 +1172,7 @@
 10e6: f8 27     mov   x,$27
 10e8: 6f        ret
 
+; write A to DSP register Y
 10e9: cb f2     mov   $f2,y
 10eb: c4 f3     mov   $f3,a
 10ed: 6f        ret
@@ -1475,17 +1516,16 @@
 13bf: f8 27     mov   x,$27
 13c1: 6f        ret
 
+; receive a command from the main CPU
 13c2: f8 f4     mov   x,$f4
-13c4: d8 8f     mov   $8f,x
+13c4: d8 8f     mov   $8f,x             ; stash a copy in $8F
 13c6: f0 67     beq   $142f
 13c8: c8 01     cmp   x,#$01
 13ca: d0 03     bne   $13cf
-13cc: 5f 32 14  jmp   $1432
-
+13cc: 5f 32 14  jmp   $1432             ; case 1,3,4 -> $1432
 13cf: c8 02     cmp   x,#$02
 13d1: d0 03     bne   $13d6
-13d3: 5f ad 15  jmp   $15ad
-
+13d3: 5f ad 15  jmp   $15ad             ; case 2 -> $15AD
 13d6: c8 03     cmp   x,#$03
 13d8: f0 f2     beq   $13cc
 13da: c8 04     cmp   x,#$04
@@ -1494,51 +1534,41 @@
 13e0: 90 07     bcc   $13e9
 13e2: c8 20     cmp   x,#$20
 13e4: b0 03     bcs   $13e9
-13e6: 5f 53 16  jmp   $1653
-
+13e6: 5f 53 16  jmp   $1653             ; case $10-$20 -> $1653
 13e9: c8 80     cmp   x,#$80
 13eb: d0 03     bne   $13f0
-13ed: 5f d7 16  jmp   $16d7
-
+13ed: 5f d7 16  jmp   $16d7             ; case $80 -> 16D7
 13f0: c8 85     cmp   x,#$85
 13f2: d0 03     bne   $13f7
-13f4: 5f e9 16  jmp   $16e9
-
+13f4: 5f e9 16  jmp   $16e9             ; case $85 -> 16E9
 13f7: c8 86     cmp   x,#$86
 13f9: d0 03     bne   $13fe
-13fb: 5f f9 16  jmp   $16f9
-
+13fb: 5f f9 16  jmp   $16f9             ; case $86 -> 16F9
 13fe: c8 87     cmp   x,#$87
 1400: d0 03     bne   $1405
-1402: 5f 09 17  jmp   $1709
-
+1402: 5f 09 17  jmp   $1709             ; case $87 -> 1709
 1405: c8 88     cmp   x,#$88
 1407: d0 03     bne   $140c
-1409: 5f 29 17  jmp   $1729
-
+1409: 5f 29 17  jmp   $1729             ; case $88 -> 1729
 140c: c8 89     cmp   x,#$89
 140e: d0 03     bne   $1413
-1410: 5f 5b 17  jmp   $175b
-
+1410: 5f 5b 17  jmp   $175b             ; case $89 -> 175B
 1413: c8 8a     cmp   x,#$8a
 1415: d0 03     bne   $141a
-1417: 5f 42 17  jmp   $1742
-
+1417: 5f 42 17  jmp   $1742             ; case $8A -> 1742
 141a: c8 8b     cmp   x,#$8b
 141c: d0 03     bne   $1421
-141e: 5f 19 17  jmp   $1719
-
+141e: 5f 19 17  jmp   $1719             ; case $8B -> 1719
 1421: c8 90     cmp   x,#$90
 1423: d0 03     bne   $1428
-1425: 5f 6b 17  jmp   $176b
-
+1425: 5f 6b 17  jmp   $176b             ; case $90 -> 176B
 1428: c8 ff     cmp   x,#$ff
 142a: d0 03     bne   $142f
-142c: 5f 82 17  jmp   $1782
-
-142f: d8 f4     mov   $f4,x
+142c: 5f 82 17  jmp   $1782             ; case $FF -> 1782
+142f: d8 f4     mov   $f4,x             ; write same value back again
 1431: 6f        ret
 
+; process commands 1,3,4 (play song)
 1432: e8 00     mov   a,#$00
 1434: c4 88     mov   $88,a
 1436: c4 78     mov   $78,a
@@ -1553,25 +1583,25 @@
 1447: c4 80     mov   $80,a
 1449: c4 79     mov   $79,a
 144b: c4 40     mov   $40,a
-144d: c4 41     mov   $41,a
+144d: c4 41     mov   $41,a             ; zero lots of direct page locations
 144f: 9c        dec   a
-1450: c4 89     mov   $89,a
+1450: c4 89     mov   $89,a             ; set $89 to #$FF
 1452: e8 ff     mov   a,#$ff
 1454: 8d 5c     mov   y,#$5c
-1456: 3f e9 10  call  $10e9
-1459: 8f 00 f5  mov   $f5,#$00
+1456: 3f e9 10  call  $10e9             ; set DSP key-off to #$FF
+1459: 8f 00 f5  mov   $f5,#$00          ; set APU1 to 0
 145c: 8f 00 22  mov   $22,#$00
-145f: 8f 20 23  mov   $23,#$20
+145f: 8f 20 23  mov   $23,#$20          ; set $22/23 to $2000
 1462: 8d 00     mov   y,#$00
-1464: e4 f6     mov   a,$f6
-1466: d7 22     mov   ($22)+y,a
+1464: e4 f6     mov   a,$f6             ; read APU2
+1466: d7 22     mov   ($22)+y,a         ; store in ($22)
 1468: 3a 22     incw  $22
-146a: d8 f4     mov   $f4,x
+146a: d8 f4     mov   $f4,x             ; send command back as ACK to APU0
 146c: 3e f4     cmp   x,$f4
-146e: f0 fc     beq   $146c
+146e: f0 fc     beq   $146c             ; wait for ACK ACK
 1470: f8 f4     mov   x,$f4
-1472: d0 f0     bne   $1464
-1474: e4 f5     mov   a,$f5
+1472: d0 f0     bne   $1464             ; keep reading till APU0 is 0
+1474: e4 f5     mov   a,$f5             ; read APU1
 1476: f0 1a     beq   $1492
 1478: 10 0a     bpl   $1484
 147a: d8 f4     mov   $f4,x
@@ -1581,10 +1611,10 @@
 1482: 2f 78     bra   $14fc
 1484: 68 22     cmp   a,#$22
 1486: f0 42     beq   $14ca
-1488: d8 f4     mov   $f4,x
+1488: d8 f4     mov   $f4,x             ; write what we got from APU0 back
 148a: 3e f4     cmp   x,$f4
-148c: f0 fc     beq   $148a
-148e: f8 f4     mov   x,$f4
+148c: f0 fc     beq   $148a             ; wait till APU0 changes again
+148e: f8 f4     mov   x,$f4             ; remember it
 1490: 2f 46     bra   $14d8
 1492: e4 f5     mov   a,$f5
 1494: d0 34     bne   $14ca
@@ -1622,48 +1652,48 @@
 14d4: f8 f4     mov   x,$f4
 14d6: 2f 06     bra   $14de
 14d8: 8f 00 22  mov   $22,#$00
-14db: 8f 30 23  mov   $23,#$30
+14db: 8f 30 23  mov   $23,#$30          ; set $22/23 to $3000 (sample data)
 14de: 8d 00     mov   y,#$00
 14e0: e4 f5     mov   a,$f5
-14e2: d7 22     mov   ($22)+y,a
+14e2: d7 22     mov   ($22)+y,a         ; write ($22) from APU1
 14e4: 3a 22     incw  $22
 14e6: e4 f6     mov   a,$f6
-14e8: d7 22     mov   ($22)+y,a
+14e8: d7 22     mov   ($22)+y,a         ; write ($22) from APU2
 14ea: 3a 22     incw  $22
 14ec: e4 f7     mov   a,$f7
-14ee: d7 22     mov   ($22)+y,a
+14ee: d7 22     mov   ($22)+y,a         ; write ($22) from APU3
 14f0: 3a 22     incw  $22
-14f2: d8 f4     mov   $f4,x
+14f2: d8 f4     mov   $f4,x             ; write what we got back to APU0 to ACK
 14f4: 3e f4     cmp   x,$f4
-14f6: f0 fc     beq   $14f4
+14f6: f0 fc     beq   $14f4             ; wait for change in APU0
 14f8: f8 f4     mov   x,$f4
-14fa: d0 e4     bne   $14e0
+14fa: d0 e4     bne   $14e0             ; loop until APU0 is zero
 14fc: 8f 00 22  mov   $22,#$00
-14ff: 8f 1f 23  mov   $23,#$1f
+14ff: 8f 1f 23  mov   $23,#$1f          ; set $22/23 to $1F00 (source dir tbl)
 1502: e4 f6     mov   a,$f6
-1504: d7 22     mov   ($22)+y,a
+1504: d7 22     mov   ($22)+y,a         ; write ($22) from APU2
 1506: 3a 22     incw  $22
 1508: e4 f7     mov   a,$f7
-150a: d7 22     mov   ($22)+y,a
+150a: d7 22     mov   ($22)+y,a         ; write ($22) from APU3
 150c: 3a 22     incw  $22
-150e: d8 f4     mov   $f4,x
+150e: d8 f4     mov   $f4,x             ; write ACK back to APU0
 1510: 3e f4     cmp   x,$f4
-1512: f0 fc     beq   $1510
+1512: f0 fc     beq   $1510             ; wait for change in APU0
 1514: f8 f4     mov   x,$f4
-1516: d0 ea     bne   $1502
+1516: d0 ea     bne   $1502             ; loop until APU0 is zero
 1518: 8f 40 22  mov   $22,#$40
-151b: 8f ff 23  mov   $23,#$ff
+151b: 8f ff 23  mov   $23,#$ff          ; set $22/23 to $FF40
 151e: e4 f6     mov   a,$f6
-1520: d7 22     mov   ($22)+y,a
+1520: d7 22     mov   ($22)+y,a         ; write ($22) from APU2
 1522: 3a 22     incw  $22
-1524: d8 f4     mov   $f4,x
+1524: d8 f4     mov   $f4,x             ; write ACK to APU0
 1526: 3e f4     cmp   x,$f4
-1528: f0 fc     beq   $1526
+1528: f0 fc     beq   $1526             ; wait for change in APU0
 152a: f8 f4     mov   x,$f4
-152c: d0 f0     bne   $151e
-152e: d8 f4     mov   $f4,x
+152c: d0 f0     bne   $151e             ; loop until APU0 is 0
+152e: d8 f4     mov   $f4,x             ; write final ACK to APU0
 1530: 8d 01     mov   y,#$01
-1532: cb 8d     mov   $8d,y
+1532: cb 8d     mov   $8d,y             ; set $8D to 1
 1534: cd 00     mov   x,#$00
 1536: f5 00 20  mov   a,$2000+x
 1539: d4 02     mov   $02+x,a
@@ -1709,13 +1739,14 @@
 1596: 8f ff 38  mov   $38,#$ff
 1599: e8 ff     mov   a,#$ff
 159b: 8d 5c     mov   y,#$5c
-159d: 3f e9 10  call  $10e9
+159d: 3f e9 10  call  $10e9             ; set key-off all voices
 15a0: 8f 05 7a  mov   $7a,#$05
 15a3: 3f 12 10  call  $1012
 15a6: 3f 5b 0f  call  $0f5b
 15a9: 3f 3f 10  call  $103f
 15ac: 6f        ret
 
+; process command 2 (play sfx)
 15ad: d8 f4     mov   $f4,x
 15af: 3e f4     cmp   x,$f4
 15b1: f0 fc     beq   $15af
@@ -1795,6 +1826,7 @@
 164f: 8f 88 39  mov   $39,#$88
 1652: 6f        ret
 
+; process commands $10-$20
 1653: d8 f4     mov   $f4,x
 1655: 3e f4     cmp   x,$f4
 1657: f0 fc     beq   $1655
@@ -1851,6 +1883,7 @@
 16d3: 3f 3f 10  call  $103f
 16d6: 6f        ret
 
+; process command $80
 16d7: e4 f5     mov   a,$f5
 16d9: c5 3d 02  mov   $023d,a
 16dc: c5 3f 02  mov   $023f,a
@@ -1860,6 +1893,7 @@
 16e5: 8f 00 f4  mov   $f4,#$00
 16e8: 6f        ret
 
+; process command $85
 16e9: d8 f4     mov   $f4,x
 16eb: 3e f4     cmp   x,$f4
 16ed: f0 fc     beq   $16eb
@@ -1868,6 +1902,7 @@
 16f5: 8f ff 47  mov   $47,#$ff
 16f8: 6f        ret
 
+; process command $86
 16f9: d8 f4     mov   $f4,x
 16fb: 3e f4     cmp   x,$f4
 16fd: f0 fc     beq   $16fb
@@ -1876,6 +1911,7 @@
 1705: 8f fe 47  mov   $47,#$fe
 1708: 6f        ret
 
+; process command $87
 1709: d8 f4     mov   $f4,x
 170b: 3e f4     cmp   x,$f4
 170d: f0 fc     beq   $170b
@@ -1884,6 +1920,7 @@
 1715: 8f ff 47  mov   $47,#$ff
 1718: 6f        ret
 
+; process command $8B
 1719: d8 f4     mov   $f4,x
 171b: 3e f4     cmp   x,$f4
 171d: f0 fc     beq   $171b
@@ -1892,6 +1929,7 @@
 1725: 8f ff 47  mov   $47,#$ff
 1728: 6f        ret
 
+; process command $88
 1729: d8 f4     mov   $f4,x
 172b: 3e f4     cmp   x,$f4
 172d: f0 fc     beq   $172b
@@ -1903,6 +1941,7 @@
 173e: 8f ff 8b  mov   $8b,#$ff
 1741: 6f        ret
 
+; process command $8A
 1742: d8 f4     mov   $f4,x
 1744: 3e f4     cmp   x,$f4
 1746: f0 fc     beq   $1744
@@ -1914,6 +1953,7 @@
 1757: 8f ff 8b  mov   $8b,#$ff
 175a: 6f        ret
 
+; process command $89
 175b: d8 f4     mov   $f4,x
 175d: 3e f4     cmp   x,$f4
 175f: f0 fc     beq   $175d
@@ -1922,6 +1962,7 @@
 1767: 8f 00 47  mov   $47,#$00
 176a: 6f        ret
 
+; process command $90
 176b: e4 f5     mov   a,$f5
 176d: d0 04     bne   $1773
 176f: 12 90     clr0  $90
@@ -1934,6 +1975,7 @@
 177e: 8f ff 8b  mov   $8b,#$ff
 1781: 6f        ret
 
+; process command $FF
 1782: e8 ff     mov   a,#$ff
 1784: 8d 5c     mov   y,#$5c
 1786: 3f e9 10  call  $10e9
@@ -1987,268 +2029,186 @@
 17e7: 3f 3f 10  call  $103f
 17ea: 5f 82 10  jmp   $1082
 
-17ed: f4 0c     mov   a,$0c+x
-17ef: 47 0d     eor   a,($0d+x)
-17f1: 4e 0d 0b  tclr1 $0b0d
-17f4: 0e 5f 0e  tset1 $0e5f
-17f7: 8e        pop   psw
-17f8: 0e c0 0e  tset1 $0ec0
-17fb: e9 0e de  mov   x,$de0e
-17fe: 0c 13 0f  asl   $0f13
-1801: 1e 0f 2d  cmp   x,$2d0f
-1804: 0f        brk
-1805: 37 0f     and   a,($0f)+y
-1807: 4d        push  x
-1808: 0f        brk
-1809: 78 0f de  cmp   $de,#$0f
-180c: 0c de 0c  asl   $0cde
-180f: 5c        lsr   a
-1810: 10 04     bpl   $1816
-1812: 10 05     bpl   $1819
-1814: 10 8a     bpl   $17a0
-1816: 0e bc 0e  tset1 $0ebc
-1819: e5 0e 0f  mov   a,$0f0e
-181c: 0f        brk
-181d: 2b 0e     rol   $0e
-181f: 47 0e     eor   a,($0e+x)
-1821: 06        or    a,(x)
-1822: 10 1f     bpl   $1843
-1824: 10 33     bpl   $1859
-1826: 10 4c     bpl   $1874
-1828: 10 9b     bpl   $17c5
-182a: 0f        brk
-182b: 5d        mov   x,a
-182c: 10 57     bpl   $1885
-182e: 0d        push  psw
-182f: b1        tcall 11
-1830: 0d        push  psw
-1831: fb 0f     mov   y,$0f+x
-1833: bf        mov   a,(x)+
-1834: 0f        brk
-1835: f0 0f     beq   $1846
-1837: 5d        mov   x,a
-1838: 10 5d     bpl   $1897
-183a: 10 5d     bpl   $1899
-183c: 10 5d     bpl   $189b
-183e: 10 5d     bpl   $189d
-1840: 10 5d     bpl   $189f
-1842: 10 5d     bpl   $18a1
-1844: 10 5d     bpl   $18a3
-1846: 10 5d     bpl   $18a5
-1848: 10 03     bpl   $184d
-184a: 03 01 02  bbs0  $01,$184f
-184d: 03 03 03  bbs0  $03,$1853
-1850: 03 01 01  bbs0  $01,$1854
-1853: 01        tcall 0
-1854: 01        tcall 0
-1855: 01        tcall 0
-1856: 01        tcall 0
-1857: 01        tcall 0
-1858: 00        nop
-1859: 00        nop
-185a: 00        nop
-185b: 00        nop
-185c: 00        nop
-185d: 00        nop
-185e: 00        nop
-185f: 00        nop
-1860: 00        nop
-1861: 00        nop
-1862: 00        nop
-1863: 00        nop
-1864: 00        nop
-1865: 00        nop
-1866: 00        nop
-1867: 00        nop
-1868: 00        nop
-1869: 03 03 02  bbs0  $03,$186e
-186c: 03 00 00  bbs0  $00,$186f
-186f: 00        nop
-1870: 00        nop
-1871: 00        nop
-1872: 00        nop
-1873: 00        nop
-1874: 00        nop
-1875: 00        nop
-1876: 00        nop
-1877: 79        cmp   (x),(y)
-1878: 08 fa     or    a,#$fa
-187a: 08 83     or    a,#$83
-187c: 09 14 0a  or    ($0a),($14)
-187f: ad 0a     cmp   y,#$0a
-1881: 50 0b     bvc   $188e
-1883: fc        inc   y
-1884: 0b b2     asl   $b2
-1886: 0c 74 0d  asl   $0d74
-1889: 41        tcall 4
-188a: 0e 1a 0f  tset1 $0f1a
-188d: 00        nop
-188e: 10 f3     bpl   $1883
-1890: 10 7f     bpl   $1911
-1892: 00        nop
-1893: 00        nop
-1894: 00        nop
-1895: 00        nop
-1896: 00        nop
-1897: 00        nop
-1898: 00        nop
-1899: 0c 21 2b  asl   $2b21
-189c: 2b 13     rol   $13
-189e: fe f3     dbnz  y,$1893
-18a0: f9 58     mov   x,$58+y
-18a2: bf        mov   a,(x)+
-18a3: db f0     mov   $f0+x,y
-18a5: fe 07     dbnz  y,$18ae
-18a7: 0c 0c 34  asl   $340c
-18aa: 33 00 d9  bbc1  $00,$1886
-18ad: e5 01 fc  mov   a,$fc01
-18b0: eb
+; vcmd dispatch table
+17ed: dw $0cf4  ; d2 - set/fade tempo
+17ef: dw $0d47  ; d3
+17f1: dw $0d4e  ; d4 - echo volume
+17f3: dw $0e0b  ; d5 - echo feedback, etc
+17f5: dw $0e5f  ; d6 - portamento
+17f7: dw $0e8e  ; d7 - tremolo
+17f9: dw $0ec0  ; d8 - vibrato
+17fb: dw $0ee9  ; d9 - panpot LFO
+17fd: dw $0cde  ; da - set octave
+17ff: dw $0f13  ; db - set instrument
+1801: dw $0f1e  ; dc - set volume envelove (software)
+1803: dw $0f2d  ; dd
+1805: dw $0f37  ; de - set duration rate
+1807: dw $0f4d  ; df - set noise frequency
+1809: dw $0f78  ; e0 - repeat start
+180b: dw $0cde  ; e1 - increment octave
+180d: dw $0cde  ; e2 - decrement octave
+180f: dw $105c  ; e3 - nop
+1811: dw $1004  ; e4 - nop
+1813: dw $1005  ; e5 - nop
+1815: dw $0e8a  ; e6 - portamento off
+1817: dw $0ebc  ; e7
+1819: dw $0ee5  ; e8
+181b: dw $0f0f  ; e9
+181d: dw $0e2b  ; ea - echo on
+181f: dw $0e47  ; eb - echo off
+1821: dw $1006  ; ec - noise on
+1823: dw $101f  ; ed - noise off
+1825: dw $1033  ; ee - pitch modulation on
+1827: dw $104c  ; ef - pitch modulation off
+1829: dw $0f9b  ; f0 - repeat end
+182b: dw $105d  ; f1 - end of track
+182d: dw $0d57  ; f2 - volume
+182f: dw $0db1  ; f3 - panpot
+1831: dw $0ffb  ; f4
+1833: dw $0fbf  ; f5
+1835: dw $0ff0  ; f6
+1837: dw $105d  ; f7 - end of track (duplicated)
+1839: dw $105d  ; f8 - end of track (duplicated)
+183b: dw $105d  ; f9 - end of track (duplicated)
+183d: dw $105d  ; fa - end of track (duplicated)
+183f: dw $105d  ; fb - end of track (duplicated)
+1841: dw $105d  ; fc - end of track (duplicated)
+1843: dw $105d  ; fd - end of track (duplicated)
+1845: dw $105d  ; fe - end of track (duplicated)
+1847: dw $105d  ; ff - end of track (duplicated)
 
-18b1: c0 90 60 48 40 30 24 20 18 10 0c 08 06 04 03
-18c0: a0        ei
-18c1: a1        tcall 10
-18c2: a2 a3     set5  $a3
-18c4: a4 a5     sbc   a,$a5
-18c6: a6        sbc   a,(x)
-18c7: a7 a8     sbc   a,($a8+x)
-18c9: a9 aa ab  sbc   ($ab),($aa)
-18cc: ac ad ae  inc   $aead
-18cf: af        mov   (x)+,a
-18d0: b0 b1     bcs   $1883
-18d2: b2 b3     clr5  $b3
-18d4: b4 b5     sbc   a,$b5+x
-18d6: b6 b7 b8  sbc   a,$b8b7+y
-18d9: b9        sbc   (x),(y)
-18da: ba bb     movw  ya,$bb
-18dc: bc        inc   a
-18dd: bd        mov   sp,x
-18de: be        das   a
-18df: bf        mov   a,(x)+
-18e0: 00        nop
-18e1: 19        or    (x),(y)
-18e2: 12 19     clr0  $19
-18e4: 24 19     and   a,$19
-18e6: 38 19 4a  and   $4a,#$19
-18e9: 19        or    (x),(y)
-18ea: 00        nop
-18eb: 00        nop
-18ec: 00        nop
-18ed: 00        nop
-18ee: 00        nop
-18ef: 00        nop
-18f0: 5c        lsr   a
-18f1: 19        or    (x),(y)
-18f2: 83 19 00  bbs4  $19,$18f5
-18f5: 00        nop
-18f6: 00        nop
-18f7: 00        nop
-18f8: 00        nop
-18f9: 00        nop
-18fa: 00        nop
-18fb: 00        nop
-18fc: 00        nop
-18fd: 00        nop
-18fe: 00        nop
-18ff: 00        nop
-1900: f2 00     clr7  $00
-1902: 00        nop
-1903: 78 dc 0d  cmp   $0d,#$dc
-1906: db 05     mov   $05+x,y
-1908: dd        mov   a,y
-1909: 00        nop
-190a: d6 00 06  mov   $0600+y,a
-190d: 0c da 06  asl   $06da
-1910: 74 f1     cmp   a,$f1+x
-1912: f2 00     clr7  $00
-1914: 00        nop
-1915: 78 dc 0d  cmp   $0d,#$dc
-1918: db 05     mov   $05+x,y
-191a: dd        mov   a,y
-191b: 00        nop
-191c: d6 00 06  mov   $0600+y,a
-191f: 0c da 06  asl   $06da
-1922: a1        tcall 10
-1923: f1        tcall 15
-1924: f2 00     clr7  $00
-1926: 00        nop
-1927: ff        stop
-1928: dc        dec   y
-1929: 0d        push  psw
-192a: dd        mov   a,y
-192b: 00        nop
-192c: da 04     movw  $04,ya
-192e: e0        clrv
-192f: 03 db 04  bbs0  $db,$1936
-1932: 3b db     rol   $db+x
-1934: 03 3b f0  bbs0  $3b,$1927
-1937: f1        tcall 15
-1938: f2 00     clr7  $00
-193a: 00        nop
-193b: c8 dc     cmp   x,#$dc
-193d: 0d        push  psw
-193e: db 05     mov   $05+x,y
-1940: dd        mov   a,y
-1941: 00        nop
-1942: d6 00 06  mov   $0600+y,a
-1945: 0c da 06  asl   $06da
-1948: 74 f1     cmp   a,$f1+x
-194a: f2 00     clr7  $00
-194c: 00        nop
-194d: c8 dc     cmp   x,#$dc
-194f: 0d        push  psw
-1950: db 05     mov   $05+x,y
-1952: dd        mov   a,y
-1953: 00        nop
-1954: d6 00 06  mov   $0600+y,a
-1957: 0c da 06  asl   $06da
-195a: a1        tcall 10
-195b: f1        tcall 15
-195c: f2 00     clr7  $00
-195e: 00        nop
-195f: e6        mov   a,(x)
-1960: d8 00     mov   $00,x
-1962: 0c ff dc  asl   $dcff
-1965: 09 db 03  or    ($03),($db)
-1968: dd        mov   a,y
-1969: 08 da     or    a,#$da
-196b: 05 92 e1  or    a,$e192
-196e: f2 00     clr7  $00
-1970: 00        nop
-1971: be        das   a
-1972: 47 f2     eor   a,($f2+x)
-1974: 00        nop
-1975: 00        nop
-1976: a0        ei
-1977: 47 f2     eor   a,($f2+x)
-1979: 00        nop
-197a: 00        nop
-197b: 82 47     set4  $47
-197d: f2 00     clr7  $00
-197f: 00        nop
-1980: 64 47     cmp   a,$47
-1982: f1        tcall 15
-1983: f2 00     clr7  $00
-1985: 00        nop
-1986: e6        mov   a,(x)
-1987: d8 00     mov   $00,x
-1989: 0c ff dc  asl   $dcff
-198c: 09 db 03  or    ($03),($db)
-198f: dd        mov   a,y
-1990: 08 da     or    a,#$da
-1992: 05 47 f2  or    a,$f247
-1995: 00        nop
-1996: 00        nop
-1997: be        das   a
-1998: b0 f2     bcs   $198c
-199a: 00        nop
-199b: 00        nop
-199c: a0        ei
-199d: b0 f2     bcs   $1991
-199f: 00        nop
-19a0: 00        nop
-19a1: 82 b0     set4  $b0
-19a3: f2 00     clr7  $00
-19a5: 00        nop
-19a6: 64 b0     cmp   a,$b0
-19a8: f1        tcall 15
-19a9: ff        stop
+; vcmd length table
+1849: db         $03,$03,$01,$02,$03,$03,$03,$03,$01,$01,$01,$01,$01,$01
+1857: db $01,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+1867: db $00,$00,$03,$03,$02,$03,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+
+; pitch table
+1877: dw $0879  ; c
+1879: dw $08fa  ; c#
+187b: dw $0983  ; d
+187d: dw $0a14  ; d#
+187f: dw $0aad  ; e
+1881: dw $0b50  ; f
+1883: dw $0bfc  ; f#
+1885: dw $0cb2  ; g
+1887: dw $0d74  ; g#
+1889: dw $0e41  ; a
+188b: dw $0f1a  ; a#
+188d: dw $1000  ; b
+188f: dw $10f3  ; c'
+
+; echo FIR filter coeff tables
+1891: db $7f,$00,$00,$00,$00,$00,$00,$00
+1899: db $0c,$21,$2b,$2b,$13,$fe,$f3,$f9
+18a1: db $58,$bf,$db,$f0,$fe,$07,$0c,$0c
+18a9: db $34,$33,$00,$d9,$e5,$01,$fc,$eb
+
+; duration table
+18b1: db $c0,$90,$60,$48,$40,$30,$24,$20,$18,$10,$0c,$08,$06,$04,$03
+
+18c0: db $a0,$a1,$a2,$a3,$a4,$a5,$a6,$a7
+18c8: db $a8,$a9,$aa,$ab,$ac,$ad,$ae,$af
+18d0: db $b0,$b1,$b2,$b3,$b4,$b5,$b6,$b7
+18d8: db $b8,$b9,$ba,$bb,$bc,$bd,$be,$bf
+
+18e0: 00 19
+18e2: 12 19
+18e4: 24 19
+18e6: 38 19
+18e8: 4a 19
+18ea: 00 00
+18ec: 00 00
+18ee: 00 00
+18f0: 5c 19
+18f2: 83 19
+18f4: 00 00
+18f6: 00 00
+18f8: 00 00
+18fa: 00 00
+18fc: 00 00
+18fe: 00 00
+1900: f2 00
+1902: 00 78
+1904: dc 0d
+1906: db 05
+1908: dd 00
+190a: d6 00
+190c: 06 0c
+190e: da 06
+1910: 74 f1
+1912: f2 00
+1914: 00 78
+1916: dc 0d
+1918: db 05
+191a: dd 00
+191c: d6 00
+191e: 06 0c
+1920: da 06
+1922: a1 f1
+1924: f2 00
+1926: 00 ff
+1928: dc 0d
+192a: dd 00
+192c: da 04
+192e: e0 03
+1930: db 04
+1932: 3b db
+1934: 03 3b
+1936: f0 f1
+1938: f2 00
+193a: 00 c8
+193c: dc 0d
+193e: db 05
+1940: dd 00
+1942: d6 00
+1944: 06 0c
+1946: da 06
+1948: 74 f1
+194a: f2 00
+194c: 00 c8
+194e: dc 0d
+1950: db 05
+1952: dd 00
+1954: d6 00
+1956: 06 0c
+1958: da 06
+195a: a1 f1
+195c: f2 00
+195e: 00 e6
+1960: d8 00
+1962: 0c ff
+1964: dc 09
+1966: db 03
+1968: dd 08
+196a: da 05
+196c: 92 e1
+196e: f2 00
+1970: 00 be
+1972: 47 f2
+1974: 00 00
+1976: a0 47
+1978: f2 00
+197a: 00 82
+197c: 47 f2
+197e: 00 00
+1980: 64 47
+1982: f1 f2
+1984: 00 00
+1986: e6 d8
+1988: 00 0c
+198a: ff dc
+198c: 09 db
+198e: 03 dd
+1990: 08 da
+1992: 05 47
+1994: f2 00
+1996: 00 be
+1998: b0 f2
+199a: 00 00
+199c: a0 b0
+199e: f2 00
+19a0: 00 82
+19a2: b0 f2
+19a4: 00 00
+19a6: 64 b0
+19a8: f1

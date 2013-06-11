@@ -1,5 +1,5 @@
 /**
- * Akao AKAO spc2midi.
+ * Square AKAO spc2midi.
  * http://loveemu.yh.land.to/
  */
 
@@ -14,9 +14,9 @@
 #include "spcseq.h"
 #include "akaospc.h"
 
-#define APPNAME "Akao AKAO SPC2MIDI"
+#define APPNAME "Square AKAO SPC2MIDI"
 #define APPSHORTNAME "akaospc"
-#define VERSION "[2013-06-06]"
+#define VERSION "[2013-06-10]"
 
 static int akaoSpcLoopMax = 2;            // maximum loop count of parser
 static int akaoSpcTextLoopMax = 1;        // maximum loop count of text output
@@ -46,8 +46,73 @@ static const char *mycssfile = APPSHORTNAME ".css";
 
 enum {
     SPC_VER_UNKNOWN = 0,
+    SPC_VER_FF4,
     SPC_VER_RS1,
-    SPC_VER_RS3,
+    SPC_VER_FF5,
+    SPC_VER_RS2,
+};
+
+byte FF4_VCMD_LEN_TABLE[] = {
+                0x03, 0x03, 0x01, 0x02, 0x03, 0x03, 0x03, 0x03, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+    0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x03, 0x03, 0x02, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+};
+byte RS1_VCMD_LEN_TABLE[] = {
+                0x01, 0x02, 0x01, 0x02, 0x01, 0x02, 0x01, 0x02, 0x01, 0x03, 0x00, 0x03, 0x00, 0x03,
+    0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x02, 0x00, 0x01, 0x00, 0x00, 0x01, 0x00,
+    0x03, 0x02, 0x00, 0x01, 0x01, 0x00, 0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+};
+byte FF5_VCMD_LEN_TABLE[] = {
+                0x01, 0x02, 0x01, 0x02, 0x02, 0x03, 0x00, 0x03, 0x00, 0x02, 0x00, 0x01, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00,
+    0x01, 0x00, 0x00, 0x01, 0x02, 0x01, 0x02, 0x02, 0x01, 0x03, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00,
+};
+byte FF6_VCMD_LEN_TABLE[] = {
+                            0x01, 0x02, 0x01, 0x02, 0x02, 0x03, 0x00, 0x03, 0x00, 0x02, 0x00, 0x01,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+    0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x01, 0x02, 0x01, 0x02, 0x01, 0x03, 0x02, 0x02, 0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
+};
+byte RS2_VCMD_LEN_TABLE[] = {
+                            0x01, 0x02, 0x01, 0x02, 0x02, 0x03, 0x00, 0x03, 0x00, 0x02, 0x00, 0x01,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+    0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x01, 0x02, 0x01, 0x02, 0x02, 0x01, 0x03, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+};
+byte RS3_VCMD_LEN_TABLE[] = {
+                            0x01, 0x02, 0x01, 0x02, 0x02, 0x03, 0x00, 0x03, 0x00, 0x02, 0x00, 0x01,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+    0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x01, 0x02, 0x01, 0x02, 0x01, 0x03, 0x02, 0x01, 0x01, 0x01, 0x03, 0x00, 0x00, 0x01, 0x00, 0x00,
+};
+byte LAL_VCMD_LEN_TABLE[] = {
+                            0x01, 0x02, 0x01, 0x02, 0x02, 0x03, 0x00, 0x03, 0x00, 0x02, 0x00, 0x01,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+    0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x01, 0x02, 0x01, 0x02, 0x02, 0x01, 0x03, 0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00,
+};
+byte CT_VCMD_LEN_TABLE[] = {
+                            0x01, 0x02, 0x01, 0x02, 0x02, 0x03, 0x00, 0x03, 0x00, 0x02, 0x00, 0x01,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+    0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x01, 0x02, 0x01, 0x02, 0x01, 0x03, 0x02, 0x02, 0x02, 0x01, 0x03, 0x00, 0x00, 0x01, 0x00, 0x00,
+};
+byte DT_VCMD_LEN_TABLE[] = {
+                            0x01, 0x02, 0x01, 0x02, 0x02, 0x03, 0x00, 0x03, 0x00, 0x02, 0x00, 0x01,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+    0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00,
+    0x01, 0x02, 0x01, 0x02, 0x01, 0x03, 0x02, 0x01, 0x01, 0x01, 0x03, 0x00, 0x00, 0x01, 0x00, 0x00,
+};
+byte GH_VCMD_LEN_TABLE[] = {
+                            0x01, 0x02, 0x01, 0x02, 0x02, 0x03, 0x00, 0x03, 0x00, 0x02, 0x00, 0x01,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+    0x01, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00,
+    0x01, 0x02, 0x01, 0x02, 0x01, 0x03, 0x02, 0x01, 0x01, 0x01, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00,
+};
+byte SD2_VCMD_LEN_TABLE[] = {
+                0x01, 0x02, 0x01, 0x02, 0x02, 0x03, 0x00, 0x03, 0x00, 0x02, 0x00, 0x01, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x00,
+    0x01, 0x00, 0x00, 0x01, 0x02, 0x01, 0x02, 0x02, 0x01, 0x03, 0x02, 0x02, 0x00, 0x01, 0x00, 0x00,
 };
 
 // MIDI/SMF limitations
@@ -65,14 +130,19 @@ typedef void (*AkaoSpcEvent) (AkaoSpcSeqStat *, SeqEventReport *);
 
 typedef struct TagAkaoSpcVerInfo {
     int id;
-    int seqListAddr;
-    int songIndex;
+    //int seqListAddr;
+    //int songIndex;
     int seqHeaderAddr;
     int noteLenTableLen;
     int noteLenTableAddr;
+    int vcmdTableAddr;
     int vcmdLenTableAddr;
+    byte vcmdFirstByte;
+    bool useROMAddress;
+    int apuAddressBase; // ROM -> ARAM
     AkaoSpcEvent event[256];
     PatchFixInfo patchFix[256];
+    char debugHeaderInfo[1024];
     bool seqDetected;
 } AkaoSpcVerInfo;
 
@@ -206,10 +276,14 @@ bool akaoSpcImportPatchFixFile (const char *filename)
 static const char *akaoSpcVerToStrHtml (AkaoSpcSeqStat *seq)
 {
     switch (seq->ver.id) {
+    case SPC_VER_FF4:
+        return "Final Fantasy 4";
     case SPC_VER_RS1:
         return "Romancing SaGa";
-    case SPC_VER_RS3:
-        return "Romancing SaGa 3";
+    case SPC_VER_FF5:
+        return "Final Fantasy 5";
+    case SPC_VER_RS2:
+        return "Romancing SaGa 2";
     default:
         return "Unknown Version / Unsupported";
     }
@@ -271,15 +345,25 @@ static int akaoSpcCheckVer (AkaoSpcSeqStat *seq)
 {
     int version = SPC_VER_UNKNOWN;
     int noteLenLdCodeAddr;
+    int noteLenLdCodeVer = SPC_VER_UNKNOWN;
+    int vcmdExecCodeAddr;
+    int vcmdExecCodeVer = SPC_VER_UNKNOWN;
+    int songLdCodeAddr;
+    char argDumpStr[512];
 
     seq->timebase = akaoSpcTimeBase;
-    seq->ver.seqListAddr = -1;
-    seq->ver.songIndex = -1;
+    //seq->ver.seqListAddr = -1;
+    //seq->ver.songIndex = -1;
     seq->ver.seqHeaderAddr = -1;
     seq->ver.noteLenTableAddr = -1;
     seq->ver.noteLenTableLen = 0;
+    seq->ver.vcmdTableAddr = -1;
     seq->ver.vcmdLenTableAddr = -1;
+    seq->ver.vcmdFirstByte = -1;
+    seq->ver.useROMAddress = false;
+    seq->ver.apuAddressBase = 0;
     seq->ver.seqDetected = false;
+    strcpy(seq->ver.debugHeaderInfo, "CheckVer");
 
     // (Romancing SaGa 2)
     // mov   x,#$0e
@@ -290,6 +374,8 @@ static int akaoSpcCheckVer (AkaoSpcSeqStat *seq)
     {
         seq->ver.noteLenTableAddr = mget2l(&seq->aRAM[noteLenLdCodeAddr + 6]);
         seq->ver.noteLenTableLen = 14;
+        strcat(seq->ver.debugHeaderInfo, ", NoteLen=RS2");
+        noteLenLdCodeVer = SPC_VER_RS2;
     }
     // (Romacing SaGa)
     // mov   y,#$00
@@ -297,10 +383,12 @@ static int akaoSpcCheckVer (AkaoSpcSeqStat *seq)
     // div   ya,x
     // mov   x,$06
     // mov   a,$19f4+y
-    if ((noteLenLdCodeAddr = indexOfHexPat(seq->aRAM, "\x8d\\\x00\xcd\x0f\x9e\xf8.\xf6..", SPC_ARAM_SIZE, NULL)) != -1)
+    else if ((noteLenLdCodeAddr = indexOfHexPat(seq->aRAM, "\x8d\\\x00\xcd\x0f\x9e\xf8.\xf6..", SPC_ARAM_SIZE, NULL)) != -1)
     {
         seq->ver.noteLenTableAddr = mget2l(&seq->aRAM[noteLenLdCodeAddr + 8]);
         seq->ver.noteLenTableLen = 14;
+        strcat(seq->ver.debugHeaderInfo, ", NoteLen=RS1");
+        noteLenLdCodeVer = SPC_VER_RS1;
     }
     // (Final Fantasy 4)
     // mov   x,#$0f
@@ -312,7 +400,263 @@ static int akaoSpcCheckVer (AkaoSpcSeqStat *seq)
     {
         seq->ver.noteLenTableAddr = mget2l(&seq->aRAM[noteLenLdCodeAddr + 8]);
         seq->ver.noteLenTableLen = 15;
+        strcat(seq->ver.debugHeaderInfo, ", NoteLen=FF4");
+        noteLenLdCodeVer = SPC_VER_FF4;
     }
+
+    // (Romancing SaGa 3)
+    // sbc   a,#$c4
+    // mov   $a6,a
+    // asl   a
+    // mov   y,a
+    // mov   a,$1656+y
+    // push  a
+    // mov   a,$1655+y
+    // push  a
+    // mov   y,$a6
+    // mov   a,$16cd+y
+    // bne   $0747
+    // ret
+    if ((vcmdExecCodeAddr = indexOfHexPat(seq->aRAM, "\xa8.\xc4.\x1c\xfd\xf6..\x2d\xf6..\x2d\xeb.\xf6....", SPC_ARAM_SIZE, NULL)) != -1)
+    {
+        if (seq->aRAM[vcmdExecCodeAddr + 3] == seq->aRAM[vcmdExecCodeAddr + 15] &&
+            mget2l(&seq->aRAM[vcmdExecCodeAddr + 7]) == mget2l(&seq->aRAM[vcmdExecCodeAddr + 11]) + 1 &&
+            (seq->aRAM[vcmdExecCodeAddr + 19] == 0xf0 || seq->aRAM[vcmdExecCodeAddr + 19] == 0xd0)) // beq/bne
+        {
+            seq->ver.vcmdFirstByte = seq->aRAM[vcmdExecCodeAddr + 1];
+            seq->ver.vcmdTableAddr = mget2l(&seq->aRAM[vcmdExecCodeAddr + 11]);
+            seq->ver.vcmdLenTableAddr = mget2l(&seq->aRAM[vcmdExecCodeAddr + 17]);
+            strcat(seq->ver.debugHeaderInfo, ", VcmdExec=RS3");
+            vcmdExecCodeVer = SPC_VER_RS2;
+        }
+    }
+    // (Final Fantasy 5)
+    // sbc   a,#$d2
+    // asl   a
+    // mov   y,a
+    // mov   a,$182c+y
+    // push  a
+    // mov   a,$182b+y
+    // push  a
+    // mov   a,y
+    // lsr   a
+    // mov   y,a
+    // mov   a,$1887+y
+    // beq   $05a6
+    else if ((vcmdExecCodeAddr = indexOfHexPat(seq->aRAM, "\xa8.\x1c\xfd\xf6..\x2d\xf6..\x2d\xdd\\\x5c\xfd\xf6....", SPC_ARAM_SIZE, NULL)) != -1)
+    {
+        if (mget2l(&seq->aRAM[vcmdExecCodeAddr + 5]) == mget2l(&seq->aRAM[vcmdExecCodeAddr + 9]) + 1 &&
+            (seq->aRAM[vcmdExecCodeAddr + 18] == 0xf0 || seq->aRAM[vcmdExecCodeAddr + 18] == 0xd0)) // beq/bne
+        {
+            seq->ver.vcmdFirstByte = seq->aRAM[vcmdExecCodeAddr + 1];
+            seq->ver.vcmdTableAddr = mget2l(&seq->aRAM[vcmdExecCodeAddr + 9]);
+            seq->ver.vcmdLenTableAddr = mget2l(&seq->aRAM[vcmdExecCodeAddr + 16]);
+            strcat(seq->ver.debugHeaderInfo, ", VcmdExec=FF5");
+            vcmdExecCodeVer = SPC_VER_FF4;
+        }
+    }
+
+    // (Romancing SaGa 3)
+    // mov   a,$2200           ; $2200 - header start address
+    // mov   $00,a
+    // mov   a,$2201
+    // mov   $01,a             ; header 00/1 - ROM address base
+    // mov   a,#$24
+    // mov   y,#$22            ; $2224 - ARAM address base
+    // subw  ya,$00
+    // movw  $00,ya            ; $00/1 - offset from ROM to ARAM address
+    if ((songLdCodeAddr = indexOfHexPat(seq->aRAM, "\xe5..\xc4.\xe5..\xc4.\xe8.\x8d.\x9a.\xda.", SPC_ARAM_SIZE, NULL)) != -1)
+    {
+        if (mget2l(&seq->aRAM[songLdCodeAddr + 1]) + 1 == mget2l(&seq->aRAM[songLdCodeAddr + 6]) &&
+            seq->aRAM[songLdCodeAddr + 4] + 1 == seq->aRAM[songLdCodeAddr + 9] &&
+            seq->aRAM[songLdCodeAddr + 4] == seq->aRAM[songLdCodeAddr + 15] &&
+            seq->aRAM[songLdCodeAddr + 15] == seq->aRAM[songLdCodeAddr + 17])
+        {
+            seq->ver.seqHeaderAddr = mget2l(&seq->aRAM[songLdCodeAddr + 1]);
+            seq->ver.useROMAddress = true;
+            seq->ver.apuAddressBase = (seq->aRAM[songLdCodeAddr + 13] << 8) | seq->aRAM[songLdCodeAddr + 11];
+            strcat(seq->ver.debugHeaderInfo, ", SongLd=RS3");
+        }
+    }
+    // (Final Fantasy: Mystic Quest)
+    // mov   x,#$10
+    // mov   a,$1bff+x
+    // mov   $0d+x,a
+    // dec   x
+    // bne   $0dfb
+    // mov   a,#$12
+    // mov   y,#$1c
+    // subw  ya,$0e
+    // movw  $08,ya
+    // mov   x,#$0e
+    // mov   $c1,#$80
+    // mov   a,$1c10
+    // mov   y,$1c11
+    // movw  $36,ya
+    else if ((songLdCodeAddr = indexOfHexPat(seq->aRAM, "\xcd\x10\xf5..\xd4.\x1d\xd0\xf8\xe8.\x8d.\x9a.\xda.\xcd\x0e\x8f\x80.\xe5..\xec..\xda.", SPC_ARAM_SIZE, NULL)) != -1)
+    {
+        if (mget2l(&seq->aRAM[songLdCodeAddr + 3]) + 0x11 == mget2l(&seq->aRAM[songLdCodeAddr + 24]) &&
+            mget2l(&seq->aRAM[songLdCodeAddr + 24]) + 1 == mget2l(&seq->aRAM[songLdCodeAddr + 27]) &&
+            seq->aRAM[songLdCodeAddr + 6] + 1 == seq->aRAM[songLdCodeAddr + 15])
+        {
+            seq->ver.seqHeaderAddr = mget2l(&seq->aRAM[songLdCodeAddr + 3]) + 1;
+            seq->ver.useROMAddress = true;
+            seq->ver.apuAddressBase = (seq->aRAM[songLdCodeAddr + 13] << 8) | seq->aRAM[songLdCodeAddr + 11];
+            strcat(seq->ver.debugHeaderInfo, ", SongLd=FFMQ");
+        }
+    }
+    // (Romancing SaGa)
+    // mov   x,#$00
+    // mov   y,#$00
+    // mov   $93,#$01
+    // mov   a,$2001+x
+    // beq   $14d8
+    // or    ($8e),($93)
+    // mov   $08+x,a
+    // mov   a,$2000+x
+    // mov   $07+x,a
+    else if ((songLdCodeAddr = indexOfHexPat(seq->aRAM, "\xcd\\\x00\x8d\\\x00\x8f\x01.\xf5..\xf0.\x09..\xd4.\xf5..\xd4.", SPC_ARAM_SIZE, NULL)) != -1)
+    {
+        if (mget2l(&seq->aRAM[songLdCodeAddr + 8]) == mget2l(&seq->aRAM[songLdCodeAddr + 18]) + 1 &&
+            seq->aRAM[songLdCodeAddr + 6] == seq->aRAM[songLdCodeAddr + 13] &&
+            seq->aRAM[songLdCodeAddr + 16] == seq->aRAM[songLdCodeAddr + 21] + 1)
+        {
+            seq->ver.seqHeaderAddr = mget2l(&seq->aRAM[songLdCodeAddr + 18]);
+            seq->ver.useROMAddress = false;
+            seq->ver.apuAddressBase = 0;
+            strcat(seq->ver.debugHeaderInfo, ", SongLd=RS1");
+        }
+    }
+    // (Final Fantasy 4)
+    // mov   y,#$01
+    // mov   $8d,y
+    // mov   x,#$00
+    // mov   a,$2000+x
+    // mov   $02+x,a
+    // mov   a,$2001+x
+    // mov   $03+x,a
+    // beq   $154c
+    // mov   $48+x,y
+    else if ((songLdCodeAddr = indexOfHexPat(seq->aRAM, "\x8d\x01\xcb.\xcd\\\x00\xf5..\xd4.\xf5..\xd4.\xf0.\xdb.", SPC_ARAM_SIZE, NULL)) != -1)
+    {
+        if (mget2l(&seq->aRAM[songLdCodeAddr + 7]) + 1 == mget2l(&seq->aRAM[songLdCodeAddr + 12]) &&
+            seq->aRAM[songLdCodeAddr + 10] + 1 == seq->aRAM[songLdCodeAddr + 15])
+        {
+            seq->ver.seqHeaderAddr = mget2l(&seq->aRAM[songLdCodeAddr + 7]);
+            seq->ver.useROMAddress = false;
+            seq->ver.apuAddressBase = 0;
+            strcat(seq->ver.debugHeaderInfo, ", SongLd=FF4");
+        }
+    }
+
+    if (seq->ver.vcmdLenTableAddr != -1)
+    {
+        if (seq->ver.vcmdFirstByte == 0x100 - countof(FF4_VCMD_LEN_TABLE) &&
+            memcmp(&seq->aRAM[seq->ver.vcmdLenTableAddr], FF4_VCMD_LEN_TABLE, sizeof(FF4_VCMD_LEN_TABLE)) == 0)
+        {
+            strcat(seq->ver.debugHeaderInfo, ", VcmdLenTbl=FF4");
+        }
+        else if (seq->ver.vcmdFirstByte == 0x100 - countof(FF5_VCMD_LEN_TABLE) &&
+            memcmp(&seq->aRAM[seq->ver.vcmdLenTableAddr], FF5_VCMD_LEN_TABLE, sizeof(FF5_VCMD_LEN_TABLE)) == 0)
+        {
+            strcat(seq->ver.debugHeaderInfo, ", VcmdLenTbl=FF5");
+        }
+        else if (seq->ver.vcmdFirstByte == 0x100 - countof(FF6_VCMD_LEN_TABLE) &&
+            memcmp(&seq->aRAM[seq->ver.vcmdLenTableAddr], FF6_VCMD_LEN_TABLE, sizeof(FF6_VCMD_LEN_TABLE)) == 0)
+        {
+            strcat(seq->ver.debugHeaderInfo, ", VcmdLenTbl=FF6");
+        }
+        else if (seq->ver.vcmdFirstByte == 0x100 - countof(RS1_VCMD_LEN_TABLE) &&
+            memcmp(&seq->aRAM[seq->ver.vcmdLenTableAddr], RS1_VCMD_LEN_TABLE, sizeof(RS1_VCMD_LEN_TABLE)) == 0)
+        {
+            strcat(seq->ver.debugHeaderInfo, ", VcmdLenTbl=RS1");
+        }
+        else if (seq->ver.vcmdFirstByte == 0x100 - countof(RS2_VCMD_LEN_TABLE) &&
+            memcmp(&seq->aRAM[seq->ver.vcmdLenTableAddr], RS2_VCMD_LEN_TABLE, sizeof(RS2_VCMD_LEN_TABLE)) == 0)
+        {
+            strcat(seq->ver.debugHeaderInfo, ", VcmdLenTbl=RS2");
+        }
+        else if (seq->ver.vcmdFirstByte == 0x100 - countof(RS3_VCMD_LEN_TABLE) &&
+            memcmp(&seq->aRAM[seq->ver.vcmdLenTableAddr], RS3_VCMD_LEN_TABLE, sizeof(RS3_VCMD_LEN_TABLE)) == 0)
+        {
+            strcat(seq->ver.debugHeaderInfo, ", VcmdLenTbl=RS3");
+        }
+        else if (seq->ver.vcmdFirstByte == 0x100 - countof(LAL_VCMD_LEN_TABLE) &&
+            memcmp(&seq->aRAM[seq->ver.vcmdLenTableAddr], LAL_VCMD_LEN_TABLE, sizeof(LAL_VCMD_LEN_TABLE)) == 0)
+        {
+            strcat(seq->ver.debugHeaderInfo, ", VcmdLenTbl=LAL");
+        }
+        else if (seq->ver.vcmdFirstByte == 0x100 - countof(CT_VCMD_LEN_TABLE) &&
+            memcmp(&seq->aRAM[seq->ver.vcmdLenTableAddr], CT_VCMD_LEN_TABLE, sizeof(CT_VCMD_LEN_TABLE)) == 0)
+        {
+            strcat(seq->ver.debugHeaderInfo, ", VcmdLenTbl=CT");
+        }
+        else if (seq->ver.vcmdFirstByte == 0x100 - countof(DT_VCMD_LEN_TABLE) &&
+            memcmp(&seq->aRAM[seq->ver.vcmdLenTableAddr], DT_VCMD_LEN_TABLE, sizeof(DT_VCMD_LEN_TABLE)) == 0)
+        {
+            strcat(seq->ver.debugHeaderInfo, ", VcmdLenTbl=DT");
+        }
+        else if (seq->ver.vcmdFirstByte == 0x100 - countof(GH_VCMD_LEN_TABLE) &&
+            memcmp(&seq->aRAM[seq->ver.vcmdLenTableAddr], GH_VCMD_LEN_TABLE, sizeof(GH_VCMD_LEN_TABLE)) == 0)
+        {
+            strcat(seq->ver.debugHeaderInfo, ", VcmdLenTbl=GH");
+        }
+        else if (seq->ver.vcmdFirstByte == 0x100 - countof(SD2_VCMD_LEN_TABLE) &&
+            memcmp(&seq->aRAM[seq->ver.vcmdLenTableAddr], SD2_VCMD_LEN_TABLE, sizeof(SD2_VCMD_LEN_TABLE)) == 0)
+        {
+            strcat(seq->ver.debugHeaderInfo, ", VcmdLenTbl=SD2");
+        }
+        else
+        {
+            strcat(seq->ver.debugHeaderInfo, ", VcmdLenTbl=???");
+        }
+
+        if (seq->ver.useROMAddress)
+        {
+            sprintf(argDumpStr, ", ARAMBase=$%04X", seq->ver.apuAddressBase);
+            strcat(seq->ver.debugHeaderInfo, argDumpStr);
+        }
+        else
+        {
+            strcat(seq->ver.debugHeaderInfo, ", ARAMBase=none");
+        }
+        sprintf(argDumpStr, ", VCmdAt=$%02X", seq->ver.vcmdFirstByte);
+        strcat(seq->ver.debugHeaderInfo, argDumpStr);
+    }
+
+    // classify
+    if (seq->ver.seqHeaderAddr != -1 &&
+        seq->ver.noteLenTableAddr != -1 &&
+        seq->ver.vcmdTableAddr != -1 &&
+        seq->ver.vcmdLenTableAddr != -1)
+    {
+        if (noteLenLdCodeVer == SPC_VER_FF4 &&
+            seq->ver.vcmdFirstByte == 0xd2 &&
+            !seq->ver.useROMAddress)
+        {
+            version = SPC_VER_FF4;
+        }
+        else if (noteLenLdCodeVer == SPC_VER_RS1 &&
+            seq->ver.vcmdFirstByte == 0xd2 &&
+            !seq->ver.useROMAddress)
+        {
+            version = SPC_VER_RS1;
+        }
+        else if (noteLenLdCodeVer == SPC_VER_RS1 &&
+            seq->ver.vcmdFirstByte == 0xd2 &&
+            seq->ver.useROMAddress)
+        {
+            version = SPC_VER_FF5;
+        }
+        else if (noteLenLdCodeVer == SPC_VER_RS2 &&
+            seq->ver.vcmdFirstByte == 0xc4 &&
+            seq->ver.useROMAddress)
+        {
+            version = SPC_VER_RS2;
+        }
+    }
+
+    fprintf(stderr, "Debug: %s\n", seq->ver.debugHeaderInfo);
 
     seq->ver.id = version;
     akaoSpcSetEventList(seq);
@@ -324,18 +668,19 @@ static bool akaoSpcDetectSeq (AkaoSpcSeqStat *seq)
 {
     bool result = true;
     int trackMax = SPC_TRACK_MAX;
-    int tr;
+    //int tr;
 
-    if (seq->ver.id == SPC_VER_UNKNOWN)
+    //if (seq->ver.id == SPC_VER_UNKNOWN)
         return false;
 
+    // TODO: NYI
+#if 0
     akaoSpcResetParam(seq);
     // track list
     for (tr = 0; tr < trackMax; tr++) {
         int trackAddr = mget2l(&seq->aRAM[tr * 2 + seq->ver.seqHeaderAddr]);
         seq->track[tr].pos = trackAddr;
 
-        // TODO: HACK to know proper track count
         if (trackAddr < (SPC_TRACK_MAX * 2 + seq->ver.seqHeaderAddr) &&
             trackAddr >= seq->ver.seqHeaderAddr)
         {
@@ -345,6 +690,7 @@ static bool akaoSpcDetectSeq (AkaoSpcSeqStat *seq)
         seq->track[tr].active = true;
         result = true;
     }
+#endif
 
     return result;
 }
@@ -405,7 +751,17 @@ static void printHtmlInfoList (AkaoSpcSeqStat *seq)
     //myprintf("          <li>Song List: $%04X</li>\n", seq->ver.seqListAddr);
     myprintf("          <li>Song Entry: $%04X", seq->ver.seqHeaderAddr);
     myprintf("          <li>Note Length Table: $%04X (%d bytes)", seq->ver.noteLenTableAddr, seq->ver.noteLenTableLen);
-    myprintf("          <li>Voice Cmd Length Table: $%04X", seq->ver.vcmdLenTableAddr);
+    myprintf("          <li>Voice Command Table: $%04X", seq->ver.vcmdTableAddr);
+    myprintf("          <li>Voice Command Length Table: $%04X", seq->ver.vcmdLenTableAddr);
+    myprintf("          <li>First Voice Command Byte: $%02X", seq->ver.vcmdFirstByte);
+    if (seq->ver.useROMAddress)
+    {
+        myprintf("          <li>APU RAM Address Base: $%04X", seq->ver.apuAddressBase);
+    }
+    if (strcmp(seq->ver.debugHeaderInfo, "") != 0)
+    {
+        //myprintf("          <li>Other Info: %s", seq->ver.debugHeaderInfo);
+    }
     //myprintf(" (Song $%02x)", seq->ver.songIndex);
     myprintf("</li>\n");
 }
