@@ -674,7 +674,7 @@ static bool akaoSpcDetectSeq (AkaoSpcSeqStat *seq)
     if (seq->ver.id == SPC_VER_UNKNOWN)
         return false;
 
-    if (seq->ver.id != SPC_VER_REV4) //TODO
+    if (seq->ver.id != SPC_VER_REV3 && seq->ver.id != SPC_VER_REV4) //TODO
         return false;
 
     seq->apuAddressOffset = 0;
@@ -683,8 +683,15 @@ static bool akaoSpcDetectSeq (AkaoSpcSeqStat *seq)
     seqHeaderReadOfs = seq->ver.seqHeaderAddr;
     seq->apuAddressOffset = (seq->ver.apuAddressBase - mget2l(&seq->aRAM[seqHeaderReadOfs])) & 0xffff;
     seqHeaderReadOfs += 2;
-    seqEndOffset = mget2l(&seq->aRAM[seqHeaderReadOfs]);
-    seqHeaderReadOfs += 2;
+    if (seq->ver.id == SPC_VER_REV3)
+    {
+        seqEndOffset = mget2l(&seq->aRAM[seqHeaderReadOfs + SPC_TRACK_MAX * 2]);
+    }
+    else
+    {
+        seqEndOffset = mget2l(&seq->aRAM[seqHeaderReadOfs]);
+        seqHeaderReadOfs += 2;
+    }
     // track list
     for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
         int trackAddr = mget2l(&seq->aRAM[seqHeaderReadOfs]);
