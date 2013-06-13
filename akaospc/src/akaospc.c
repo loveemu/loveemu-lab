@@ -145,7 +145,7 @@ byte BSGAME_VCMD_LEN_TABLE[] = {
 
 // any changes are not needed normally
 #define SPC_TRACK_MAX       8
-#define SPC_NOTE_KEYSHIFT   24
+#define SPC_NOTE_KEYSHIFT   12
 #define SPC_ARAM_SIZE       0x10000
 
 typedef struct TagAkaoSpcTrackStat AkaoSpcTrackStat;
@@ -165,6 +165,7 @@ typedef struct TagAkaoSpcVerInfo {
     byte vcmdFirstByte;
     bool useROMAddress;
     int apuAddressBase; // ROM -> ARAM
+    int timer0Freq;
     AkaoSpcEvent event[256];
     PatchFixInfo patchFix[256];
     bool seqDetected;
@@ -384,6 +385,7 @@ static int akaoSpcCheckVer (AkaoSpcSeqStat *seq)
     int vcmdExecCodeAddr;
     int vcmdExecCodeVer = SPC_VER_UNKNOWN;
     int songLdCodeAddr;
+    int timerSetCodeAddr;
 
     seq->timebase = akaoSpcTimeBase;
     //seq->ver.seqListAddr = -1;
@@ -397,6 +399,7 @@ static int akaoSpcCheckVer (AkaoSpcSeqStat *seq)
     seq->ver.useROMAddress = false;
     seq->ver.apuAddressBase = 0;
     seq->ver.seqDetected = false;
+    seq->ver.timer0Freq = -1;
     seq->ver.subId = SPC_SUBVER_UNKNOWN;
 
     // (Romancing SaGa 2)
@@ -574,11 +577,66 @@ static int akaoSpcCheckVer (AkaoSpcSeqStat *seq)
         }
     }
 
+    // (Final Fantasy 5)
+    // mov   $f1,#$f0
+    // mov   $fa,#$24
+    // mov   $fb,#$80
+    // mov   $f1,#$03
+    if ((timerSetCodeAddr = indexOfHexPat(seq->aRAM, "\x8f.\xf1\x8f.\xfa\x8f.\xfb\x8f\x03\xf1", SPC_ARAM_SIZE, NULL)) != -1)
+    {
+        if ((seq->aRAM[timerSetCodeAddr + 1] & 0x07) == 0 &&
+            seq->aRAM[timerSetCodeAddr + 10] == 0x03)
+        {
+            seq->ver.timer0Freq = seq->aRAM[timerSetCodeAddr + 4];
+        }
+    }
+    // (Live A Live)
+    // mov   $f1,#$f0
+    // mov   $fa,#$24
+    // mov   $fb,#$80
+    // mov   $fc,#$05
+    // mov   $f1,#$03
+    else if ((timerSetCodeAddr = indexOfHexPat(seq->aRAM, "\x8f.\xf1\x8f.\xfa\x8f.\xfb\x8f.\xfc\x8f\x07\xf1", SPC_ARAM_SIZE, NULL)) != -1)
+    {
+        if ((seq->aRAM[timerSetCodeAddr + 1] & 0x07) == 0)
+        {
+            seq->ver.timer0Freq = seq->aRAM[timerSetCodeAddr + 4];
+        }
+    }
+    // (Seiken Densetsu 2)
+    // mov   $f1,#$f0
+    // mov   $fa,#$24
+    // mov   $f1,#$01
+    else if ((timerSetCodeAddr = indexOfHexPat(seq->aRAM, "\x8f.\xf1\x8f.\xfa\x8f\x01\xf1", SPC_ARAM_SIZE, NULL)) != -1)
+    {
+        if ((seq->aRAM[timerSetCodeAddr + 1] & 0x07) == 0)
+        {
+            seq->ver.timer0Freq = seq->aRAM[timerSetCodeAddr + 4];
+        }
+    }
+    // (Final Fantasy 4)
+    // mov   a,#$f0
+    // mov   $f1,a             ; clear ports, stop timers
+    // mov   a,#$24
+    // mov   $fa,a             ; set timer 0 latch to #$24 (222.2 Hz)
+    // mov   a,#$80
+    // mov   $fb,a             ; set timer 1 latch to #$80 (62.5 Hz)
+    // mov   a,#$03
+    // mov   $f1,a             ; start timers 0 and 1
+    else if ((timerSetCodeAddr = indexOfHexPat(seq->aRAM, "\xe8.\xc4\xf1\xe8.\xc4\xfa\xe8.\xc4\xfb\xe8\x03\xc4\xf1", SPC_ARAM_SIZE, NULL)) != -1)
+    {
+        if ((seq->aRAM[timerSetCodeAddr + 1] & 0x07) == 0)
+        {
+            seq->ver.timer0Freq = seq->aRAM[timerSetCodeAddr + 5];
+        }
+    }
+
     // classify
     if (seq->ver.seqHeaderAddr != -1 &&
         seq->ver.noteLenTableAddr != -1 &&
         seq->ver.vcmdTableAddr != -1 &&
-        seq->ver.vcmdLenTableAddr != -1)
+        seq->ver.vcmdLenTableAddr != -1 &&
+        seq->ver.timer0Freq != -1)
     {
         if (noteLenLdCodeVer == SPC_VER_REV1 &&
             seq->ver.vcmdFirstByte == 0xd2 &&
@@ -780,6 +838,7 @@ static void printHtmlInfoList (AkaoSpcSeqStat *seq)
     {
         myprintf("          <li>APU RAM Address Base: $%04X", seq->ver.apuAddressBase);
     }
+    myprintf("          <li>Timer 0 Frequency: $%02X", seq->ver.timer0Freq);
     //myprintf(" (Song $%02x)", seq->ver.songIndex);
     myprintf("</li>\n");
 }
@@ -843,7 +902,7 @@ static void printEventTableFooter (AkaoSpcSeqStat *seq, Smf* smf)
 /** convert SPC tempo into bpm. */
 static double akaoSpcTempo (AkaoSpcSeqStat *seq)
 {
-    return (double) seq->tempo * 60000000 / 55296000; // 55296000 = (timer0) 4.5ms * 48 TPQN * 256
+    return (double) seq->tempo * 60000000 / (125 * seq->ver.timer0Freq * 48 * 256); // 55296000 = (timer0) 4.5ms * 48 TPQN * 256
 }
 
 /** convert SPC velocity into MIDI one. */
@@ -1235,11 +1294,8 @@ static void akaoSpcEventNote (AkaoSpcSeqStat *seq, SeqEventReport *ev)
         strcat(ev->classStr, " ev-note");
     }
 
-    if (tie)
-    {
-        if (!akaoSpcLessTextInSMF)
-           smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
-    }
+    //if (!akaoSpcLessTextInSMF)
+    //   smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 
     // output old note first
     if (!tie)
@@ -1256,7 +1312,7 @@ static void akaoSpcEventNote (AkaoSpcSeqStat *seq, SeqEventReport *ev)
             tr->lastNote.tick = ev->tick;
             tr->lastNote.dur = dur;
             tr->lastNote.key = note;
-            //tr->lastNote.vel = tr->note.vel;
+            tr->lastNote.vel = 100;
             tr->lastNote.transpose = seq->transpose + tr->note.transpose;
             tr->lastNote.patch = tr->note.patch;
         }
