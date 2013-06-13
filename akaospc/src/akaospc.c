@@ -191,7 +191,9 @@ struct TagAkaoSpcTrackStat {
     AkaoSpcNoteParam lastNote; // note params for last note
     int lastNoteLen;        // last note length ($0230+x)
     int looped;             // how many times looped (internal)
+    byte octave;            // octave
     int patch;              // patch number (for pitch fix)
+    bool rhythmChannel;     // rhythm channel / melody channel
 };
 
 struct TagAkaoSpcSeqStat {
@@ -322,9 +324,12 @@ static void akaoSpcResetTrackParam (AkaoSpcSeqStat *seq, int track)
     tr->used = false;
     tr->prevTick = tr->tick;
     tr->looped = 0;
+    tr->octave = 6;
     tr->note.transpose = 0;
     tr->lastNote.active = false;
     tr->lastNoteLen = 0;
+    tr->patch = 0;
+    tr->rhythmChannel = false;
 }
 
 /** reset before play/convert song. */
@@ -335,7 +340,7 @@ static void akaoSpcResetParam (AkaoSpcSeqStat *seq)
 
     seq->tick = 0;
     seq->time = 0;
-    seq->tempo = 0x40;
+    seq->tempo = 1;
     seq->transpose = 0;
     seq->looped = 0;
     seq->active = true;
@@ -668,30 +673,32 @@ static bool akaoSpcDetectSeq (AkaoSpcSeqStat *seq)
 {
     bool result = true;
     int seqHeaderReadOfs;
-    int seqEndOffset = 0;
+    int seqEndOffset;
     int tr;
 
     if (seq->ver.id == SPC_VER_UNKNOWN)
         return false;
 
-    if (seq->ver.id != SPC_VER_REV3 && seq->ver.id != SPC_VER_REV4) //TODO
-        return false;
-
     seq->apuAddressOffset = 0;
+    seqEndOffset = 0;
     akaoSpcResetParam(seq);
 
     seqHeaderReadOfs = seq->ver.seqHeaderAddr;
-    seq->apuAddressOffset = (seq->ver.apuAddressBase - mget2l(&seq->aRAM[seqHeaderReadOfs])) & 0xffff;
-    seqHeaderReadOfs += 2;
-    if (seq->ver.id == SPC_VER_REV3)
+    if (seq->ver.id != SPC_VER_REV1 && seq->ver.id != SPC_VER_REV2)
     {
-        seqEndOffset = mget2l(&seq->aRAM[seqHeaderReadOfs + SPC_TRACK_MAX * 2]);
-    }
-    else
-    {
-        seqEndOffset = mget2l(&seq->aRAM[seqHeaderReadOfs]);
+        seq->apuAddressOffset = (seq->ver.apuAddressBase - mget2l(&seq->aRAM[seqHeaderReadOfs])) & 0xffff;
         seqHeaderReadOfs += 2;
+        if (seq->ver.id == SPC_VER_REV3)
+        {
+            seqEndOffset = mget2l(&seq->aRAM[seqHeaderReadOfs + SPC_TRACK_MAX * 2]);
+        }
+        else
+        {
+            seqEndOffset = mget2l(&seq->aRAM[seqHeaderReadOfs]);
+            seqHeaderReadOfs += 2;
+        }
     }
+
     // track list
     for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
         int trackAddr = mget2l(&seq->aRAM[seqHeaderReadOfs]);
@@ -706,25 +713,6 @@ static bool akaoSpcDetectSeq (AkaoSpcSeqStat *seq)
         seq->track[tr].active = true;
         result = true;
     }
-
-    // TODO: NYI
-#if 0
-    akaoSpcResetParam(seq);
-    // track list
-    for (tr = 0; tr < trackMax; tr++) {
-        int trackAddr = mget2l(&seq->aRAM[tr * 2 + seq->ver.seqHeaderAddr]);
-        seq->track[tr].pos = trackAddr;
-
-        if (trackAddr < (SPC_TRACK_MAX * 2 + seq->ver.seqHeaderAddr) &&
-            trackAddr >= seq->ver.seqHeaderAddr)
-        {
-            trackMax = (trackAddr - seq->ver.seqHeaderAddr) / 2;
-        }
-
-        seq->track[tr].active = true;
-        result = true;
-    }
-#endif
 
     return result;
 }
@@ -855,7 +843,7 @@ static void printEventTableFooter (AkaoSpcSeqStat *seq, Smf* smf)
 /** convert SPC tempo into bpm. */
 static double akaoSpcTempo (AkaoSpcSeqStat *seq)
 {
-    return (double) seq->tempo * 60000000 / 98304000; // 49152000 = (timer0) 4ms * 48 TPQN * 256
+    return (double) seq->tempo * 60000000 / 55296000; // 55296000 = (timer0) 4.5ms * 48 TPQN * 256
 }
 
 /** convert SPC velocity into MIDI one. */
@@ -874,6 +862,16 @@ static int akaoSpcMidiVolOf (int value)
         return value/2; // linear
     else
         return (int) floor(sqrt((double) value/255) * 127 + 0.5); // more similar with MIDI?
+}
+
+/** convert SPC channel panpot into MIDI one. */
+static int akaoSpcMidiPanOf (int value)
+{
+    if (value > 0x7f)
+    {
+        fprintf(stderr, "Warning: Panpot %d is too large\n", value); // older version, work on it later
+    }
+    return value/2; // linear (TODO: sine curve)
 }
 
 /** create new smf object and link to spc seq. */
@@ -1196,61 +1194,973 @@ static void akaoSpcEventNOP (AkaoSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
     sprintf(ev->note, "NOP");
 }
 
+/** vcmd 00-c3: note. */
+static void akaoSpcEventNote (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+    byte noteByte = ev->code;
+    int keyIndex = noteByte / seq->ver.noteLenTableLen;
+    int lenIndex = noteByte % seq->ver.noteLenTableLen;
+    int note;
+    int len;
+    int dur;
+    bool rest;
+    bool tie;
+
+    tie = (keyIndex == 12);
+    rest = (keyIndex == 13);
+
+    len = seq->aRAM[seq->ver.noteLenTableAddr + lenIndex];
+    dur = len;
+    if (!tie && !rest)
+    {
+        note = (tr->octave * 12) + keyIndex;
+    }
+
+    if (rest) {
+        sprintf(ev->note, "Rest, len = %d", len);
+        strcat(ev->classStr, " ev-rest");
+    }
+    else if (tie) {
+        sprintf(ev->note, "Tie, len = %d", len);
+        strcat(ev->classStr, " ev-tie");
+    }
+    else {
+        getNoteName(ev->note, note + seq->transpose + tr->note.transpose
+            + seq->ver.patchFix[tr->note.patch].key
+            + (tr->rhythmChannel ? 0 : SPC_NOTE_KEYSHIFT));
+        sprintf(argDumpStr, ", len = %d", len);
+        strcat(ev->note, argDumpStr);
+        strcat(ev->classStr, " ev-note");
+    }
+
+    if (tie)
+    {
+        if (!akaoSpcLessTextInSMF)
+           smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+    }
+
+    // output old note first
+    if (!tie)
+    {
+        akaoSpcDequeueNote(seq, ev->track);
+    }
+
+    // set new note
+    if (!rest) {
+        if (tie) {
+            tr->lastNote.dur += dur;
+        }
+        else {
+            tr->lastNote.tick = ev->tick;
+            tr->lastNote.dur = dur;
+            tr->lastNote.key = note;
+            //tr->lastNote.vel = tr->note.vel;
+            tr->lastNote.transpose = seq->transpose + tr->note.transpose;
+            tr->lastNote.patch = tr->note.patch;
+        }
+        tr->lastNote.tied = tie;
+        tr->lastNote.active = true;
+    }
+    tr->tick += len;
+}
+
+/** vcmd c4: set volume. */
+static void akaoSpcEventVolume (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Volume, vol = %d", arg1);
+    strcat(ev->classStr, " ev-vol");
+
+    //if (!akaoSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_VOLUME, akaoSpcMidiVolOf(arg1));
+}
+
+/** vcmd c5: set volume fade. */
+static void akaoSpcEventVolumeFade (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    int *p = &seq->track[ev->track].pos;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Volume Fade, speed = %d, vol = %d", arg1, arg2);
+    strcat(ev->classStr, " ev-vol");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_VOLUME, akaoSpcMidiVolOf(arg2)); // TODO: OH LAZY!
+}
+
+/** vcmd c6: set panpot. */
+static void akaoSpcEventPanpot (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Panpot, balance = %d", arg1);
+    strcat(ev->classStr, " ev-pan");
+
+    //if (!akaoSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_PANPOT, akaoSpcMidiPanOf(arg1));
+}
+
+/** vcmd c7: set volume fade. */
+static void akaoSpcEventPanpotFade (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    int *p = &seq->track[ev->track].pos;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Panpot Fade, speed = %d, vol = %d", arg1, arg2);
+    strcat(ev->classStr, " ev-pan");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_PANPOT, akaoSpcMidiPanOf(arg2)); // TODO: OH LAZY!
+}
+
+/** vcmd c8: portamento (one-shot pitch slide). */
+static void akaoSpcEventPitchSlide (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    int *p = &seq->track[ev->track].pos;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size += 3;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    sprintf(ev->note, "Pitch Slide, speed = %d, key += %d", arg1, arg2);
+    strcat(ev->classStr, " ev-pitchslide");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd c9: set vibrato on. */
+static void akaoSpcEventVibratoOn (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2, arg3;
+    int *p = &seq->track[ev->track].pos;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size += 3;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+    arg3 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Vibrato, delay = %d, rate = %d, depth = %d", arg1, arg2, arg3);
+    strcat(ev->classStr, " ev-vibrato");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd ca: set vibrato off. */
+static void akaoSpcEventVibratoOff (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int *p = &seq->track[ev->track].pos;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Vibrato Off");
+    strcat(ev->classStr, " ev-vibratooff");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd cb: set tremolo on. */
+static void akaoSpcEventTremoloOn (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2, arg3;
+    int *p = &seq->track[ev->track].pos;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size += 3;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+    arg3 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Tremolo, delay = %d, rate = %d, depth = %d", arg1, arg2, arg3);
+    strcat(ev->classStr, " ev-tremolo");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd cc: set tremolo off. */
+static void akaoSpcEventTremoloOff (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int *p = &seq->track[ev->track].pos;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Tremolo Off");
+    strcat(ev->classStr, " ev-tremolooff");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd cd: set panpot LFO on. */
+static void akaoSpcEventPanLFOOn (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2, arg3;
+    int *p = &seq->track[ev->track].pos;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size += 3;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+    arg3 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Panpot LFO, delay = %d, rate = %d, depth = %d", arg1, arg2, arg3);
+    strcat(ev->classStr, " ev-panLFO");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd ce: set panpot LFO off. */
+static void akaoSpcEventPanLFOOff (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int *p = &seq->track[ev->track].pos;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Panpot LFO Off");
+    strcat(ev->classStr, " ev-panLFOoff");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd cf: set noise clock. */
+static void akaoSpcEventNoiseFreq (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size += 1;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Set Noise Frequency, NCK = %d", arg1 & 0x1f);
+    strcat(ev->classStr, " ev-noisefreq");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd d0: noise on. */
+static void akaoSpcEventNoiseOn (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Noise On");
+    strcat(ev->classStr, " ev-noiseon");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd d1: noise off. */
+static void akaoSpcEventNoiseOff (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Noise Off");
+    strcat(ev->classStr, " ev-noiseoff");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd d2: pitchmod on. */
+static void akaoSpcEventPitchModOn (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Pitch Mod On");
+    strcat(ev->classStr, " ev-pitchmodon");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd d3: pitchmod off. */
+static void akaoSpcEventPitchModOff (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Pitch Mod Off");
+    strcat(ev->classStr, " ev-pitchmodoff");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd d4: echo on. */
+static void akaoSpcEventEchoOn (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Echo On");
+    strcat(ev->classStr, " ev-echoon");
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_REVERB, 100);
+}
+
+/** vcmd d5: echo off. */
+static void akaoSpcEventEchoOff (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Echo Off");
+    strcat(ev->classStr, " ev-echooff");
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_REVERB, 100);
+}
+
+/** vcmd d6: set octave. */
+static void akaoSpcEventSetOctave (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Set Octave, octave = %d", arg1);
+    strcat(ev->classStr, " ev-octave");
+
+    tr->octave = arg1;
+}
+
+/** vcmd d7: increase octave. */
+static void akaoSpcEventOctaveUp (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    tr->octave++; // wrong emulation, but I think it's good enough
+
+    sprintf(ev->note, "Octave Up, octave = %d", tr->octave);
+    strcat(ev->classStr, " ev-octaveup");
+}
+
+/** vcmd d8: decrease octave. */
+static void akaoSpcEventOctaveDown (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    tr->octave--; // wrong emulation, but I think it's good enough
+
+    sprintf(ev->note, "Octave Down, octave = %d", tr->octave);
+    strcat(ev->classStr, " ev-octavedown");
+}
+
+/** vcmd d9: transpose (absolute). */
+static void akaoSpcEventTransposeAbs (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    tr->note.transpose = arg1;
+
+    sprintf(ev->note, "Transpose, key = %d", arg1);
+    strcat(ev->classStr, " ev-transpose");
+
+    //if (!akaoSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd da: transpose (relative). */
+static void akaoSpcEventTransposeRel (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    tr->note.transpose += arg1;
+
+    sprintf(ev->note, "Transpose, key += %d", arg1);
+    strcat(ev->classStr, " ev-transpose");
+
+    //if (!akaoSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd db: detune. */
+static void akaoSpcEventDetune (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    sprintf(ev->note, "Tuning, key += %d / 256", arg1); // TODO: details
+    strcat(ev->classStr, " ev-tuning");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    //smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNM, 0);
+    //smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNL, 1);
+    //smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_DATAENTRYM, 64 + (arg1 / 4));
+    //smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_DATAENTRYL, 0);
+}
+
+/** vcmd dc: set instrument. */
+static void akaoSpcEventInstrument (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    tr->note.patch = arg1;
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_BANKSELM, seq->ver.patchFix[arg1].bankSelM);
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_BANKSELL, seq->ver.patchFix[arg1].bankSelL);
+    smfInsertProgram(seq->smf, ev->tick, ev->track, ev->track, seq->ver.patchFix[arg1].patchNo);
+
+    sprintf(ev->note, "Set Instrument, patch = %d", arg1);
+    strcat(ev->classStr, " ev-patch");
+}
+
+/** vcmd dd: set attack rate (AR). */
+static void akaoSpcEventSetAR (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Set Attack Rate, AR = %d", arg1 & 15);
+    strcat(ev->classStr, " ev-setAR");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd de: set decay rate (DR). */
+static void akaoSpcEventSetDR (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Set Decay Rate, DR = %d", arg1 & 7);
+    strcat(ev->classStr, " ev-setDR");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd df: set sustain level (SL). */
+static void akaoSpcEventSetSL (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Set Sustain Level, SL = %d", arg1 & 7);
+    strcat(ev->classStr, " ev-setSL");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd e0: set sustain rate (SR). */
+static void akaoSpcEventSetSR (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Set Sustain Rate, SR = %d", arg1 & 31);
+    strcat(ev->classStr, " ev-setSR");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd e1: set default ADSR. */
+static void akaoSpcEventSetDefaultADSR (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    sprintf(ev->note, "Set Default ADSR");
+    strcat(ev->classStr, " ev-setdefaultADSR");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd e4: slur on. */
+static void akaoSpcEventSlurOn (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Slur On");
+    strcat(ev->classStr, " ev-sluron");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd e5: slur off. */
+static void akaoSpcEventSlurOff (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Slur Off");
+    strcat(ev->classStr, " ev-sluroff");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd eb: end of track. */
+static void akaoSpcEventEndOfTrack (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    sprintf(ev->note, "End of Track");
+    strcat(ev->classStr, " ev-end");
+
+    akaoSpcInactiveTrack(seq, ev->track);
+
+    //if (!akaoSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd f0: set tempo. */
+static void akaoSpcEventSetTempo (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    seq->tempo = arg1;
+
+    sprintf(ev->note, "Set Tempo, tempo = %.1f", akaoSpcTempo(seq));
+    strcat(ev->classStr, " ev-tempo");
+
+    smfInsertTempoBPM(seq->smf, ev->tick, 0, akaoSpcTempo(seq));
+}
+
+/** vcmd f1: set tempo fade. */
+static void akaoSpcEventSetTempoFade (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    seq->tempo = arg2;
+
+    sprintf(ev->note, "Set Tempo, fade speed = %d, tempo = %.1f", arg1, akaoSpcTempo(seq));
+    strcat(ev->classStr, " ev-tempo");
+
+    smfInsertTempoBPM(seq->smf, ev->tick, 0, akaoSpcTempo(seq)); // OH LAZY!
+}
+
+/** vcmd f1: set echo volume. */
+static void akaoSpcEventEchoVolume (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 1;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Echo Volume, vol = %d", arg1);
+    strcat(ev->classStr, " ev-echovol");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd f2: set echo volume fade. */
+static void akaoSpcEventEchoVolumeFade (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Echo Volume Fade, speed = %d, vol = %d", arg1, arg2);
+    strcat(ev->classStr, " ev-echovolfade");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd f6: jump. */
+static void akaoSpcEventJump (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+    int dest;
+
+    ev->size += 2;
+    arg1 = mget2l(&seq->aRAM[*p]);
+
+    dest = (arg1 + seq->apuAddressOffset) & 0xffff;
+
+    sprintf(ev->note, "Jump, dest = $%04X", dest);
+    strcat(ev->classStr, " ev-jump");
+
+    // assumes backjump = loop
+    if (dest < *p) {
+        akaoSpcAddTrackLoopCount(seq, ev->track, 1);
+    }
+    *p = dest;
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd f7: set echo feedback. */
+static void akaoSpcEventEchoFeedback (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 1;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Echo Feedback, vol = %d", arg1);
+    strcat(ev->classStr, " ev-echoparam");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd f8: set echo FIR. */
+static void akaoSpcEventEchoFIR (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 1;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Echo FIR, index = %d", arg1);
+    strcat(ev->classStr, " ev-echoparam");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd fb: rhythm channel on. */
+static void akaoSpcEventRhythmOn (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    strcpy(ev->note, "Rhythm Channel On");
+    strcat(ev->classStr, " ev-rhythmon");
+    tr->rhythmChannel = true;
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    // put program change to SMF (better than nothing)
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_BANKSELM, seq->ver.patchFix[255].bankSelM);
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_BANKSELL, seq->ver.patchFix[255].bankSelL);
+    smfInsertProgram(seq->smf, ev->tick, ev->track, ev->track, seq->ver.patchFix[255].patchNo);
+}
+
+/** vcmd fc: rhythm channel off. */
+static void akaoSpcEventRhythmOff (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    strcpy(ev->note, "Rhythm Channel Off");
+    strcat(ev->classStr, " ev-rhythmoff");
+    tr->rhythmChannel = false;
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
 /** set pointers of each event. */
 static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
 {
     int code;
     AkaoSpcEvent *event = seq->ver.event;
+    byte vcmdFirst = seq->ver.vcmdFirstByte;
 
     // disable them all first
     for(code = 0x00; code <= 0xff; code++) {
         event[code] = (AkaoSpcEvent) akaoSpcEventUnidentified;
     }
 
-/*
-    for (code = 0x00; code <= 0x5f; code++) {
+    for(code = 0x00; code < vcmdFirst; code++) {
         event[code] = (AkaoSpcEvent) akaoSpcEventNote;
-        event[code | 0x80] = (AkaoSpcEvent) akaoSpcEventNote;
     }
-    event[0x60] = (AkaoSpcEvent) akaoSpcEventUnknown0;
-    event[0x61] = (AkaoSpcEvent) akaoSpcEventUnknown0;
-    event[0x62] = (AkaoSpcEvent) akaoSpcEventUnknown1;
-    for (code = 0x63; code <= 0x7f; code++) {
-        event[code] = (AkaoSpcEvent) akaoSpcEventUnknown0;
+
+    if (seq->ver.id == SPC_VER_REV1)
+    {
+        event[0xd2] = akaoSpcEventUnknown3; // tempo
+        //event[0xd3] = akaoSpcEventUnidentified;
+        event[0xd4] = akaoSpcEventEchoVolume;
+        event[0xd5] = akaoSpcEventUnknown2; // feedback, delay
+        event[0xd6] = akaoSpcEventUnknown3; // pitch slide
+        event[0xd7] = akaoSpcEventUnknown3; // volume
+        event[0xd8] = akaoSpcEventVibratoOn;
+        //event[0xd9] = akaoSpcEventUnknown1; // panpot?
+        event[0xda] = akaoSpcEventSetOctave;
+        event[0xdb] = akaoSpcEventInstrument;
+        //event[0xdc] = akaoSpcEventUnidentified;
+        //event[0xdd] = akaoSpcEventUnidentified;
+        //event[0xde] = akaoSpcEventUnidentified;
+        event[0xdf] = akaoSpcEventNoiseFreq;
+        //event[0xe0] = akaoSpcEventUnidentified; // repeat
+        event[0xe1] = akaoSpcEventOctaveUp;
+        event[0xe2] = akaoSpcEventOctaveDown;
+        //event[0xe3] = akaoSpcEventUnidentified;
+        //event[0xe4] = akaoSpcEventUnidentified;
+        //event[0xe5] = akaoSpcEventUnidentified;
+        //event[0xe6] = akaoSpcEventUnidentified;
+        //event[0xe7] = akaoSpcEventUnidentified;
+        //event[0xe8] = akaoSpcEventUnidentified; // vibrato
+        //event[0xe9] = akaoSpcEventUnidentified;
+        event[0xea] = akaoSpcEventEchoOn;
+        event[0xeb] = akaoSpcEventEchoOff;
+        event[0xec] = akaoSpcEventNoiseOn; // d0
+        event[0xed] = akaoSpcEventNoiseOff;
+        event[0xee] = akaoSpcEventPitchModOn;
+        event[0xef] = akaoSpcEventPitchModOff;
+        //event[0xf0] = akaoSpcEventUnidentified; // repeat?
+        //event[0xf1] = akaoSpcEventUnidentified;
+        //event[0xf2] = akaoSpcEventUnidentified;
+        //event[0xf3] = akaoSpcEventUnidentified;
+        //event[0xf4] = akaoSpcEventUnidentified;
+        //event[0xf5] = akaoSpcEventUnidentified;
+        //event[0xf6] = akaoSpcEventUnidentified;
+        //event[0xf7] = akaoSpcEventUnidentified;
+        //event[0xf8] = akaoSpcEventUnidentified;
+        //event[0xf9] = akaoSpcEventUnidentified;
+        //event[0xfa] = akaoSpcEventUnidentified;
+        //event[0xfb] = akaoSpcEventUnidentified;
+        //event[0xfc] = akaoSpcEventUnidentified;
+        //event[0xfd] = akaoSpcEventUnidentified;
+        //event[0xfe] = akaoSpcEventUnidentified;
+        //event[0xff] = akaoSpcEventUnidentified;
     }
-    event[0xe0] = (AkaoSpcEvent) akaoSpcEventE0;
-    event[0xe1] = (AkaoSpcEvent) akaoSpcEventE1;
-    event[0xe2] = (AkaoSpcEvent) akaoSpcEventInstrument;
-    event[0xe3] = (AkaoSpcEvent) akaoSpcEventUnknown1;
-    event[0xe4] = (AkaoSpcEvent) akaoSpcEventUnknown3;
-    event[0xe5] = (AkaoSpcEvent) akaoSpcEventUnknown3;
-    event[0xe6] = (AkaoSpcEvent) akaoSpcEventLoopStart;
-    event[0xe7] = (AkaoSpcEvent) akaoSpcEventLoopEnd;
-    event[0xe8] = (AkaoSpcEvent) akaoSpcEventLoopStart2;
-    event[0xe9] = (AkaoSpcEvent) akaoSpcEventLoopEnd2;
-    event[0xea] = (AkaoSpcEvent) akaoSpcEventSetTempo;
-    event[0xeb] = (AkaoSpcEvent) akaoSpcEventUnknown2;
-    event[0xec] = (AkaoSpcEvent) akaoSpcEventTransposeAbs;
-    event[0xed] = (AkaoSpcEvent) akaoSpcEventUnknown1;
-    event[0xee] = (AkaoSpcEvent) akaoSpcEventVolume;
-    event[0xef] = (AkaoSpcEvent) akaoSpcEventUnknown2;
-    event[0xf0] = (AkaoSpcEvent) akaoSpcEventUnknown1;
-    event[0xf1] = (AkaoSpcEvent) akaoSpcEventUnknown5;
-    event[0xf2] = (AkaoSpcEvent) akaoSpcEventUnknown1;
-    event[0xf3] = (AkaoSpcEvent) akaoSpcEventUnknown5;
-    event[0xf4] = (AkaoSpcEvent) akaoSpcEventUnknown3;
-    event[0xf5] = (AkaoSpcEvent) akaoSpcEventEchoParam;
-    event[0xf6] = (AkaoSpcEvent) akaoSpcEventLoopExStart;
-    event[0xf7] = (AkaoSpcEvent) akaoSpcEventLoopExEnd;
-    event[0xf8] = (AkaoSpcEvent) akaoSpcEventUnknown2;
-    event[0xf9] = (AkaoSpcEvent) akaoSpcEventUnknown1;
-    event[0xfa] = (AkaoSpcEvent) akaoSpcEventUnknown3;
-    event[0xfb] = (AkaoSpcEvent) akaoSpcEventUnknown1;
-    event[0xfc] = (AkaoSpcEvent) akaoSpcEventVolumeAndInstrument;
-    event[0xfd] = (AkaoSpcEvent) akaoSpcEventJump;
-    event[0xfe] = (AkaoSpcEvent) akaoSpcEventSubroutine;
-    event[0xff] = (AkaoSpcEvent) akaoSpcEventEndSubroutine;
-*/
+    else if (seq->ver.id == SPC_VER_REV2)
+    {
+        event[0xd2] = akaoSpcEventSetTempo;
+        event[0xd3] = akaoSpcEventUnknown1; // restore default tempo
+        event[0xd4] = akaoSpcEventVolume; // c4
+        event[0xd5] = akaoSpcEventVolumeFade;
+        event[0xd6] = akaoSpcEventPanpot;
+        event[0xd7] = akaoSpcEventPanpotFade;
+        event[0xd8] = akaoSpcEventPitchSlide;
+        //event[0xd9] = akaoSpcEventUnidentified;
+        //event[0xda] = akaoSpcEventUnidentified;
+        //event[0xdb] = akaoSpcEventUnidentified;
+        //event[0xdc] = akaoSpcEventUnidentified;
+        //event[0xdd] = akaoSpcEventUnidentified;
+        //event[0xde] = akaoSpcEventUnidentified;
+        //event[0xdf] = akaoSpcEventUnidentified;
+        //event[0xe0] = akaoSpcEventUnidentified;
+        event[0xe1] = akaoSpcEventNoiseFreq;
+        event[0xe2] = akaoSpcEventNoiseOn; // d0
+        event[0xe3] = akaoSpcEventNoiseOff;
+        event[0xe4] = akaoSpcEventPitchModOn;
+        event[0xe5] = akaoSpcEventPitchModOff;
+        event[0xe6] = akaoSpcEventUnknown2; // feedback, delay
+        event[0xe7] = akaoSpcEventEchoOn;
+        event[0xe8] = akaoSpcEventEchoOff;
+        //event[0xe9] = akaoSpcEventUnidentified;
+        //event[0xea] = akaoSpcEventUnidentified;
+        event[0xeb] = akaoSpcEventSetOctave;
+        event[0xec] = akaoSpcEventOctaveUp;
+        event[0xed] = akaoSpcEventOctaveDown;
+        //event[0xee] = akaoSpcEventUnidentified;
+        //event[0xef] = akaoSpcEventUnidentified;
+        //event[0xf0] = akaoSpcEventUnidentified;
+        event[0xf1] = akaoSpcEventUnknown3; // loop (old style)
+        event[0xf2] = akaoSpcEventSlurOn;
+        event[0xf3] = akaoSpcEventInstrument;
+        event[0xf4] = akaoSpcEventUnknown1; // software envelope
+        event[0xf5] = akaoSpcEventSlurOff;
+        //event[0xf6] = akaoSpcEventUnidentified;
+        event[0xf7] = akaoSpcEventDetune;
+        //event[0xf8] = akaoSpcEventUnidentified;
+        //event[0xf9] = akaoSpcEventUnidentified;
+        //event[0xfa] = akaoSpcEventUnidentified;
+        //event[0xfb] = akaoSpcEventUnidentified;
+        //event[0xfc] = akaoSpcEventUnidentified;
+        //event[0xfd] = akaoSpcEventUnidentified;
+        //event[0xfe] = akaoSpcEventUnidentified;
+        //event[0xff] = akaoSpcEventUnidentified;
+    }
+    else
+    {
+        event[vcmdFirst + 0x00] = akaoSpcEventVolume; // c4
+        event[vcmdFirst + 0x01] = akaoSpcEventVolumeFade;
+        event[vcmdFirst + 0x02] = akaoSpcEventPanpot;
+        event[vcmdFirst + 0x03] = akaoSpcEventPanpotFade;
+        event[vcmdFirst + 0x04] = akaoSpcEventPitchSlide;
+        event[vcmdFirst + 0x05] = akaoSpcEventVibratoOn;
+        event[vcmdFirst + 0x06] = akaoSpcEventVibratoOff;
+        event[vcmdFirst + 0x07] = akaoSpcEventTremoloOn;
+        event[vcmdFirst + 0x08] = akaoSpcEventTremoloOff;
+        event[vcmdFirst + 0x09] = akaoSpcEventPanLFOOn;
+        event[vcmdFirst + 0x0a] = akaoSpcEventPanLFOOff;
+        event[vcmdFirst + 0x0b] = akaoSpcEventNoiseFreq;
+        event[vcmdFirst + 0x0c] = akaoSpcEventNoiseOn; // d0
+        event[vcmdFirst + 0x0d] = akaoSpcEventNoiseOff;
+        event[vcmdFirst + 0x0e] = akaoSpcEventPitchModOn;
+        event[vcmdFirst + 0x0f] = akaoSpcEventPitchModOff;
+        event[vcmdFirst + 0x10] = akaoSpcEventEchoOn;
+        event[vcmdFirst + 0x11] = akaoSpcEventEchoOff;
+        event[vcmdFirst + 0x12] = akaoSpcEventSetOctave;
+        event[vcmdFirst + 0x13] = akaoSpcEventOctaveUp;
+        event[vcmdFirst + 0x14] = akaoSpcEventOctaveDown;
+        event[vcmdFirst + 0x15] = akaoSpcEventTransposeAbs;
+        event[vcmdFirst + 0x16] = akaoSpcEventTransposeRel;
+        event[vcmdFirst + 0x17] = akaoSpcEventDetune;
+        event[vcmdFirst + 0x18] = akaoSpcEventInstrument;
+        event[vcmdFirst + 0x19] = akaoSpcEventSetAR;
+        event[vcmdFirst + 0x1a] = akaoSpcEventSetDR;
+        event[vcmdFirst + 0x1b] = akaoSpcEventSetSL;
+        event[vcmdFirst + 0x1c] = akaoSpcEventSetSR; // e0
+        event[vcmdFirst + 0x1d] = akaoSpcEventSetDefaultADSR;
+        event[vcmdFirst + 0x1e] = akaoSpcEventUnknown1; // TODO repeat start
+        event[vcmdFirst + 0x1f] = akaoSpcEventUnknown0; // TODO repeat end
+        event[vcmdFirst + 0x20] = akaoSpcEventSlurOn;
+        event[vcmdFirst + 0x21] = akaoSpcEventSlurOff; // TODO is that true?
+        //event[vcmdFirst + 0x22] = akaoSpcEventUnidentified; // e6
+        //event[vcmdFirst + 0x23] = akaoSpcEventUnidentified; // e7
+        event[vcmdFirst + 0x24] = akaoSpcEventUnknown1;
+        event[vcmdFirst + 0x25] = akaoSpcEventUnknown1;
+        event[vcmdFirst + 0x26] = akaoSpcEventUnknown1;
+        event[vcmdFirst + 0x27] = akaoSpcEventEndOfTrack;
+        event[vcmdFirst + 0x28] = akaoSpcEventEndOfTrack; // duplicated
+        event[vcmdFirst + 0x29] = akaoSpcEventEndOfTrack; // duplicated
+        event[vcmdFirst + 0x2a] = akaoSpcEventEndOfTrack; // duplicated
+        //event[vcmdFirst + 0x2b] = akaoSpcEventUnidentified; // ef
+        event[vcmdFirst + 0x2c] = akaoSpcEventSetTempo; // f0
+        event[vcmdFirst + 0x2d] = akaoSpcEventSetTempoFade;
+        event[vcmdFirst + 0x2e] = akaoSpcEventEchoVolume;
+        event[vcmdFirst + 0x2f] = akaoSpcEventEchoVolumeFade;
+
+        switch (seq->ver.subId)
+        {
+        case SPC_SUBVER_RS3:
+            event[0xf5] = akaoSpcEventUnknown3; // TODO repeat break
+            event[0xf6] = akaoSpcEventJump;
+            event[0xf7] = akaoSpcEventEchoFeedback;
+            event[0xf8] = akaoSpcEventEchoFIR;
+            event[0xf9] = akaoSpcEventUnidentified;
+            //event[0xfa] = akaoSpcEventUnidentified;
+            event[0xfb] = akaoSpcEventRhythmOn;
+            event[0xfc] = akaoSpcEventRhythmOff;
+            event[0xfd] = akaoSpcEventUnknown1;
+            event[0xfe] = akaoSpcEventEndOfTrack; // duplicated
+            event[0xff] = akaoSpcEventEndOfTrack; // duplicated
+            break;
+        }
+    }
 
     if (seq->ver.id == SPC_VER_UNKNOWN)
         return;
