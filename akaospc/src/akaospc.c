@@ -16,7 +16,7 @@
 
 #define APPNAME "Square AKAO SPC2MIDI"
 #define APPSHORTNAME "akaospc"
-#define VERSION "[2013-06-10]"
+#define VERSION "[2013-06-14]"
 
 static int akaoSpcLoopMax = 2;            // maximum loop count of parser
 static int akaoSpcTextLoopMax = 1;        // maximum loop count of text output
@@ -145,7 +145,7 @@ byte BSGAME_VCMD_LEN_TABLE[] = {
 
 // any changes are not needed normally
 #define SPC_TRACK_MAX       8
-#define SPC_NOTE_KEYSHIFT   12
+#define SPC_NOTE_KEYSHIFT   0
 #define SPC_ARAM_SIZE       0x10000
 
 typedef struct TagAkaoSpcTrackStat AkaoSpcTrackStat;
@@ -168,6 +168,7 @@ typedef struct TagAkaoSpcVerInfo {
     int timer0Freq;
     AkaoSpcEvent event[256];
     PatchFixInfo patchFix[256];
+    int tempoMultiplier;
     bool seqDetected;
 } AkaoSpcVerInfo;
 
@@ -195,6 +196,11 @@ struct TagAkaoSpcTrackStat {
     byte octave;            // octave
     int patch;              // patch number (for pitch fix)
     bool rhythmChannel;     // rhythm channel / melody channel
+    int repRetAddr[0x100];  // return address for repeat vcmd
+    int repIncCount[0x100]; // incremental repeat counter
+    int repDecCount[0x100]; // decremental repeat counter
+    int repNestLevel;       // current nest level of repeat vcmd
+    int repNestLevelMax;    // max nest level allowed of repeat vcmd
 };
 
 struct TagAkaoSpcSeqStat {
@@ -331,6 +337,8 @@ static void akaoSpcResetTrackParam (AkaoSpcSeqStat *seq, int track)
     tr->lastNoteLen = 0;
     tr->patch = 0;
     tr->rhythmChannel = false;
+    tr->repNestLevel = 0;
+    tr->repNestLevelMax = 4;
 }
 
 /** reset before play/convert song. */
@@ -401,6 +409,7 @@ static int akaoSpcCheckVer (AkaoSpcSeqStat *seq)
     seq->ver.seqDetected = false;
     seq->ver.timer0Freq = -1;
     seq->ver.subId = SPC_SUBVER_UNKNOWN;
+    seq->ver.tempoMultiplier = 0;
 
     // (Romancing SaGa 2)
     // mov   x,#$0e
@@ -410,7 +419,6 @@ static int akaoSpcCheckVer (AkaoSpcSeqStat *seq)
     if ((noteLenLdCodeAddr = indexOfHexPat(seq->aRAM, "\xcd\x0e\x9e\xf8.\xf6..", SPC_ARAM_SIZE, NULL)) != -1)
     {
         seq->ver.noteLenTableAddr = mget2l(&seq->aRAM[noteLenLdCodeAddr + 6]);
-        seq->ver.noteLenTableLen = 14;
         noteLenLdCodeVer = SPC_VER_REV4;
     }
     // (Romacing SaGa)
@@ -422,7 +430,6 @@ static int akaoSpcCheckVer (AkaoSpcSeqStat *seq)
     else if ((noteLenLdCodeAddr = indexOfHexPat(seq->aRAM, "\x8d\\\x00\xcd\x0f\x9e\xf8.\xf6..", SPC_ARAM_SIZE, NULL)) != -1)
     {
         seq->ver.noteLenTableAddr = mget2l(&seq->aRAM[noteLenLdCodeAddr + 8]);
-        seq->ver.noteLenTableLen = 14;
         noteLenLdCodeVer = SPC_VER_REV2;
     }
     // (Final Fantasy 4)
@@ -434,7 +441,6 @@ static int akaoSpcCheckVer (AkaoSpcSeqStat *seq)
     else if ((noteLenLdCodeAddr = indexOfHexPat(seq->aRAM, "\xcd\x0f\x8d\\\x00\x9e\xf8.\xf6..", SPC_ARAM_SIZE, NULL)) != -1)
     {
         seq->ver.noteLenTableAddr = mget2l(&seq->aRAM[noteLenLdCodeAddr + 8]);
-        seq->ver.noteLenTableLen = 15;
         noteLenLdCodeVer = SPC_VER_REV1;
     }
 
@@ -631,9 +637,15 @@ static int akaoSpcCheckVer (AkaoSpcSeqStat *seq)
         }
     }
 
+    if (seq->ver.vcmdFirstByte % 14 == 0)
+    {
+        seq->ver.noteLenTableLen = seq->ver.vcmdFirstByte / 14;
+    }
+
     // classify
     if (seq->ver.seqHeaderAddr != -1 &&
         seq->ver.noteLenTableAddr != -1 &&
+        seq->ver.noteLenTableLen > 0 &&
         seq->ver.vcmdTableAddr != -1 &&
         seq->ver.vcmdLenTableAddr != -1 &&
         seq->ver.timer0Freq != -1)
@@ -718,6 +730,20 @@ static int akaoSpcCheckVer (AkaoSpcSeqStat *seq)
             memcmp(&seq->aRAM[seq->ver.vcmdLenTableAddr], SD2_VCMD_LEN_TABLE, sizeof(SD2_VCMD_LEN_TABLE)) == 0)
         {
             seq->ver.subId = SPC_SUBVER_SD2;
+        }
+    }
+
+    if (seq->ver.vcmdFirstByte == 0xc4)
+    {
+        int tempoVcmdAddr = mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + (0xf0 - seq->ver.vcmdFirstByte) * 2]);
+
+        // (Chrono Trigger)
+        // ; vcmd f0 - set tempo
+        // mov   y,#$14
+        // mul   ya
+        if (seq->aRAM[tempoVcmdAddr] == 0x8d && seq->aRAM[tempoVcmdAddr + 2] == 0xcf)
+        {
+            seq->ver.tempoMultiplier = seq->aRAM[tempoVcmdAddr + 1];
         }
     }
 
@@ -830,16 +856,21 @@ static void printHtmlInfoList (AkaoSpcSeqStat *seq)
     myprintf("          <li>Version: %s</li>\n", akaoSpcVerToStrHtml(seq));
     //myprintf("          <li>Song List: $%04X</li>\n", seq->ver.seqListAddr);
     myprintf("          <li>Song Entry: $%04X", seq->ver.seqHeaderAddr);
-    myprintf("          <li>Note Length Table: $%04X (%d bytes)", seq->ver.noteLenTableAddr, seq->ver.noteLenTableLen);
-    myprintf("          <li>Voice Command Table: $%04X", seq->ver.vcmdTableAddr);
-    myprintf("          <li>Voice Command Length Table: $%04X", seq->ver.vcmdLenTableAddr);
-    myprintf("          <li>First Voice Command Byte: $%02X", seq->ver.vcmdFirstByte);
+    //myprintf(" (Song $%02x)", seq->ver.songIndex);
+    myprintf("</li>\n");
+    myprintf("          <li>Note Length Table: $%04X (%d bytes)</li>", seq->ver.noteLenTableAddr, seq->ver.noteLenTableLen);
+    myprintf("          <li>Voice Command Table: $%04X</li>", seq->ver.vcmdTableAddr);
+    myprintf("          <li>Voice Command Length Table: $%04X</li>", seq->ver.vcmdLenTableAddr);
+    myprintf("          <li>First Voice Command Byte: $%02X</li>", seq->ver.vcmdFirstByte);
     if (seq->ver.useROMAddress)
     {
-        myprintf("          <li>APU RAM Address Base: $%04X", seq->ver.apuAddressBase);
+        myprintf("          <li>APU RAM Address Base: $%04X</li>", seq->ver.apuAddressBase);
     }
     myprintf("          <li>Timer 0 Frequency: $%02X", seq->ver.timer0Freq);
-    //myprintf(" (Song $%02x)", seq->ver.songIndex);
+    if (seq->ver.tempoMultiplier != 0)
+    {
+        myprintf(" (tempo multiplier $%02X)", seq->ver.tempoMultiplier);
+    }
     myprintf("</li>\n");
 }
 
@@ -902,7 +933,12 @@ static void printEventTableFooter (AkaoSpcSeqStat *seq, Smf* smf)
 /** convert SPC tempo into bpm. */
 static double akaoSpcTempo (AkaoSpcSeqStat *seq)
 {
-    return (double) seq->tempo * 60000000 / (125 * seq->ver.timer0Freq * 48 * 256); // 55296000 = (timer0) 4.5ms * 48 TPQN * 256
+    int tempoValue = seq->tempo;
+    if (seq->ver.tempoMultiplier != 0)
+    {
+        tempoValue = (tempoValue * seq->ver.tempoMultiplier) / 0x100 + tempoValue;
+    }
+    return (double) tempoValue * 60000000 / (125 * seq->ver.timer0Freq * 48 * 256); // 55296000 = (timer0) 4.5ms * 48 TPQN * 256
 }
 
 /** convert SPC velocity into MIDI one. */
@@ -1269,6 +1305,13 @@ static void akaoSpcEventNote (AkaoSpcSeqStat *seq, SeqEventReport *ev)
 
     tie = (keyIndex == 12);
     rest = (keyIndex == 13);
+    if (seq->ver.id == SPC_VER_REV1)
+    {
+        // swap
+        bool bSwap = tie;
+        tie = rest;
+        rest = bSwap;
+    }
 
     len = seq->aRAM[seq->ver.noteLenTableAddr + lenIndex];
     dur = len;
@@ -1825,6 +1868,138 @@ static void akaoSpcEventSetDefaultADSR (AkaoSpcSeqStat *seq, SeqEventReport *ev)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
+/** vcmd e2: loop start. */
+static void akaoSpcEventLoopStart (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+    int repCount;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    if (arg1 == 0)
+    {
+        repCount = 0;
+    }
+    else
+    {
+        repCount = (arg1 + 1) & 0xff;
+    }
+
+    sprintf(ev->note, "Loop Start, count = %d", repCount);
+    strcat(ev->classStr, " ev-loopstart");
+
+    if (tr->repNestLevel + 1 > tr->repNestLevelMax) {
+        //fprintf(stderr, "Warning: Repeat Nest Level Overflow at $%04X\n", ev->addr);
+    }
+    tr->repRetAddr[tr->repNestLevel] = *p;
+    tr->repIncCount[tr->repNestLevel] = 1;
+    tr->repDecCount[tr->repNestLevel] = repCount;
+    tr->repNestLevel = (tr->repNestLevel + 1) % tr->repNestLevelMax;
+
+    //if (!akaoSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd e3: loop end. */
+static void akaoSpcEventLoopEnd (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+    bool repeatAgain;
+    int nestIndex;
+
+    nestIndex = (tr->repNestLevel - 1);
+    if (nestIndex < 0)
+    {
+        //fprintf(stderr, "Warning: Repeat Nest Level Overflow at $%04X\n", ev->addr);
+        nestIndex += tr->repNestLevelMax;
+    }
+    nestIndex %= tr->repNestLevelMax;
+
+    sprintf(ev->note, "Loop End/Continue");
+    strcat(ev->classStr, " ev-loopend");
+
+    tr->repIncCount[nestIndex]++;
+    if (tr->repDecCount[nestIndex] == 0)
+    {
+        akaoSpcAddTrackLoopCount(seq, ev->track, 1);
+        repeatAgain = true;
+    }
+    else
+    {
+        if (tr->repDecCount[nestIndex] - 1 == 0)
+        {
+            repeatAgain = false;
+        }
+        else
+        {
+            tr->repDecCount[nestIndex]--;
+            repeatAgain = true;
+        }
+    }
+
+    if (!repeatAgain) {
+        // repeat end, fall through
+        sprintf(ev->note, "Loop End");
+        tr->repNestLevel = nestIndex;
+    }
+    else {
+        // repeat again
+        sprintf(ev->note, "Loop Continue, count = %d%s", tr->repDecCount[nestIndex], tr->repDecCount[nestIndex] == 0 ? " (infinite)" : "");
+        *p = tr->repRetAddr[nestIndex];
+    }
+
+    //if (!akaoSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd f5: conditional jump in repeat. */
+static void akaoSpcEventConditionalJump (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+    int nestIndex;
+    bool doJump;
+    int dest;
+
+    ev->size += 3;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = mget2l(&seq->aRAM[*p]);
+    (*p) += 2;
+
+    dest = (arg2 + seq->apuAddressOffset) & 0xffff;
+    nestIndex = (tr->repNestLevel - 1);
+    if (nestIndex < 0)
+    {
+        //fprintf(stderr, "Warning: Repeat Nest Level Overflow at $%04X\n", ev->addr);
+        nestIndex += tr->repNestLevelMax;
+    }
+    nestIndex %= tr->repNestLevelMax;
+
+    doJump = (arg1 == tr->repIncCount[nestIndex]);
+    if (doJump)
+    {
+        if (tr->repDecCount[nestIndex] - 1 == 0)
+        {
+            // last time, decrement stack ptr (finish loop)
+            tr->repNestLevel = nestIndex;
+        }
+        *p = dest;
+    }
+
+    sprintf(ev->note, "Conditional Jump, count = %d, dest = $%04X, jump = %s", arg1, dest, doJump ? "true" : "false");
+    strcat(ev->classStr, " ev-loopbranch");
+
+    //if (!akaoSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
 /** vcmd e4: slur on. */
 static void akaoSpcEventSlurOn (AkaoSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -1849,6 +2024,80 @@ static void akaoSpcEventSlurOff (AkaoSpcSeqStat *seq, SeqEventReport *ev)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
+/** vcmd e6: roll on. */
+static void akaoSpcEventRollOn (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Roll On");
+    strcat(ev->classStr, " ev-rollon");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd e7: roll off. */
+static void akaoSpcEventRollOff (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Roll Off");
+    strcat(ev->classStr, " ev-rolloff");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd e9: play SFX #1. */
+static void akaoSpcEventPlaySFX1 (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Play SFX #1, index = %d", arg1);
+    strcat(ev->classStr, " ev-playsfx");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    // actually, this command will move voice pointer to a certain address,
+    // the destination address is determined by a table and index (arg1).
+    // it's probably not used in usual songs, and it will never return to
+    // the main score data (perhaps), thus, the tool ends conversion here.
+    fprintf(stderr, "Redirect to SFX #1 (index = %d) at $%04X [Track %d]\n", arg1, ev->addr, ev->track + 1);
+    akaoSpcInactiveTrack(seq, ev->track);
+}
+
+/** vcmd ea: play SFX #2. */
+static void akaoSpcEventPlaySFX2 (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Play SFX #2, index = %d at $%04X [Track %d]\n", arg1, ev->addr, ev->track + 1);
+    strcat(ev->classStr, " ev-playsfx");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    // actually, this command will move voice pointer to a certain address,
+    // the destination address is determined by a table and index (arg1).
+    // it's probably not used in usual songs, and it will never return to
+    // the main score data (perhaps), thus, the tool ends conversion here.
+    fprintf(stderr, "Redirect to SFX #2 (index = %d)\n", arg1);
+    akaoSpcInactiveTrack(seq, ev->track);
+}
+
 /** vcmd eb: end of track. */
 static void akaoSpcEventEndOfTrack (AkaoSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -1862,6 +2111,22 @@ static void akaoSpcEventEndOfTrack (AkaoSpcSeqStat *seq, SeqEventReport *ev)
 
     //if (!akaoSpcLessTextInSMF)
     //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd xx: end of track (duplicated). */
+static void akaoSpcEventEndOfTrackDup (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    sprintf(ev->note, "End of Track (Duplicated)");
+    strcat(ev->classStr, " ev-end");
+
+    akaoSpcInactiveTrack(seq, ev->track);
+    fprintf(stderr, "Warning: End of Track $%02X (duplicated) at $%04X (possible unknown event) [Track %d]\n", ev->code, ev->addr, ev->track + 1);
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmd f0: set tempo. */
@@ -2004,6 +2269,34 @@ static void akaoSpcEventEchoFIR (AkaoSpcSeqStat *seq, SeqEventReport *ev)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
+/** vcmd fx: set/fade echo FIR. */
+static void akaoSpcEventEchoFIRFade (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    if (arg1 == 0)
+    {
+        sprintf(ev->note, "Echo FIR, index = %d", arg2);
+    }
+    else
+    {
+        // fade?
+        sprintf(ev->note, "Echo FIR Fade, speed = %d, index = %d", arg1, arg2);
+    }
+    strcat(ev->classStr, " ev-echoparam");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
 /** vcmd fb: rhythm channel on. */
 static void akaoSpcEventRhythmOn (AkaoSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -2041,11 +2334,17 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
     int code;
     AkaoSpcEvent *event = seq->ver.event;
     byte vcmdFirst = seq->ver.vcmdFirstByte;
+    bool needsAutoEventAssign = true;
+    byte autoAssignFirstVCmd = vcmdFirst + 0x30;
+    int endOfTrackVcmdAddr = -1;
 
     // disable them all first
     for(code = 0x00; code <= 0xff; code++) {
         event[code] = (AkaoSpcEvent) akaoSpcEventUnidentified;
     }
+
+    if (seq->ver.id == SPC_VER_UNKNOWN)
+        return;
 
     for(code = 0x00; code < vcmdFirst; code++) {
         event[code] = (AkaoSpcEvent) akaoSpcEventNote;
@@ -2084,21 +2383,23 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
         event[0xee] = akaoSpcEventPitchModOn;
         event[0xef] = akaoSpcEventPitchModOff;
         //event[0xf0] = akaoSpcEventUnidentified; // repeat?
-        //event[0xf1] = akaoSpcEventUnidentified;
+        event[0xf1] = akaoSpcEventEndOfTrack;
+        endOfTrackVcmdAddr = mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + ((0xf1 - vcmdFirst) * 2)]);
         //event[0xf2] = akaoSpcEventUnidentified;
         //event[0xf3] = akaoSpcEventUnidentified;
         //event[0xf4] = akaoSpcEventUnidentified;
         //event[0xf5] = akaoSpcEventUnidentified;
         //event[0xf6] = akaoSpcEventUnidentified;
-        //event[0xf7] = akaoSpcEventUnidentified;
-        //event[0xf8] = akaoSpcEventUnidentified;
-        //event[0xf9] = akaoSpcEventUnidentified;
-        //event[0xfa] = akaoSpcEventUnidentified;
-        //event[0xfb] = akaoSpcEventUnidentified;
-        //event[0xfc] = akaoSpcEventUnidentified;
-        //event[0xfd] = akaoSpcEventUnidentified;
-        //event[0xfe] = akaoSpcEventUnidentified;
-        //event[0xff] = akaoSpcEventUnidentified;
+        event[0xf7] = akaoSpcEventEndOfTrackDup;
+        event[0xf8] = akaoSpcEventEndOfTrackDup;
+        event[0xf9] = akaoSpcEventEndOfTrackDup;
+        event[0xfa] = akaoSpcEventEndOfTrackDup;
+        event[0xfb] = akaoSpcEventEndOfTrackDup;
+        event[0xfc] = akaoSpcEventEndOfTrackDup;
+        event[0xfd] = akaoSpcEventEndOfTrackDup;
+        event[0xfe] = akaoSpcEventEndOfTrackDup;
+        event[0xff] = akaoSpcEventEndOfTrackDup;
+        autoAssignFirstVCmd = vcmdFirst;
     }
     else if (seq->ver.id == SPC_VER_REV2)
     {
@@ -2140,14 +2441,16 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
         event[0xf5] = akaoSpcEventSlurOff;
         //event[0xf6] = akaoSpcEventUnidentified;
         event[0xf7] = akaoSpcEventDetune;
-        //event[0xf8] = akaoSpcEventUnidentified;
-        //event[0xf9] = akaoSpcEventUnidentified;
-        //event[0xfa] = akaoSpcEventUnidentified;
-        //event[0xfb] = akaoSpcEventUnidentified;
-        //event[0xfc] = akaoSpcEventUnidentified;
-        //event[0xfd] = akaoSpcEventUnidentified;
-        //event[0xfe] = akaoSpcEventUnidentified;
-        //event[0xff] = akaoSpcEventUnidentified;
+        event[0xf8] = akaoSpcEventEndOfTrack;
+        endOfTrackVcmdAddr = mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + ((0xf8 - vcmdFirst) * 2)]);
+        event[0xf9] = akaoSpcEventEndOfTrackDup;
+        event[0xfa] = akaoSpcEventEndOfTrackDup;
+        event[0xfb] = akaoSpcEventEndOfTrackDup;
+        event[0xfc] = akaoSpcEventEndOfTrackDup;
+        event[0xfd] = akaoSpcEventEndOfTrackDup;
+        event[0xfe] = akaoSpcEventEndOfTrackDup;
+        event[0xff] = akaoSpcEventEndOfTrackDup;
+        autoAssignFirstVCmd = vcmdFirst;
     }
     else
     {
@@ -2181,29 +2484,60 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
         event[vcmdFirst + 0x1b] = akaoSpcEventSetSL;
         event[vcmdFirst + 0x1c] = akaoSpcEventSetSR; // e0
         event[vcmdFirst + 0x1d] = akaoSpcEventSetDefaultADSR;
-        event[vcmdFirst + 0x1e] = akaoSpcEventUnknown1; // TODO repeat start
-        event[vcmdFirst + 0x1f] = akaoSpcEventUnknown0; // TODO repeat end
-        event[vcmdFirst + 0x20] = akaoSpcEventSlurOn;
-        event[vcmdFirst + 0x21] = akaoSpcEventSlurOff; // TODO is that true?
-        //event[vcmdFirst + 0x22] = akaoSpcEventUnidentified; // e6
-        //event[vcmdFirst + 0x23] = akaoSpcEventUnidentified; // e7
-        event[vcmdFirst + 0x24] = akaoSpcEventUnknown1;
-        event[vcmdFirst + 0x25] = akaoSpcEventUnknown1;
-        event[vcmdFirst + 0x26] = akaoSpcEventUnknown1;
-        event[vcmdFirst + 0x27] = akaoSpcEventEndOfTrack;
-        event[vcmdFirst + 0x28] = akaoSpcEventEndOfTrack; // duplicated
-        event[vcmdFirst + 0x29] = akaoSpcEventEndOfTrack; // duplicated
-        event[vcmdFirst + 0x2a] = akaoSpcEventEndOfTrack; // duplicated
-        //event[vcmdFirst + 0x2b] = akaoSpcEventUnidentified; // ef
-        event[vcmdFirst + 0x2c] = akaoSpcEventSetTempo; // f0
-        event[vcmdFirst + 0x2d] = akaoSpcEventSetTempoFade;
-        event[vcmdFirst + 0x2e] = akaoSpcEventEchoVolume;
-        event[vcmdFirst + 0x2f] = akaoSpcEventEchoVolumeFade;
+        event[vcmdFirst + 0x1e] = akaoSpcEventLoopStart;
+        event[vcmdFirst + 0x1f] = akaoSpcEventLoopEnd;
+
+        if (seq->ver.id == SPC_VER_REV3)
+        {
+            event[vcmdFirst + 0x20] = akaoSpcEventEndOfTrack; // f2
+            endOfTrackVcmdAddr = mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + (0x2d * 2)]);
+            event[vcmdFirst + 0x21] = akaoSpcEventSetTempo;
+            event[vcmdFirst + 0x22] = akaoSpcEventSetTempoFade;
+            autoAssignFirstVCmd = vcmdFirst + 0x20;
+        }
+        else
+        {
+            event[vcmdFirst + 0x20] = akaoSpcEventSlurOn;
+            event[vcmdFirst + 0x21] = akaoSpcEventSlurOff;
+            event[vcmdFirst + 0x22] = akaoSpcEventRollOn;
+            event[vcmdFirst + 0x23] = akaoSpcEventRollOff;
+            event[vcmdFirst + 0x24] = akaoSpcEventUnknown1; // duration related event
+            event[vcmdFirst + 0x25] = akaoSpcEventPlaySFX1;
+            event[vcmdFirst + 0x26] = akaoSpcEventPlaySFX2;
+            event[vcmdFirst + 0x27] = akaoSpcEventEndOfTrack;
+            endOfTrackVcmdAddr = mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + (0x27 * 2)]);
+            event[vcmdFirst + 0x28] = akaoSpcEventEndOfTrackDup;
+            event[vcmdFirst + 0x29] = akaoSpcEventEndOfTrackDup;
+            event[vcmdFirst + 0x2a] = akaoSpcEventEndOfTrackDup;
+            event[vcmdFirst + 0x2b] = akaoSpcEventEndOfTrackDup;
+            event[vcmdFirst + 0x2c] = akaoSpcEventSetTempo; // f0
+            event[vcmdFirst + 0x2d] = akaoSpcEventSetTempoFade;
+            event[vcmdFirst + 0x2e] = akaoSpcEventEchoVolume;
+            event[vcmdFirst + 0x2f] = akaoSpcEventEchoVolumeFade;
+        }
 
         switch (seq->ver.subId)
         {
+        case SPC_SUBVER_LAL:
+            event[0xf4] = akaoSpcEventEchoFIRFade;
+            event[0xf5] = akaoSpcEventUnknown1; // master volume?
+            event[0xf6] = akaoSpcEventConditionalJump;
+            event[0xf7] = akaoSpcEventJump;
+            event[0xf8] = akaoSpcEventUnknown0; // increment shared counter (CPU can read it, but cannot change it)
+            event[0xf9] = akaoSpcEventUnknown0; // zero shared counter (CPU can read it, but cannot change it)
+            event[0xfa] = akaoSpcEventUnknown0; // ignore master volume?
+            event[0xfb] = akaoSpcEventUnknown2; // conditional jump
+            event[0xfc] = akaoSpcEventEndOfTrackDup;
+            event[0xfd] = akaoSpcEventEndOfTrackDup;
+            event[0xfe] = akaoSpcEventEndOfTrackDup;
+            event[0xff] = akaoSpcEventEndOfTrackDup;
+            needsAutoEventAssign = false;
+            break;
+
         case SPC_SUBVER_RS3:
-            event[0xf5] = akaoSpcEventUnknown3; // TODO repeat break
+            event[0xef] = akaoSpcEventUnknown1;
+            event[0xf4] = akaoSpcEventUnknown1; // master volume
+            event[0xf5] = akaoSpcEventConditionalJump;
             event[0xf6] = akaoSpcEventJump;
             event[0xf7] = akaoSpcEventEchoFeedback;
             event[0xf8] = akaoSpcEventEchoFIR;
@@ -2212,14 +2546,106 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
             event[0xfb] = akaoSpcEventRhythmOn;
             event[0xfc] = akaoSpcEventRhythmOff;
             event[0xfd] = akaoSpcEventUnknown1;
-            event[0xfe] = akaoSpcEventEndOfTrack; // duplicated
-            event[0xff] = akaoSpcEventEndOfTrack; // duplicated
+            event[0xfe] = akaoSpcEventEndOfTrackDup;
+            event[0xff] = akaoSpcEventEndOfTrackDup;
+            needsAutoEventAssign = false;
             break;
         }
     }
 
-    if (seq->ver.id == SPC_VER_UNKNOWN)
-        return;
+    if (needsAutoEventAssign)
+    {
+        // assign events by using length table
+        // (some variable-length vcmds and jumps can be wrong)
+        int vcmdIndex;
+
+        if (endOfTrackVcmdAddr == -1)
+        {
+            // assume: last 2 events are end of track (duplicated)
+            if (mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + ((0xff - vcmdFirst) * 2)]) == mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + ((0xfe - vcmdFirst) * 2)]) &&
+                seq->aRAM[seq->ver.vcmdLenTableAddr + (0xff - vcmdFirst)] == seq->aRAM[seq->ver.vcmdLenTableAddr + (0xfe - vcmdFirst)] &&
+                seq->aRAM[seq->ver.vcmdLenTableAddr + (0xff - vcmdFirst)] == 0)
+            {
+                endOfTrackVcmdAddr = mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + ((0xff - vcmdFirst) * 2)]);
+                fprintf(stderr, "Info: Auto assigned an event \"End of Track\" - $%04X\n", endOfTrackVcmdAddr);
+            }
+        }
+
+        for (vcmdIndex = autoAssignFirstVCmd; vcmdIndex <= 0xff; vcmdIndex++)
+        {
+            int vcmdAddr = mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + ((vcmdIndex - vcmdFirst) * 2)]);
+            if (event[vcmdIndex] == akaoSpcEventUnidentified)
+            {
+                int len = seq->aRAM[seq->ver.vcmdLenTableAddr + vcmdIndex - vcmdFirst];
+                switch(len)
+                {
+                    case 0:
+                        if (endOfTrackVcmdAddr != -1 &&
+                            vcmdAddr == endOfTrackVcmdAddr)
+                        {
+                            event[vcmdIndex] = akaoSpcEventEndOfTrackDup;
+                        }
+                        else
+                        {
+                            event[vcmdIndex] = akaoSpcEventUnknown0;
+                        }
+                        break;
+                    case 1: event[vcmdIndex] = akaoSpcEventUnknown1; break;
+
+                    case 2:
+                        // (Romancing SaGa 3)
+                        // mov   y,a
+                        // call  $0747
+                        // mov   a,y
+                        // mov   y,$a6
+                        // addw  ya,$00
+                        // mov   $02+x,a
+                        // mov   $03+x,y
+                        // ret
+                        if (vcmdAddr + 14 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\xfd\x3f..\xdd\xeb.\x7a.\xd4.\xdb.\x6f", 14, NULL) != -1 &&
+                            seq->aRAM[vcmdAddr + 10] + 1 == seq->aRAM[vcmdAddr + 12])
+                        {
+                            event[vcmdIndex] = akaoSpcEventJump;
+                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Jump\" - $%04X\n", vcmdIndex, vcmdAddr);
+                        }
+                        else
+                        {
+                            event[vcmdIndex] = akaoSpcEventUnknown2;
+                        }
+                        break;
+
+                    case 3:
+                        // (Romancing SaGa 3)
+                        // ; vcmd f5 - conditional jump in repeat
+                        // mov   $9e,a             ; arg1 - target repeat count
+                        // call  $0747
+                        // mov   $9c,a
+                        // call  $0747
+                        // mov   $9d,a             ; arg2/3 - target address
+                        // mov   y,$27+x
+                        // mov   a,$f520+y
+                        // cbne  $9e,$1ccd         ; do nothing if repeat count doesn't match
+                        if (vcmdAddr + 20 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\xc4.\x3f..\xc4.\x3f..\xc4.\xfb.\xf6..\x2e..", 20, NULL) != -1 &&
+                            mget2l(&seq->aRAM[vcmdAddr + 3]) == mget2l(&seq->aRAM[vcmdAddr + 8]) &&
+                            seq->aRAM[vcmdAddr + 6] + 1 == seq->aRAM[vcmdAddr + 11])
+                        {
+                            event[vcmdIndex] = akaoSpcEventConditionalJump;
+                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Conditional Jump\" - $%04X\n", vcmdIndex, vcmdAddr);
+                        }
+                        else
+                        {
+                            event[vcmdIndex] = akaoSpcEventUnknown3;
+                        }
+                        break;
+
+                    case 4: event[vcmdIndex] = akaoSpcEventUnknown4; break;
+                    case 5: event[vcmdIndex] = akaoSpcEventUnknown5; break;
+                }
+            }
+        }
+    }
 }
 
 //----
