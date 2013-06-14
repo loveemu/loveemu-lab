@@ -2258,10 +2258,11 @@
 ; vcmd da - change (relative) transpose
 132a: 60        clrc
 132b: 95 21 f7  adc   a,$f721+x
+; vcmd d9 - set transpose
 132e: d5 21 f7  mov   $f721+x,a
 1331: 6f        ret
 
-; vcmd d9 - set transpose
+; vcmd f4 - set/fade filter
 1332: c4 65     mov   $65,a
 1334: 3f 90 05  call  $0590
 1337: c4 64     mov   $64,a
@@ -2269,7 +2270,6 @@
 133c: 90 01     bcc   $133f
 133e: 6f        ret
 
-; vcmd f4 - set/fade filter
 133f: e4 64     mov   a,$64
 1341: 28 03     and   a,#$03
 1343: 1c        asl   a

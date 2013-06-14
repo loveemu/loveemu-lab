@@ -2651,9 +2651,9 @@
 1691: dw $1cf9  ; e2 - repeat start
 1693: dw $1d29  ; e3 - repeat end
 1695: dw $1c07  ; e4 - slur on
-1697: dw $1421  ; e5 - nop
-1699: dw $1c2f  ; e6
-169b: dw $1421  ; e7 - nop
+1697: dw $1421  ; e5 - nop (end slur)
+1699: dw $1c2f  ; e6 - begin roll
+169b: dw $1421  ; e7 - nop (end roll)
 169d: dw $1d84  ; e8 - (force note length?)
 169f: dw $1c3d  ; e9 - (related to SFX?)
 16a1: dw $1c41  ; ea - (related to SFX?)
@@ -2667,7 +2667,7 @@
 16b1: dw $1882  ; f2 - (echo depth?)
 16b3: dw $188d  ; f3 - (echo depth fade?)
 16b5: dw $1848  ; f4 - master volume
-16b7: dw $1c9e  ; f5 - repeat break
+16b7: dw $1c9e  ; f5 - conditional jump in repeat
 16b9: dw $1c83  ; f6 - goto
 16bb: dw $18d3  ; f7 - echo feedback
 16bd: dw $18fb  ; f8 - echo FIR
@@ -3466,18 +3466,19 @@
 1c9b: da 94     movw  $94,ya
 1c9d: 6f        ret
 
-; vcmd f5 - repeat break
-1c9e: c4 9e     mov   $9e,a
+; vcmd f5 - conditional jump in repeat
+1c9e: c4 9e     mov   $9e,a             ; arg1 - target repeat count
 1ca0: 3f 47 07  call  $0747
 1ca3: c4 9c     mov   $9c,a
 1ca5: 3f 47 07  call  $0747
-1ca8: c4 9d     mov   $9d,a
+1ca8: c4 9d     mov   $9d,a             ; arg2/3 - target address
 1caa: fb 27     mov   y,$27+x
 1cac: f6 20 f5  mov   a,$f520+y
-1caf: 2e 9e 1b  cbne  $9e,$1ccd
-1cb2: f6 40 f5  mov   a,$f540+y
+1caf: 2e 9e 1b  cbne  $9e,$1ccd         ; do nothing if repeat count doesn't match
+1cb2: f6 40 f5  mov   a,$f540+y         ; get decremental repeat counter
 1cb5: 9c        dec   a
 1cb6: d0 0d     bne   $1cc5
+; decrement stack ptr (only work for the last time)
 1cb8: 7d        mov   a,x
 1cb9: 1c        asl   a
 1cba: 9c        dec   a
@@ -3486,6 +3487,7 @@
 1cc0: 60        clrc
 1cc1: 88 04     adc   a,#$04
 1cc3: d4 27     mov   $27+x,a
+; goto target address
 1cc5: ba 9c     movw  ya,$9c
 1cc7: 7a 00     addw  ya,$00
 1cc9: d4 02     mov   $02+x,a
@@ -3521,27 +3523,27 @@
 1cfa: 1c        asl   a
 1cfb: 60        clrc
 1cfc: 88 04     adc   a,#$04
-1cfe: bb 27     inc   $27+x
-1d00: de 27 05  cbne  $27+x,$1d08
+1cfe: bb 27     inc   $27+x             ; increment stack ptr (nest level)
+1d00: de 27 05  cbne  $27+x,$1d08       ; (it's actually a circular buffer)
 1d03: 80        setc
-1d04: a8 04     sbc   a,#$04
+1d04: a8 04     sbc   a,#$04            ; set 0 if the nest level exceeds 4
 1d06: d4 27     mov   $27+x,a
 1d08: fb 27     mov   y,$27+x
-1d0a: e4 a6     mov   a,$a6
+1d0a: e4 a6     mov   a,$a6             ; arg1 - repeat count
 1d0c: f0 01     beq   $1d0f
-1d0e: bc        inc   a
-1d0f: d6 40 f5  mov   $f540+y,a
+1d0e: bc        inc   a                 ; increment unless 0
+1d0f: d6 40 f5  mov   $f540+y,a         ; set repeat count
 1d12: c8 10     cmp   x,#$10
 1d14: b0 05     bcs   $1d1b
 1d16: e8 01     mov   a,#$01
-1d18: d6 20 f5  mov   $f520+y,a
+1d18: d6 20 f5  mov   $f520+y,a         ; for real voices: store 1 in $f520+y (incremental repeat counter)
 1d1b: dd        mov   a,y
 1d1c: 1c        asl   a
 1d1d: fd        mov   y,a
 1d1e: f4 02     mov   a,$02+x
 1d20: d6 80 f5  mov   $f580+y,a
 1d23: f4 03     mov   a,$03+x
-1d25: d6 81 f5  mov   $f581+y,a
+1d25: d6 81 f5  mov   $f581+y,a         ; set repeat beginning address
 1d28: 6f        ret
 
 ; vcmd e3 - repeat end
@@ -3550,28 +3552,30 @@
 1d2d: b0 07     bcs   $1d36
 1d2f: f6 20 f5  mov   a,$f520+y
 1d32: bc        inc   a
-1d33: d6 20 f5  mov   $f520+y,a
+1d33: d6 20 f5  mov   $f520+y,a         ; for real voices: increment $f520+y
 1d36: f6 40 f5  mov   a,$f540+y
-1d39: f0 15     beq   $1d50
+1d39: f0 15     beq   $1d50             ; repeat count 0 = infinite loop
 1d3b: 9c        dec   a
 1d3c: d0 0f     bne   $1d4d
+; repeat end
 1d3e: 7d        mov   a,x
 1d3f: 1c        asl   a
 1d40: 9c        dec   a
-1d41: 9b 27     dec   $27+x
+1d41: 9b 27     dec   $27+x             ; decrement stack ptr
 1d43: de 27 17  cbne  $27+x,$1d5d
 1d46: 60        clrc
-1d47: 88 04     adc   a,#$04
+1d47: 88 04     adc   a,#$04            ; correct overflow
 1d49: d4 27     mov   $27+x,a
-1d4b: 2f 10     bra   $1d5d
-1d4d: d6 40 f5  mov   $f540+y,a
+1d4b: 2f 10     bra   $1d5d             ; next
+; repeat continue
+1d4d: d6 40 f5  mov   $f540+y,a         ; update repeat counter
 1d50: dd        mov   a,y
 1d51: 1c        asl   a
 1d52: fd        mov   y,a
 1d53: f6 80 f5  mov   a,$f580+y
 1d56: d4 02     mov   $02+x,a
 1d58: f6 81 f5  mov   a,$f581+y
-1d5b: d4 03     mov   $03+x,a
+1d5b: d4 03     mov   $03+x,a           ; goto repeat beginning
 1d5d: 6f        ret
 
 1d5e: eb bb     mov   y,$bb
@@ -3745,9 +3749,9 @@
 ; vcmd ef
 1ee8: e8 30     mov   a,#$30
 1eea: 8d 64     mov   y,#$64
-1eec: 3f 97 07  call  $0797
+1eec: 3f 97 07  call  $0797             ; Voice 6 SRCN = $30
 1eef: 8d 74     mov   y,#$74
-1ef1: 3f 97 07  call  $0797
+1ef1: 3f 97 07  call  $0797             ; Voice 7 SRCN = $30
 1ef4: e5 60 21  mov   a,$2160
 1ef7: d5 80 f3  mov   $f380+x,a
 1efa: e5 61 21  mov   a,$2161
@@ -3760,24 +3764,24 @@
 1f0b: 3f af 06  call  $06af
 1f0e: e4 b4     mov   a,$b4
 1f10: 8d 62     mov   y,#$62
-1f12: 3f 97 07  call  $0797
+1f12: 3f 97 07  call  $0797             ; Voice 6 P(L)
 1f15: 8d 72     mov   y,#$72
-1f17: 3f 97 07  call  $0797
+1f17: 3f 97 07  call  $0797             ; Voice 7 P(L)
 1f1a: e4 b5     mov   a,$b5
 1f1c: 8d 63     mov   y,#$63
-1f1e: 3f 97 07  call  $0797
+1f1e: 3f 97 07  call  $0797             ; Voice 6 P(H)
 1f21: 8d 73     mov   y,#$73
-1f23: 3f 97 07  call  $0797
+1f23: 3f 97 07  call  $0797             ; Voice 7 P(H)
 1f26: e5 e0 21  mov   a,$21e0
 1f29: 8d 65     mov   y,#$65
-1f2b: 3f 97 07  call  $0797
+1f2b: 3f 97 07  call  $0797             ; Voice 6 ADSR(1)
 1f2e: 8d 75     mov   y,#$75
-1f30: 3f 97 07  call  $0797
+1f30: 3f 97 07  call  $0797             ; Voice 7 ADSR(1)
 1f33: e5 e1 21  mov   a,$21e1
 1f36: 8d 66     mov   y,#$66
-1f38: 3f 97 07  call  $0797
+1f38: 3f 97 07  call  $0797             ; Voice 6 ADSR(2)
 1f3b: 8d 76     mov   y,#$76
-1f3d: 3f 97 07  call  $0797
+1f3d: 3f 97 07  call  $0797             ; Voice 7 ADSR(2)
 1f40: e5 f3 f1  mov   a,$f1f3
 1f43: ec f4 f1  mov   y,$f1f4
 1f46: da 9c     movw  $9c,ya
@@ -3785,9 +3789,9 @@
 1f49: dd        mov   a,y
 1f4a: 5c        lsr   a
 1f4b: 8d 61     mov   y,#$61
-1f4d: 3f 97 07  call  $0797
+1f4d: 3f 97 07  call  $0797             ; Voice 6 VOL(R)
 1f50: 8d 71     mov   y,#$71
-1f52: 3f 97 07  call  $0797
+1f52: 3f 97 07  call  $0797             ; Voice 7 VOL(R)
 1f55: e4 9d     mov   a,$9d
 1f57: 48 ff     eor   a,#$ff
 1f59: eb 9c     mov   y,$9c
@@ -3795,9 +3799,9 @@
 1f5c: dd        mov   a,y
 1f5d: 5c        lsr   a
 1f5e: 8d 60     mov   y,#$60
-1f60: 3f 97 07  call  $0797
+1f60: 3f 97 07  call  $0797             ; Voice 6 VOL(L)
 1f63: 8d 70     mov   y,#$70
-1f65: 3f 97 07  call  $0797
+1f65: 3f 97 07  call  $0797             ; Voice 7 VOL(L)
 1f68: e8 c0     mov   a,#$c0
 1f6a: 4e 8a 00  tclr1 $008a
 1f6d: 4e 8b 00  tclr1 $008b
@@ -3809,7 +3813,7 @@
 1f7e: 0e 87 00  tset1 $0087
 1f81: 4e 86 00  tclr1 $0086
 1f84: 8d 4c     mov   y,#$4c
-1f86: 3f 97 07  call  $0797
+1f86: 3f 97 07  call  $0797             ; KOL
 1f89: ae        pop   a
 1f8a: ae        pop   a
 1f8b: 62 89     set3  $89

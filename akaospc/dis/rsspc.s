@@ -1093,7 +1093,7 @@
 1019: d4 08     mov   $08+x,a
 101b: 6f        ret
 
-; vcmd f0 - repeat break
+; vcmd f0 - conditional jump in repeat
 101c: fd        mov   y,a
 101d: 3f 1f 0c  call  $0c1f
 1020: c4 4f     mov   $4f,a
@@ -2297,7 +2297,7 @@
 1966: dw $0f2d  ; ed - decrease octave
 1968: dw $1042  ; ee - repeat start
 196a: dw $106b  ; ef - repeat end
-196c: dw $101c  ; f0 - repeat break
+196c: dw $101c  ; f0 - conditional jump in repeat
 196e: dw $100f  ; f1 - goto
 1970: dw $0feb  ; f2 - slur on
 1972: dw $0fa9  ; f3 - set instrument
