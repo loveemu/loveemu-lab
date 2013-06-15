@@ -692,7 +692,7 @@
 0d83: d5 00 02  mov   $0200+x,a
 0d86: 6f        ret
 
-; vcmd d8 - (echo depth?)
+; vcmd d8 - echo volume
 0d87: c8 10     cmp   x,#$10
 0d89: b0 08     bcs   $0d93
 0d8b: 5c        lsr   a
@@ -701,7 +701,7 @@
 0d91: c4 8d     mov   $8d,a
 0d93: 6f        ret
 
-; vcmd d9 - (echo depth fade?)
+; vcmd d9 - echo volume fade
 0d94: c4 8d     mov   $8d,a
 0d96: 3f 1f 0c  call  $0c1f
 0d99: c8 10     cmp   x,#$10
@@ -775,14 +775,14 @@
 0e18: d5 40 02  mov   $0240+x,a
 0e1b: 6f        ret
 
-; vcmd db
+; vcmd db - pitch envelope on
 0e1c: fd        mov   y,a
-0e1d: 3f 1f 0c  call  $0c1f
+0e1d: 3f 1f 0c  call  $0c1f             ; arg2 - delay
 0e20: d5 60 03  mov   $0360+x,a
-0e23: 3f 1f 0c  call  $0c1f
+0e23: 3f 1f 0c  call  $0c1f             ; arg3 - length
 0e26: 5d        mov   x,a
 0e27: f0 14     beq   $0e3d
-0e29: 6d        push  y
+0e29: 6d        push  y                 ; arg1 - depth (semitones, signed)
 0e2a: 8d 00     mov   y,#$00
 0e2c: e8 ff     mov   a,#$ff
 0e2e: 9e        div   ya,x
@@ -794,15 +794,15 @@
 0e38: ae        pop   a
 0e39: d5 01 04  mov   $0401+x,a
 0e3c: ae        pop   a
-; vcmd dc
+; vcmd dc - pitch envelope off
 0e3d: d5 a0 02  mov   $02a0+x,a
 0e40: 6f        ret
 
-; vcmd da
+; vcmd da - transpose (absolute)
 0e41: d4 a5     mov   $a5+x,a
 0e43: 6f        ret
 
-; vcmd e6 - echo feedback, delay
+; vcmd e6 - echo feedback, FIR
 0e44: c4 4f     mov   $4f,a
 0e46: 3f 1f 0c  call  $0c1f
 0e49: c8 10     cmp   x,#$10
@@ -902,7 +902,7 @@
 0eea: d5 e0 02  mov   $02e0+x,a
 0eed: 6f        ret
 
-; vcmd e9
+; vcmd e9 - panpot LFO on
 0eee: fd        mov   y,a
 0eef: 3f 1f 0c  call  $0c1f
 0ef2: 5d        mov   x,a
@@ -929,7 +929,7 @@
 0f19: ae        pop   a
 0f1a: d5 20 03  mov   $0320+x,a
 0f1d: 1c        asl   a
-; vcmd ea
+; vcmd ea - panpot LFO off
 0f1e: d5 e1 02  mov   $02e1+x,a
 0f21: e8 00     mov   a,#$00
 0f23: d5 21 05  mov   $0521+x,a
@@ -1176,7 +1176,7 @@
 10aa: d4 08     mov   $08+x,a
 10ac: 6f        ret
 
-; vcmd f7
+; vcmd f7 - tuning
 10ad: d5 a1 03  mov   $03a1+x,a
 10b0: 6f        ret
 
@@ -2273,11 +2273,11 @@
 1936: dw $0d46  ; d5 - volume fade
 1938: dw $0dcf  ; d6 - panpot
 193a: dw $0ddb  ; d7 - panpot fade
-193c: dw $0d87  ; d8 - (echo depth?)
-193e: dw $0d94  ; d9 - (echo depth fade?)
-1940: dw $0e41  ; da
-1942: dw $0e1c  ; db
-1944: dw $0e3d  ; dc
+193c: dw $0d87  ; d8 - echo volume
+193e: dw $0d94  ; d9 - echo volume fade
+1940: dw $0e41  ; da - transpose (absolute)
+1942: dw $0e1c  ; db - pitch envelope on
+1944: dw $0e3d  ; dc - pitch envelope off
 1946: dw $0e6c  ; dd - vibrato on
 1948: dw $0ea9  ; de - vibrato off
 194a: dw $0ead  ; df - tremolo on
@@ -2287,11 +2287,11 @@
 1952: dw $0f63  ; e3 - noise off
 1954: dw $0f8f  ; e4 - pitch modulation on
 1956: dw $0f9b  ; e5 - pitch modulation off
-1958: dw $0e44  ; e6 - echo feedback, delay
+1958: dw $0e44  ; e6 - echo feedback, FIR
 195a: dw $0f35  ; e7 - echo on
 195c: dw $0f49  ; e8 - echo off
-195e: dw $0eee  ; e9
-1960: dw $0f1e  ; ea
+195e: dw $0eee  ; e9 - panpot LFO on
+1960: dw $0f1e  ; ea - panpot LFO off
 1962: dw $0f31  ; eb - set octave
 1964: dw $0f27  ; ec - increase octave
 1966: dw $0f2d  ; ed - decrease octave
@@ -2304,7 +2304,7 @@
 1974: dw $0fdc  ; f4 - set envelope
 1976: dw $1000  ; f5 - slur off
 1978: dw $1091  ; f6
-197a: dw $10ad  ; f7
+197a: dw $10ad  ; f7 - tuning
 197c: dw $10b1  ; f8 - end of track
 197e: dw $10b1  ; f9 - end of track (duplicated)
 1980: dw $10b1  ; fa - end of track (duplicated)

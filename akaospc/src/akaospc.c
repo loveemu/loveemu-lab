@@ -16,7 +16,7 @@
 
 #define APPNAME "Square AKAO SPC2MIDI"
 #define APPSHORTNAME "akaospc"
-#define VERSION "[2013-06-14]"
+#define VERSION "[2013-06-15]"
 
 static int akaoSpcLoopMax = 2;            // maximum loop count of parser
 static int akaoSpcTextLoopMax = 1;        // maximum loop count of text output
@@ -587,6 +587,10 @@ static int akaoSpcCheckVer (AkaoSpcSeqStat *seq)
             seq->ver.useROMAddress = false;
             seq->ver.apuAddressBase = 0;
         }
+    }
+    if (akaoSpcForceSongListAddr != -1)
+    {
+        seq->ver.seqHeaderAddr = akaoSpcForceSongListAddr;
     }
 
     // (Final Fantasy 5)
@@ -1383,9 +1387,9 @@ static void akaoSpcEventNote (AkaoSpcSeqStat *seq, SeqEventReport *ev)
             tr->lastNote.vel = 100;
             tr->lastNote.transpose = seq->transpose + tr->note.transpose;
             tr->lastNote.patch = tr->note.patch;
+            tr->lastNote.active = true;
         }
         tr->lastNote.tied = tie;
-        tr->lastNote.active = true;
     }
     tr->tick += len;
 }
@@ -1543,7 +1547,7 @@ static void akaoSpcEventPanpotFade (AkaoSpcSeqStat *seq, SeqEventReport *ev)
     }
 }
 
-/** vcmd c8: pitch slide. */
+/** vcmd c8: pitch slide (one-shot). */
 static void akaoSpcEventPitchSlide (AkaoSpcSeqStat *seq, SeqEventReport *ev)
 {
     int arg1, arg2;
@@ -1563,8 +1567,8 @@ static void akaoSpcEventPitchSlide (AkaoSpcSeqStat *seq, SeqEventReport *ev)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
-/** vcmd d6: pitch slide (old). */
-static void akaoSpcEventPitchSlideWithDelay (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+/** vcmd d6: pitch envelope on (old). */
+static void akaoSpcEventPitchEnvelopeOn (AkaoSpcSeqStat *seq, SeqEventReport *ev)
 {
     int arg1, arg2, arg3;
     int *p = &seq->track[ev->track].pos;
@@ -1575,24 +1579,33 @@ static void akaoSpcEventPitchSlideWithDelay (AkaoSpcSeqStat *seq, SeqEventReport
     (*p)++;
     arg2 = seq->aRAM[*p];
     (*p)++;
-    arg3 = utos1(seq->aRAM[*p]);
+    arg3 = seq->aRAM[*p];
     (*p)++;
 
-    sprintf(ev->note, "Pitch Slide, delay = %d, speed = %d, key += %d", arg1, arg2, arg3);
-    strcat(ev->classStr, " ev-pitchslide");
+    if (seq->ver.id == SPC_VER_REV1)
+    {
+        arg3 = utos1(arg3);
+        sprintf(ev->note, "Pitch Envelope, delay = %d, speed = %d, depth = %d semitones", arg1, arg2, arg3);
+    }
+    else // (SPC_VER_REV2 - Romancing SaGa)
+    {
+        arg1 = utos1(arg1);
+        sprintf(ev->note, "Pitch Envelope, depth = %d semitones, delay = %d, speed = %d", arg1, arg2, arg3);
+    }
+    strcat(ev->classStr, " ev-pitchenv");
 
     if (!akaoSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
-/** vcmd xx: pitch slide off. */
-static void akaoSpcEventPitchSlideOff (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+/** vcmd xx: pitch envelope off. */
+static void akaoSpcEventPitchEnvelopeOff (AkaoSpcSeqStat *seq, SeqEventReport *ev)
 {
     int *p = &seq->track[ev->track].pos;
     AkaoSpcTrackStat *tr = &seq->track[ev->track];
 
-    sprintf(ev->note, "Pitch Slide Off");
-    strcat(ev->classStr, " ev-pitchslideoff");
+    sprintf(ev->note, "Pitch Envelope Off");
+    strcat(ev->classStr, " ev-pitchenv");
 
     if (!akaoSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
@@ -1895,21 +1908,31 @@ static void akaoSpcEventDetune (AkaoSpcSeqStat *seq, SeqEventReport *ev)
 {
     int arg1;
     int *p = &seq->track[ev->track].pos;
+    int midiScaled;
 
     ev->size++;
     arg1 = utos1(seq->aRAM[*p]);
     (*p)++;
 
-    sprintf(ev->note, "Tuning, key += %d / 256", arg1); // TODO: details
+    sprintf(ev->note, "Tuning, key += %.1f cents", arg1 * 100 / 16.0);
     strcat(ev->classStr, " ev-tuning");
 
     if (!akaoSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 
-    //smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNM, 0);
-    //smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNL, 1);
-    //smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_DATAENTRYM, 64 + (arg1 / 4));
-    //smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_DATAENTRYL, 0);
+    midiScaled = arg1 * 64 / 16;
+    if (midiScaled >= -64 && midiScaled <= 64)
+    {
+        if (midiScaled == 64)
+        {
+            midiScaled = 63; // just a hack!
+        }
+
+        smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNM, 0);
+        smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNL, 1);
+        smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_DATAENTRYM, 64 + midiScaled);
+        //smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_DATAENTRYL, 0);
+    }
 }
 
 /** vcmd dc: set instrument. */
@@ -2548,8 +2571,8 @@ static void akaoSpcEventSetSoftEnvPattern (AkaoSpcSeqStat *seq, SeqEventReport *
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
-/** vcmd dd: set sustain rate (old). */
-static void akaoSpcEventSetSustainGAIN (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+/** vcmd dd: set GAIN-based release rate (old). */
+static void akaoSpcEventSetGAINReleaseRate (AkaoSpcSeqStat *seq, SeqEventReport *ev)
 {
     int arg1;
     AkaoSpcTrackStat *tr = &seq->track[ev->track];
@@ -2559,25 +2582,30 @@ static void akaoSpcEventSetSustainGAIN (AkaoSpcSeqStat *seq, SeqEventReport *ev)
     arg1 = seq->aRAM[*p];
     (*p)++;
 
-    sprintf(ev->note, "Set Sustain Rate, GAIN = %d", arg1 & 0x1f);
+    sprintf(ev->note, "Set Release Rate, GAIN = %d", arg1 & 0x1f);
     strcat(ev->classStr, " ev-softenv");
 
     if (!akaoSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
-/** vcmd de: set release rate (old). */
-static void akaoSpcEventSetReleaseGAIN (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+/** vcmd de: set GAIN-based sustain rate (old). */
+static void akaoSpcEventSetGAINSustainRate (AkaoSpcSeqStat *seq, SeqEventReport *ev)
 {
     int arg1;
     AkaoSpcTrackStat *tr = &seq->track[ev->track];
     int *p = &seq->track[ev->track].pos;
+    int rate;
 
     ev->size++;
     arg1 = seq->aRAM[*p];
     (*p)++;
 
-    sprintf(ev->note, "Set Release Rate, key-off delay = %d", arg1);
+    rate = arg1;
+    if (rate == 0 || rate > 100)
+        rate = 100;
+
+    sprintf(ev->note, "Set Duration Rate, rate = %d %%", rate);
     strcat(ev->classStr, " ev-softenv");
 
     if (!akaoSpcLessTextInSMF)
@@ -2612,15 +2640,15 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
         event[0xd3] = akaoSpcEventNOP2;
         event[0xd4] = akaoSpcEventEchoVolume;
         event[0xd5] = akaoSpcEventEchoFeedbackFIR;
-        event[0xd6] = akaoSpcEventPitchSlideWithDelay;
+        event[0xd6] = akaoSpcEventPitchEnvelopeOn;
         event[0xd7] = akaoSpcEventTremoloOn;
         event[0xd8] = akaoSpcEventVibratoOn;
         event[0xd9] = akaoSpcEventPanLFOOn3;
         event[0xda] = akaoSpcEventSetOctave;
         event[0xdb] = akaoSpcEventInstrument;
         event[0xdc] = akaoSpcEventSetSoftEnvPattern;
-        event[0xdd] = akaoSpcEventSetSustainGAIN;
-        event[0xde] = akaoSpcEventSetReleaseGAIN;
+        event[0xdd] = akaoSpcEventSetGAINReleaseRate;
+        event[0xde] = akaoSpcEventSetGAINSustainRate;
         event[0xdf] = akaoSpcEventNoiseFreq;
         event[0xe0] = akaoSpcEventLoopStart;
         event[0xe1] = akaoSpcEventOctaveUp;
@@ -2628,7 +2656,7 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
         event[0xe3] = akaoSpcEventNOP;
         event[0xe4] = akaoSpcEventNOP;
         event[0xe5] = akaoSpcEventNOP;
-        event[0xe6] = akaoSpcEventPitchSlideOff;
+        event[0xe6] = akaoSpcEventPitchEnvelopeOff;
         event[0xe7] = akaoSpcEventTremoloOff;
         event[0xe8] = akaoSpcEventVibratoOff;
         event[0xe9] = akaoSpcEventPanLFOOff;
@@ -2645,7 +2673,7 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
         event[0xf3] = akaoSpcEventPanpotFade;
         event[0xf4] = akaoSpcEventJump;
         event[0xf5] = akaoSpcEventConditionalJump;
-        //event[0xf6] = akaoSpcEventUnidentified; // cpu-controled jump
+        event[0xf6] = akaoSpcEventUnknown2; // cpu-controled jump
         event[0xf7] = akaoSpcEventEndOfTrackDup;
         event[0xf8] = akaoSpcEventEndOfTrackDup;
         event[0xf9] = akaoSpcEventEndOfTrackDup;
@@ -2660,42 +2688,42 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
     else if (seq->ver.id == SPC_VER_REV2)
     {
         event[0xd2] = akaoSpcEventSetTempo;
-        event[0xd3] = akaoSpcEventUnknown1; // restore default tempo
-        event[0xd4] = akaoSpcEventVolume; // c4
+        event[0xd3] = akaoSpcEventSetTempoFade;
+        event[0xd4] = akaoSpcEventVolume;
         event[0xd5] = akaoSpcEventVolumeFade;
         event[0xd6] = akaoSpcEventPanpot;
         event[0xd7] = akaoSpcEventPanpotFade;
-        event[0xd8] = akaoSpcEventPitchSlide;
-        //event[0xd9] = akaoSpcEventUnidentified;
-        //event[0xda] = akaoSpcEventUnidentified;
-        //event[0xdb] = akaoSpcEventUnidentified;
-        //event[0xdc] = akaoSpcEventUnidentified;
-        //event[0xdd] = akaoSpcEventUnidentified;
-        //event[0xde] = akaoSpcEventUnidentified;
-        //event[0xdf] = akaoSpcEventUnidentified;
-        //event[0xe0] = akaoSpcEventUnidentified;
+        event[0xd8] = akaoSpcEventEchoVolume;
+        event[0xd9] = akaoSpcEventEchoVolumeFade;
+        event[0xda] = akaoSpcEventTransposeAbs;
+        event[0xdb] = akaoSpcEventPitchEnvelopeOn;
+        event[0xdc] = akaoSpcEventPitchEnvelopeOff;
+        event[0xdd] = akaoSpcEventTremoloOn;
+        event[0xde] = akaoSpcEventTremoloOff;
+        event[0xdf] = akaoSpcEventVibratoOn;
+        event[0xe0] = akaoSpcEventVibratoOff;
         event[0xe1] = akaoSpcEventNoiseFreq;
-        event[0xe2] = akaoSpcEventNoiseOn; // d0
+        event[0xe2] = akaoSpcEventNoiseOn;
         event[0xe3] = akaoSpcEventNoiseOff;
         event[0xe4] = akaoSpcEventPitchModOn;
         event[0xe5] = akaoSpcEventPitchModOff;
-        event[0xe6] = akaoSpcEventUnknown2; // feedback, delay
+        event[0xe6] = akaoSpcEventEchoFeedbackFIR;
         event[0xe7] = akaoSpcEventEchoOn;
         event[0xe8] = akaoSpcEventEchoOff;
-        //event[0xe9] = akaoSpcEventUnidentified;
-        //event[0xea] = akaoSpcEventUnidentified;
+        event[0xe9] = akaoSpcEventPanLFOOn;
+        event[0xea] = akaoSpcEventPanLFOOff;
         event[0xeb] = akaoSpcEventSetOctave;
         event[0xec] = akaoSpcEventOctaveUp;
         event[0xed] = akaoSpcEventOctaveDown;
-        //event[0xee] = akaoSpcEventUnidentified;
-        //event[0xef] = akaoSpcEventUnidentified;
-        //event[0xf0] = akaoSpcEventUnidentified;
-        event[0xf1] = akaoSpcEventUnknown3; // loop (old style)
+        event[0xee] = akaoSpcEventLoopStart;
+        event[0xef] = akaoSpcEventLoopEnd;
+        event[0xf0] = akaoSpcEventConditionalJump;
+        event[0xf1] = akaoSpcEventJump;
         event[0xf2] = akaoSpcEventSlurOn;
         event[0xf3] = akaoSpcEventInstrument;
-        event[0xf4] = akaoSpcEventUnknown1; // software envelope
+        event[0xf4] = akaoSpcEventSetSoftEnvPattern;
         event[0xf5] = akaoSpcEventSlurOff;
-        //event[0xf6] = akaoSpcEventUnidentified;
+        event[0xf6] = akaoSpcEventUnknown2; // cpu-controled jump?
         event[0xf7] = akaoSpcEventDetune;
         event[0xf8] = akaoSpcEventEndOfTrack;
         endOfTrackVcmdAddr = mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + ((0xf8 - vcmdFirst) * 2)]);
@@ -2941,6 +2969,26 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
                             indexOfHexPat(&seq->aRAM[vcmdAddr], "\xc4.\x3f..\xc4.\x3f..\xc4.\xc8\x10\xb0.\xfb.\xf6..\xbc\xd6..\x2e..", 28, NULL) != -1 &&
                             mget2l(&seq->aRAM[vcmdAddr + 3]) == mget2l(&seq->aRAM[vcmdAddr + 8]) &&
                             seq->aRAM[vcmdAddr + 6] + 1 == seq->aRAM[vcmdAddr + 11])
+                        {
+                            event[vcmdIndex] = akaoSpcEventConditionalJump;
+                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Conditional Jump\" - $%04X\n", vcmdIndex, vcmdAddr);
+                        }
+                        // (Romancing SaGa)
+                        // mov   y,a
+                        // call  $0c1f
+                        // mov   $4f,a
+                        // call  $0c1f
+                        // mov   $50,a
+                        // cmp   x,#$10
+                        // bcs   $1041
+                        // mov   a,$03e1+x
+                        // inc   a
+                        // mov   $03e1+x,a
+                        else if (vcmdAddr + 22 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\xfd\x3f..\xc4.\x3f..\xc4.\xc8\x10\xb0.\xf5..\xbc\xd5..", 22, NULL) != -1 &&
+                            mget2l(&seq->aRAM[vcmdAddr + 2]) == mget2l(&seq->aRAM[vcmdAddr + 7]) &&
+                            seq->aRAM[vcmdAddr + 5] + 1 == seq->aRAM[vcmdAddr + 10] &&
+                            mget2l(&seq->aRAM[vcmdAddr + 16]) == mget2l(&seq->aRAM[vcmdAddr + 20]))
                         {
                             event[vcmdIndex] = akaoSpcEventConditionalJump;
                             fprintf(stderr, "Info: Auto assigned an event $%02X \"Conditional Jump\" - $%04X\n", vcmdIndex, vcmdAddr);

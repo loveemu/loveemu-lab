@@ -812,7 +812,7 @@
 0e5b: a2 8a     set5  $8a
 0e5d: 2f dd     bra   $0e3c
 
-; vcmd d6 - portamento
+; vcmd d6 - pitch envelope on
 0e5f: bc        inc   a
 0e60: d5 21 04  mov   $0421+x,a
 0e63: 3f 85 0c  call  $0c85
@@ -831,7 +831,7 @@
 0e86: d5 01 06  mov   $0601+x,a
 0e89: 6f        ret
 
-; vcmd e6 - portamento off
+; vcmd e6 - pitch envelope off
 0e8a: d5 61 04  mov   $0461+x,a
 0e8d: 6f        ret
 
@@ -856,7 +856,7 @@
 0eb8: d5 01 05  mov   $0501+x,a
 0ebb: 6f        ret
 
-; vcmd e7
+; vcmd e7 - tremolo off
 0ebc: d5 c1 03  mov   $03c1+x,a
 0ebf: 6f        ret
 
@@ -878,7 +878,7 @@
 0ee1: d5 61 05  mov   $0561+x,a
 0ee4: 6f        ret
 
-; vcmd e8
+; vcmd e8 - vibrato off
 0ee5: d5 01 04  mov   $0401+x,a
 0ee8: 6f        ret
 
@@ -900,7 +900,7 @@
 0f0b: d5 a1 04  mov   $04a1+x,a
 0f0e: 6f        ret
 
-; vcmd e9
+; vcmd e9 - panpot LFO off
 0f0f: d5 81 03  mov   $0381+x,a
 0f12: 6f        ret
 
@@ -920,15 +920,15 @@
 0f29: d5 21 03  mov   $0321+x,a
 0f2c: 6f        ret
 
-; vcmd dd
-0f2d: 28 1f     and   a,#$1f
+; vcmd dd - set release rate
+0f2d: 28 1f     and   a,#$1f            ; arg1 - GAIN
 0f2f: fd        mov   y,a
 0f30: f6 c0 18  mov   a,$18c0+y
 0f33: d5 e1 02  mov   $02e1+x,a
 0f36: 6f        ret
 
-; vcmd de - set duration rate
-0f37: 68 64     cmp   a,#$64
+; vcmd de - set sustain rate (duration rate)
+0f37: 68 64     cmp   a,#$64            ; arg1 - dur % (0-100)
 0f39: f0 0e     beq   $0f49
 0f3b: 90 04     bcc   $0f41
 0f3d: e8 00     mov   a,#$00
@@ -1005,7 +1005,7 @@
 0fbc: d4 03     mov   $03+x,a
 0fbe: 6f        ret
 
-; vcmd f5
+; vcmd f5 - conditional jump in repeat
 0fbf: f5 81 06  mov   a,$0681+x
 0fc2: fd        mov   y,a
 0fc3: f6 80 07  mov   a,$0780+y
@@ -2034,15 +2034,15 @@
 17ef: dw $0d47  ; d3 - nop (2 bytes)
 17f1: dw $0d4e  ; d4 - echo volume
 17f3: dw $0e0b  ; d5 - echo feedback, FIR
-17f5: dw $0e5f  ; d6 - portamento
+17f5: dw $0e5f  ; d6 - pitch envelope on
 17f7: dw $0e8e  ; d7 - tremolo
 17f9: dw $0ec0  ; d8 - vibrato
 17fb: dw $0ee9  ; d9 - panpot LFO
 17fd: dw $0cde  ; da - set octave
 17ff: dw $0f13  ; db - set instrument
 1801: dw $0f1e  ; dc - set volume envelove (software)
-1803: dw $0f2d  ; dd
-1805: dw $0f37  ; de - set duration rate
+1803: dw $0f2d  ; dd - set release rate
+1805: dw $0f37  ; de - set sustain rate (duration rate)
 1807: dw $0f4d  ; df - set noise frequency
 1809: dw $0f78  ; e0 - repeat start
 180b: dw $0cde  ; e1 - increment octave
@@ -2050,10 +2050,10 @@
 180f: dw $105c  ; e3 - nop
 1811: dw $1004  ; e4 - nop
 1813: dw $1005  ; e5 - nop
-1815: dw $0e8a  ; e6 - portamento off
-1817: dw $0ebc  ; e7
-1819: dw $0ee5  ; e8
-181b: dw $0f0f  ; e9
+1815: dw $0e8a  ; e6 - pitch envelope off
+1817: dw $0ebc  ; e7 - tremolo off
+1819: dw $0ee5  ; e8 - vibrato off
+181b: dw $0f0f  ; e9 - panpot LFO off
 181d: dw $0e2b  ; ea - echo on
 181f: dw $0e47  ; eb - echo off
 1821: dw $1006  ; ec - noise on
@@ -2065,7 +2065,7 @@
 182d: dw $0d57  ; f2 - volume
 182f: dw $0db1  ; f3 - panpot
 1831: dw $0ffb  ; f4 - goto
-1833: dw $0fbf  ; f5
+1833: dw $0fbf  ; f5 - conditional jump in repeat
 1835: dw $0ff0  ; f6
 1837: dw $105d  ; f7 - end of track (duplicated)
 1839: dw $105d  ; f8 - end of track (duplicated)
