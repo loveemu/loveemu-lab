@@ -685,7 +685,11 @@ static int akaoSpcCheckVer (AkaoSpcSeqStat *seq)
             version = SPC_VER_REV4;
         }
 
-        if (version == SPC_VER_REV4)
+        if (version == SPC_VER_REV2)
+        {
+            seq->ver.panpotIs7bit = true;
+        }
+        else if (version == SPC_VER_REV4)
         {
             int panVCmdAddr = mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + 0x02 * 2]);
             if (seq->aRAM[panVCmdAddr] == 0x1c) // asl
