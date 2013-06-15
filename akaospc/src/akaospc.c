@@ -2155,7 +2155,17 @@ static void akaoSpcEventLoopStart (AkaoSpcSeqStat *seq, SeqEventReport *ev)
         //fprintf(stderr, "Warning: Repeat Nest Level Overflow at $%04X\n", ev->addr);
     }
     tr->repRetAddr[tr->repNestLevel] = *p;
-    tr->repIncCount[tr->repNestLevel] = 1;
+    switch (seq->ver.id)
+    {
+    case SPC_VER_REV1:
+    case SPC_VER_REV2:
+    case SPC_VER_REV3:
+        tr->repIncCount[tr->repNestLevel] = 0;
+        break;
+    default:
+        tr->repIncCount[tr->repNestLevel] = 1;
+        break;
+    }
     tr->repDecCount[tr->repNestLevel] = repCount;
     tr->repNestLevel = (tr->repNestLevel + 1) % tr->repNestLevelMax;
 
@@ -2182,7 +2192,18 @@ static void akaoSpcEventLoopEnd (AkaoSpcSeqStat *seq, SeqEventReport *ev)
     sprintf(ev->note, "Loop End/Continue");
     strcat(ev->classStr, " ev-loopend");
 
-    tr->repIncCount[nestIndex]++;
+    switch (seq->ver.id)
+    {
+    case SPC_VER_REV1:
+    case SPC_VER_REV2:
+    case SPC_VER_REV3:
+        // do nothing
+        break;
+    default:
+        tr->repIncCount[nestIndex]++;
+        break;
+    }
+
     if (tr->repDecCount[nestIndex] == 0)
     {
         akaoSpcAddTrackLoopCount(seq, ev->track, 1);
@@ -2241,6 +2262,18 @@ static void akaoSpcEventConditionalJump (AkaoSpcSeqStat *seq, SeqEventReport *ev
     }
     nestIndex %= tr->repNestLevelMax;
 
+    switch (seq->ver.id)
+    {
+    case SPC_VER_REV1:
+    case SPC_VER_REV2:
+    case SPC_VER_REV3:
+        tr->repIncCount[nestIndex]++;
+        break;
+    default:
+        // do nothing
+        break;
+    }
+
     doJump = (arg1 == tr->repIncCount[nestIndex]);
     if (doJump)
     {
@@ -2254,6 +2287,30 @@ static void akaoSpcEventConditionalJump (AkaoSpcSeqStat *seq, SeqEventReport *ev
 
     sprintf(ev->note, "Conditional Jump, count = %d, dest = $%04X, jump = %s", arg1, dest, doJump ? "true" : "false");
     strcat(ev->classStr, " ev-loopbranch");
+
+    //if (!akaoSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd fc: reset repeat conditional counter. */
+static void akaoSpcEventResetRepeatIncCount (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+    int nestIndex;
+
+    nestIndex = (tr->repNestLevel - 1);
+    if (nestIndex < 0)
+    {
+        //fprintf(stderr, "Warning: Repeat Nest Level Overflow at $%04X\n", ev->addr);
+        nestIndex += tr->repNestLevelMax;
+    }
+    nestIndex %= tr->repNestLevelMax;
+
+    tr->repIncCount[nestIndex] = 0;
+
+    sprintf(ev->note, "Reset Repeat Conditional Count");
+    strcat(ev->classStr, " ev-loopetc");
 
     //if (!akaoSpcLessTextInSMF)
     //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
@@ -2933,6 +2990,10 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
 
         switch (seq->ver.subId)
         {
+        case SPC_SUBVER_SD2:
+            event[0xfc] = akaoSpcEventResetRepeatIncCount;
+            break;
+
         case SPC_SUBVER_LAL:
             event[0xf4] = akaoSpcEventEchoFIRFade;
             event[0xf5] = akaoSpcEventUnknown1; // master volume?
@@ -3005,6 +3066,19 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
                         {
                             event[vcmdIndex] = akaoSpcEventNOP;
                             fprintf(stderr, "Info: Auto assigned an event $%02X \"NOP\" (it sometimes can have an effect though) - $%04X\n", vcmdIndex, vcmdAddr);
+                        }
+                        // (Seiken Densetsu 2)
+                        // ; vcmd fc
+                        // cmp   x,#$10
+                        // bcs   $0943
+                        // mov   a,#$00
+                        // mov   $fea0+x,a
+                        // ret
+                        else if (vcmdAddr + 10 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\xc8\x10\xb0\x05\xe8\\\x00\xd5..\x6f", 10, NULL) != -1)
+                        {
+                            event[vcmdIndex] = akaoSpcEventUnknown0;
+                            fprintf(stderr, "Info: Event $%02X is possibly \"Reset Repeat Conditional Counter\"? Apparently it is not a channel message - $%04X\n", vcmdIndex, vcmdAddr);
                         }
                         else
                         {
@@ -3207,7 +3281,7 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
                             seq->aRAM[vcmdAddr + 6] + 1 == seq->aRAM[vcmdAddr + 11])
                         {
                             event[vcmdIndex] = akaoSpcEventConditionalJump;
-                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Conditional Jump\" - $%04X\n", vcmdIndex, vcmdAddr);
+                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Conditional Jump (Rev.4)\" - $%04X\n", vcmdIndex, vcmdAddr);
                         }
                         // (Final Fantasy 5)
                         // ; vcmd f9 - conditional goto
@@ -3229,7 +3303,7 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
                             seq->aRAM[vcmdAddr + 6] + 1 == seq->aRAM[vcmdAddr + 11])
                         {
                             event[vcmdIndex] = akaoSpcEventConditionalJump;
-                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Conditional Jump\" - $%04X\n", vcmdIndex, vcmdAddr);
+                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Conditional Jump (Rev.3)\" - $%04X\n", vcmdIndex, vcmdAddr);
                         }
                         // (Seiken Densetsu 2 - slightly different from FF5)
                         // mov   $36,a
@@ -3249,7 +3323,7 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
                             seq->aRAM[vcmdAddr + 6] + 1 == seq->aRAM[vcmdAddr + 11])
                         {
                             event[vcmdIndex] = akaoSpcEventConditionalJump;
-                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Conditional Jump\" - $%04X\n", vcmdIndex, vcmdAddr);
+                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Conditional Jump (Rev.3 SD2)\" - $%04X\n", vcmdIndex, vcmdAddr);
                         }
 
                         // (Romancing SaGa)
@@ -3270,7 +3344,7 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
                             mget2l(&seq->aRAM[vcmdAddr + 16]) == mget2l(&seq->aRAM[vcmdAddr + 20]))
                         {
                             event[vcmdIndex] = akaoSpcEventConditionalJump;
-                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Conditional Jump\" - $%04X\n", vcmdIndex, vcmdAddr);
+                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Conditional Jump (Rev.2)\" - $%04X\n", vcmdIndex, vcmdAddr);
                         }
                         // (Final Fantasy 4)
                         // mov   a,$0681+x
@@ -3287,7 +3361,7 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
                             mget2l(&seq->aRAM[vcmdAddr + 16]) == mget2l(&seq->aRAM[vcmdAddr + 19]))
                         {
                             event[vcmdIndex] = akaoSpcEventConditionalJump;
-                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Conditional Jump\" - $%04X\n", vcmdIndex, vcmdAddr);
+                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Conditional Jump (Rev.1)\" - $%04X\n", vcmdIndex, vcmdAddr);
                         }
                         else
                         {
