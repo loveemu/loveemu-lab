@@ -948,14 +948,19 @@ static void printEventTableFooter (AkaoSpcSeqStat *seq, Smf* smf)
 }
 
 /** convert SPC tempo into bpm. */
-static double akaoSpcTempo (AkaoSpcSeqStat *seq)
+static double akaoSpcTempoOf (AkaoSpcSeqStat *seq, int tempoValue)
 {
-    int tempoValue = seq->tempo;
     if (seq->ver.tempoMultiplier != 0)
     {
         tempoValue = (tempoValue * seq->ver.tempoMultiplier) / 0x100 + tempoValue;
     }
     return (double) tempoValue * 60000000 / (125 * seq->ver.timer0Freq * 48 * 256); // 55296000 = (timer0) 4.5ms * 48 TPQN * 256
+}
+
+/** convert SPC tempo into bpm. */
+static double akaoSpcTempo (AkaoSpcSeqStat *seq)
+{
+    return akaoSpcTempoOf(seq, seq->tempo);
 }
 
 /** convert SPC velocity into MIDI one. */
@@ -1297,8 +1302,15 @@ static void akaoSpcEventUnknown5 (AkaoSpcSeqStat *seq, SeqEventReport *ev)
 }
 
 /** vcmds: no operation. */
-static void akaoSpcEventNOP (AkaoSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
+static void akaoSpcEventNOP (AkaoSpcSeqStat *seq, SeqEventReport *ev)
 {
+    sprintf(ev->note, "NOP");
+}
+
+/** vcmds: no operation (2 bytes). */
+static void akaoSpcEventNOP2 (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    ev->size++;
     sprintf(ev->note, "NOP");
 }
 
@@ -1411,8 +1423,17 @@ static void akaoSpcEventVolumeFade (AkaoSpcSeqStat *seq, SeqEventReport *ev)
     double faderPos;
 
     ev->size += 2;
-    arg1 = seq->aRAM[*p];
-    (*p)++;
+    if (seq->ver.id == SPC_VER_REV1)
+    {
+        ev->size++;
+        arg1 = mget2l(&seq->aRAM[*p]);
+        (*p) += 2;
+    }
+    else
+    {
+        arg1 = seq->aRAM[*p];
+        (*p)++;
+    }
     arg2 = seq->aRAM[*p];
     (*p)++;
 
@@ -1424,16 +1445,24 @@ static void akaoSpcEventVolumeFade (AkaoSpcSeqStat *seq, SeqEventReport *ev)
 
     // lazy fader, hope it won't be canceled by other vcmds
     // (for instance, Chrono Trigger Title)
-    valueFrom = tr->volume;
-    valueTo = arg2;
-    for (faderStep = 1; faderStep <= arg1; faderStep++)
+    if (arg1 == 0)
     {
-        faderPos = (double)faderStep / arg1;
-        faderValue = (int)(valueTo * faderPos + valueFrom * (1.0 - faderPos)); // alphablend
-        if (tr->volume != faderValue)
+        tr->volume = arg2;
+        smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_VOLUME, akaoSpcMidiVolOf(tr->volume));
+    }
+    else
+    {
+        valueFrom = tr->volume;
+        valueTo = arg2;
+        for (faderStep = 1; faderStep <= arg1; faderStep++)
         {
-            tr->volume = faderValue;
-            smfInsertControl(seq->smf, ev->tick + faderStep, ev->track, ev->track, SMF_CONTROL_VOLUME, akaoSpcMidiVolOf(tr->volume));
+            faderPos = (double)faderStep / arg1;
+            faderValue = (int)(valueTo * faderPos + valueFrom * (1.0 - faderPos)); // alphablend
+            if (tr->volume != faderValue)
+            {
+                tr->volume = faderValue;
+                smfInsertControl(seq->smf, ev->tick + faderStep, ev->track, ev->track, SMF_CONTROL_VOLUME, akaoSpcMidiVolOf(tr->volume));
+            }
         }
     }
 }
@@ -1471,8 +1500,17 @@ static void akaoSpcEventPanpotFade (AkaoSpcSeqStat *seq, SeqEventReport *ev)
     double faderPos;
 
     ev->size += 2;
-    arg1 = seq->aRAM[*p];
-    (*p)++;
+    if (seq->ver.id == SPC_VER_REV1)
+    {
+        ev->size++;
+        arg1 = mget2l(&seq->aRAM[*p]);
+        (*p) += 2;
+    }
+    else
+    {
+        arg1 = seq->aRAM[*p];
+        (*p)++;
+    }
     arg2 = seq->aRAM[*p];
     (*p)++;
 
@@ -1483,28 +1521,36 @@ static void akaoSpcEventPanpotFade (AkaoSpcSeqStat *seq, SeqEventReport *ev)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 
     // lazy fader, hope it won't be canceled by other vcmds
-    valueFrom = tr->panpot;
-    valueTo = arg2 * (seq->ver.panpotIs7bit ? 2 : 1);
-    for (faderStep = 1; faderStep <= arg1; faderStep++)
+    if (arg1 == 0)
     {
-        faderPos = (double)faderStep / arg1;
-        faderValue = (int)(valueTo * faderPos + valueFrom * (1.0 - faderPos)); // alphablend
-        if (tr->panpot != faderValue)
+        tr->panpot = arg2;
+        smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_PANPOT, akaoSpcMidiPanOf(tr->panpot));
+    }
+    else
+    {
+        valueFrom = tr->panpot;
+        valueTo = arg2 * (seq->ver.panpotIs7bit ? 2 : 1);
+        for (faderStep = 1; faderStep <= arg1; faderStep++)
         {
-            tr->panpot = faderValue;
-            smfInsertControl(seq->smf, ev->tick + faderStep, ev->track, ev->track, SMF_CONTROL_PANPOT, akaoSpcMidiPanOf(tr->panpot));
+            faderPos = (double)faderStep / arg1;
+            faderValue = (int)(valueTo * faderPos + valueFrom * (1.0 - faderPos)); // alphablend
+            if (tr->panpot != faderValue)
+            {
+                tr->panpot = faderValue;
+                smfInsertControl(seq->smf, ev->tick + faderStep, ev->track, ev->track, SMF_CONTROL_PANPOT, akaoSpcMidiPanOf(tr->panpot));
+            }
         }
     }
 }
 
-/** vcmd c8: portamento (one-shot pitch slide). */
+/** vcmd c8: pitch slide. */
 static void akaoSpcEventPitchSlide (AkaoSpcSeqStat *seq, SeqEventReport *ev)
 {
     int arg1, arg2;
     int *p = &seq->track[ev->track].pos;
     AkaoSpcTrackStat *tr = &seq->track[ev->track];
 
-    ev->size += 3;
+    ev->size += 2;
     arg1 = seq->aRAM[*p];
     (*p)++;
     arg2 = utos1(seq->aRAM[*p]);
@@ -1512,6 +1558,41 @@ static void akaoSpcEventPitchSlide (AkaoSpcSeqStat *seq, SeqEventReport *ev)
 
     sprintf(ev->note, "Pitch Slide, speed = %d, key += %d", arg1, arg2);
     strcat(ev->classStr, " ev-pitchslide");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd d6: pitch slide (old). */
+static void akaoSpcEventPitchSlideWithDelay (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2, arg3;
+    int *p = &seq->track[ev->track].pos;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size += 3;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+    arg3 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    sprintf(ev->note, "Pitch Slide, delay = %d, speed = %d, key += %d", arg1, arg2, arg3);
+    strcat(ev->classStr, " ev-pitchslide");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd xx: pitch slide off. */
+static void akaoSpcEventPitchSlideOff (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int *p = &seq->track[ev->track].pos;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Pitch Slide Off");
+    strcat(ev->classStr, " ev-pitchslideoff");
 
     if (!akaoSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
@@ -1589,6 +1670,26 @@ static void akaoSpcEventTremoloOff (AkaoSpcSeqStat *seq, SeqEventReport *ev)
 
 /** vcmd cd: set panpot LFO on. */
 static void akaoSpcEventPanLFOOn (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    int *p = &seq->track[ev->track].pos;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Panpot LFO, depth = %d, rate = %d", arg1, arg2);
+    strcat(ev->classStr, " ev-panLFO");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd d9: set panpot LFO on (old). */
+static void akaoSpcEventPanLFOOn3 (AkaoSpcSeqStat *seq, SeqEventReport *ev)
 {
     int arg1, arg2, arg3;
     int *p = &seq->track[ev->track].pos;
@@ -2207,28 +2308,45 @@ static void akaoSpcEventSetTempoFade (AkaoSpcSeqStat *seq, SeqEventReport *ev)
     double faderPos;
 
     ev->size += 2;
-    arg1 = seq->aRAM[*p];
-    (*p)++;
+    if (seq->ver.id == SPC_VER_REV1)
+    {
+        ev->size++;
+        arg1 = mget2l(&seq->aRAM[*p]);
+        (*p) += 2;
+    }
+    else
+    {
+        arg1 = seq->aRAM[*p];
+        (*p)++;
+    }
     arg2 = seq->aRAM[*p];
     (*p)++;
 
-    sprintf(ev->note, "Set Tempo, fade speed = %d, tempo = %.1f", arg1, akaoSpcTempo(seq));
+    sprintf(ev->note, "Tempo Fade, fade speed = %d, tempo = %.1f", arg1, akaoSpcTempoOf(seq, arg2));
     strcat(ev->classStr, " ev-tempo");
 
     if (!akaoSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 
     // lazy fader, hope it won't be canceled by other vcmds
-    valueFrom = seq->tempo;
-    valueTo = arg2;
-    for (faderStep = 1; faderStep <= arg1; faderStep++)
+    if (arg1 == 0)
     {
-        faderPos = (double)faderStep / arg1;
-        faderValue = (int)(valueTo * faderPos + valueFrom * (1.0 - faderPos)); // alphablend
-        if (seq->tempo != faderValue)
+        seq->tempo = arg2;
+        smfInsertTempoBPM(seq->smf, ev->tick, 0, akaoSpcTempo(seq));
+    }
+    else
+    {
+        valueFrom = seq->tempo;
+        valueTo = arg2;
+        for (faderStep = 1; faderStep <= arg1; faderStep++)
         {
-            seq->tempo = faderValue;
-            smfInsertTempoBPM(seq->smf, ev->tick + faderStep, 0, akaoSpcTempo(seq));
+            faderPos = (double)faderStep / arg1;
+            faderValue = (int)(valueTo * faderPos + valueFrom * (1.0 - faderPos)); // alphablend
+            if (seq->tempo != faderValue)
+            {
+                seq->tempo = faderValue;
+                smfInsertTempoBPM(seq->smf, ev->tick + faderStep, 0, akaoSpcTempo(seq));
+            }
         }
     }
 }
@@ -2333,6 +2451,26 @@ static void akaoSpcEventEchoFIR (AkaoSpcSeqStat *seq, SeqEventReport *ev)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
+/** vcmd xx: set echo feedback, FIR. */
+static void akaoSpcEventEchoFeedbackFIR (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Echo Feedback/FIR, feedback = %d, FIR = %d", arg1, arg2);
+    strcat(ev->classStr, " ev-echoparam");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
 /** vcmd fx: set/fade echo FIR. */
 static void akaoSpcEventEchoFIRFade (AkaoSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -2392,6 +2530,60 @@ static void akaoSpcEventRhythmOff (AkaoSpcSeqStat *seq, SeqEventReport *ev)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
+/** vcmd dc: set software envelope (old). */
+static void akaoSpcEventSetSoftEnvPattern (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Volume Envelope (Software), pattern = %d", arg1);
+    strcat(ev->classStr, " ev-softenv");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd dd: set sustain rate (old). */
+static void akaoSpcEventSetSustainGAIN (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Set Sustain Rate, GAIN = %d", arg1 & 0x1f);
+    strcat(ev->classStr, " ev-softenv");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd de: set release rate (old). */
+static void akaoSpcEventSetReleaseGAIN (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Set Release Rate, key-off delay = %d", arg1);
+    strcat(ev->classStr, " ev-softenv");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
 /** set pointers of each event. */
 static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
 {
@@ -2416,44 +2608,44 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
 
     if (seq->ver.id == SPC_VER_REV1)
     {
-        event[0xd2] = akaoSpcEventUnknown3; // tempo
-        //event[0xd3] = akaoSpcEventUnidentified;
+        event[0xd2] = akaoSpcEventSetTempoFade; // tempo
+        event[0xd3] = akaoSpcEventNOP2;
         event[0xd4] = akaoSpcEventEchoVolume;
-        event[0xd5] = akaoSpcEventUnknown2; // feedback, delay
-        event[0xd6] = akaoSpcEventUnknown3; // pitch slide
-        event[0xd7] = akaoSpcEventUnknown3; // volume
+        event[0xd5] = akaoSpcEventEchoFeedbackFIR;
+        event[0xd6] = akaoSpcEventPitchSlideWithDelay;
+        event[0xd7] = akaoSpcEventTremoloOn;
         event[0xd8] = akaoSpcEventVibratoOn;
-        //event[0xd9] = akaoSpcEventUnknown1; // panpot?
+        event[0xd9] = akaoSpcEventPanLFOOn3;
         event[0xda] = akaoSpcEventSetOctave;
         event[0xdb] = akaoSpcEventInstrument;
-        //event[0xdc] = akaoSpcEventUnidentified;
-        //event[0xdd] = akaoSpcEventUnidentified;
-        //event[0xde] = akaoSpcEventUnidentified;
+        event[0xdc] = akaoSpcEventSetSoftEnvPattern;
+        event[0xdd] = akaoSpcEventSetSustainGAIN;
+        event[0xde] = akaoSpcEventSetReleaseGAIN;
         event[0xdf] = akaoSpcEventNoiseFreq;
-        //event[0xe0] = akaoSpcEventUnidentified; // repeat
+        event[0xe0] = akaoSpcEventLoopStart;
         event[0xe1] = akaoSpcEventOctaveUp;
         event[0xe2] = akaoSpcEventOctaveDown;
-        //event[0xe3] = akaoSpcEventUnidentified;
-        //event[0xe4] = akaoSpcEventUnidentified;
-        //event[0xe5] = akaoSpcEventUnidentified;
-        //event[0xe6] = akaoSpcEventUnidentified;
-        //event[0xe7] = akaoSpcEventUnidentified;
-        //event[0xe8] = akaoSpcEventUnidentified; // vibrato
-        //event[0xe9] = akaoSpcEventUnidentified;
+        event[0xe3] = akaoSpcEventNOP;
+        event[0xe4] = akaoSpcEventNOP;
+        event[0xe5] = akaoSpcEventNOP;
+        event[0xe6] = akaoSpcEventPitchSlideOff;
+        event[0xe7] = akaoSpcEventTremoloOff;
+        event[0xe8] = akaoSpcEventVibratoOff;
+        event[0xe9] = akaoSpcEventPanLFOOff;
         event[0xea] = akaoSpcEventEchoOn;
         event[0xeb] = akaoSpcEventEchoOff;
         event[0xec] = akaoSpcEventNoiseOn; // d0
         event[0xed] = akaoSpcEventNoiseOff;
         event[0xee] = akaoSpcEventPitchModOn;
         event[0xef] = akaoSpcEventPitchModOff;
-        //event[0xf0] = akaoSpcEventUnidentified; // repeat?
+        event[0xf0] = akaoSpcEventLoopEnd;
         event[0xf1] = akaoSpcEventEndOfTrack;
         endOfTrackVcmdAddr = mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + ((0xf1 - vcmdFirst) * 2)]);
-        //event[0xf2] = akaoSpcEventUnidentified;
-        //event[0xf3] = akaoSpcEventUnidentified;
-        //event[0xf4] = akaoSpcEventUnidentified;
-        //event[0xf5] = akaoSpcEventUnidentified;
-        //event[0xf6] = akaoSpcEventUnidentified;
+        event[0xf2] = akaoSpcEventVolumeFade;
+        event[0xf3] = akaoSpcEventPanpotFade;
+        event[0xf4] = akaoSpcEventJump;
+        event[0xf5] = akaoSpcEventConditionalJump;
+        //event[0xf6] = akaoSpcEventUnidentified; // cpu-controled jump
         event[0xf7] = akaoSpcEventEndOfTrackDup;
         event[0xf8] = akaoSpcEventEndOfTrackDup;
         event[0xf9] = akaoSpcEventEndOfTrackDup;
@@ -2692,9 +2884,22 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
                             event[vcmdIndex] = akaoSpcEventJump;
                             fprintf(stderr, "Info: Auto assigned an event $%02X \"Jump\" - $%04X\n", vcmdIndex, vcmdAddr);
                         }
+                        // (Final Fantasy 4)
+                        // ; vcmd f4 - goto
+                        // mov   y,a
+                        // call  $0c85
+                        // mov   $02+x,y
+                        // mov   $03+x,a
+                        // ret
+                        else if (vcmdAddr + 9 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\xfd\x3f..\xdb.\xd4.\x6f", 9, NULL) != -1 &&
+                            seq->aRAM[vcmdAddr + 5] + 1 == seq->aRAM[vcmdAddr + 7])
+                        {
+                            event[vcmdIndex] = akaoSpcEventJump;
+                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Jump\" - $%04X\n", vcmdIndex, vcmdAddr);
+                        }
                         else
                         {
-                            fprintf(stderr, "BOO $%02X \"Jump\" - $%04X\n", vcmdIndex, vcmdAddr);
                             event[vcmdIndex] = akaoSpcEventUnknown2;
                         }
                         break;
@@ -2736,6 +2941,23 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
                             indexOfHexPat(&seq->aRAM[vcmdAddr], "\xc4.\x3f..\xc4.\x3f..\xc4.\xc8\x10\xb0.\xfb.\xf6..\xbc\xd6..\x2e..", 28, NULL) != -1 &&
                             mget2l(&seq->aRAM[vcmdAddr + 3]) == mget2l(&seq->aRAM[vcmdAddr + 8]) &&
                             seq->aRAM[vcmdAddr + 6] + 1 == seq->aRAM[vcmdAddr + 11])
+                        {
+                            event[vcmdIndex] = akaoSpcEventConditionalJump;
+                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Conditional Jump\" - $%04X\n", vcmdIndex, vcmdAddr);
+                        }
+                        // (Final Fantasy 4)
+                        // mov   a,$0681+x
+                        // mov   y,a
+                        // mov   a,$0780+y
+                        // inc   a
+                        // mov   $0780+y,a
+                        // cmp   a,$26
+                        // beq   $0fd4
+                        // call  $0c89
+                        // jmp   $0c89
+                        else if (vcmdAddr + 21 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\xf5..\xfd\xf6..\xbc\xd6..\x64.\xf0\x06\x3f..\x5f..", 21, NULL) != -1 &&
+                            mget2l(&seq->aRAM[vcmdAddr + 16]) == mget2l(&seq->aRAM[vcmdAddr + 19]))
                         {
                             event[vcmdIndex] = akaoSpcEventConditionalJump;
                             fprintf(stderr, "Info: Auto assigned an event $%02X \"Conditional Jump\" - $%04X\n", vcmdIndex, vcmdAddr);

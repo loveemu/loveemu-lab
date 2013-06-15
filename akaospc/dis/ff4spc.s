@@ -665,7 +665,7 @@
 0d44: c4 36     mov   $36,a
 0d46: 6f        ret
 
-; vcmd d3
+; vcmd d3 - nop (2 bytes)
 0d47: 3f 85 0c  call  $0c85
 0d4a: 3f 85 0c  call  $0c85
 0d4d: 6f        ret
@@ -763,7 +763,7 @@
 0e07: d5 20 02  mov   $0220+x,a
 0e0a: 6f        ret
 
-; vcmd d5 - echo feedback, etc.
+; vcmd d5 - echo feedback, FIR
 0e0b: c4 79     mov   $79,a
 0e0d: 3f 82 10  call  $1082
 0e10: 3f 85 0c  call  $0c85
@@ -1038,7 +1038,7 @@
 0ff8: d4 03     mov   $03+x,a
 0ffa: 6f        ret
 
-; vcmd f4
+; vcmd f4 - goto
 0ffb: fd        mov   y,a
 0ffc: 3f 85 0c  call  $0c85
 0fff: db 02     mov   $02+x,y
@@ -2031,9 +2031,9 @@
 
 ; vcmd dispatch table
 17ed: dw $0cf4  ; d2 - set/fade tempo
-17ef: dw $0d47  ; d3
+17ef: dw $0d47  ; d3 - nop (2 bytes)
 17f1: dw $0d4e  ; d4 - echo volume
-17f3: dw $0e0b  ; d5 - echo feedback, etc
+17f3: dw $0e0b  ; d5 - echo feedback, FIR
 17f5: dw $0e5f  ; d6 - portamento
 17f7: dw $0e8e  ; d7 - tremolo
 17f9: dw $0ec0  ; d8 - vibrato
@@ -2064,7 +2064,7 @@
 182b: dw $105d  ; f1 - end of track
 182d: dw $0d57  ; f2 - volume
 182f: dw $0db1  ; f3 - panpot
-1831: dw $0ffb  ; f4
+1831: dw $0ffb  ; f4 - goto
 1833: dw $0fbf  ; f5
 1835: dw $0ff0  ; f6
 1837: dw $105d  ; f7 - end of track (duplicated)
