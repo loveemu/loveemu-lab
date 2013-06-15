@@ -202,6 +202,8 @@ struct TagAkaoSpcTrackStat {
     int repDecCount[0x100]; // decremental repeat counter
     int repNestLevel;       // current nest level of repeat vcmd
     int repNestLevelMax;    // max nest level allowed of repeat vcmd
+    int volume;             // current volume (used for fade control)
+    int panpot;             // current panpot (used for fade control)
 };
 
 struct TagAkaoSpcSeqStat {
@@ -337,6 +339,8 @@ static void akaoSpcResetTrackParam (AkaoSpcSeqStat *seq, int track)
     tr->lastNote.active = false;
     tr->lastNoteLen = 0;
     tr->patch = 0;
+    tr->volume = 0x46; // depends on title, but nobody cares
+    tr->panpot = 0x80;
     tr->rhythmChannel = false;
     tr->repNestLevel = 0;
     tr->repNestLevelMax = 4;
@@ -1391,7 +1395,9 @@ static void akaoSpcEventVolume (AkaoSpcSeqStat *seq, SeqEventReport *ev)
     //if (!akaoSpcLessTextInSMF)
     //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 
-    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_VOLUME, akaoSpcMidiVolOf(arg1));
+    tr->volume = arg1;
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_VOLUME, akaoSpcMidiVolOf(tr->volume));
 }
 
 /** vcmd c5: set volume fade. */
@@ -1400,6 +1406,9 @@ static void akaoSpcEventVolumeFade (AkaoSpcSeqStat *seq, SeqEventReport *ev)
     int arg1, arg2;
     int *p = &seq->track[ev->track].pos;
     AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int valueFrom, valueTo;
+    int faderStep, faderValue;
+    double faderPos;
 
     ev->size += 2;
     arg1 = seq->aRAM[*p];
@@ -1413,7 +1422,20 @@ static void akaoSpcEventVolumeFade (AkaoSpcSeqStat *seq, SeqEventReport *ev)
     if (!akaoSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 
-    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_VOLUME, akaoSpcMidiVolOf(arg2)); // TODO: OH LAZY!
+    // lazy fader, hope it won't be canceled by other vcmds
+    // (for instance, Chrono Trigger Title)
+    valueFrom = tr->volume;
+    valueTo = arg2;
+    for (faderStep = 1; faderStep <= arg1; faderStep++)
+    {
+        faderPos = (double)faderStep / arg1;
+        faderValue = (int)(valueTo * faderPos + valueFrom * (1.0 - faderPos)); // alphablend
+        if (tr->volume != faderValue)
+        {
+            tr->volume = faderValue;
+            smfInsertControl(seq->smf, ev->tick + faderStep, ev->track, ev->track, SMF_CONTROL_VOLUME, akaoSpcMidiVolOf(tr->volume));
+        }
+    }
 }
 
 /** vcmd c6: set panpot. */
@@ -1433,15 +1455,20 @@ static void akaoSpcEventPanpot (AkaoSpcSeqStat *seq, SeqEventReport *ev)
     //if (!akaoSpcLessTextInSMF)
     //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 
-    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_PANPOT, akaoSpcMidiPanOf(arg1 * (seq->ver.panpotIs7bit ? 2 : 1)));
+    tr->panpot = arg1 * (seq->ver.panpotIs7bit ? 2 : 1);
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_PANPOT, akaoSpcMidiPanOf(tr->panpot));
 }
 
-/** vcmd c7: set volume fade. */
+/** vcmd c7: set panpot fade. */
 static void akaoSpcEventPanpotFade (AkaoSpcSeqStat *seq, SeqEventReport *ev)
 {
     int arg1, arg2;
     int *p = &seq->track[ev->track].pos;
     AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int valueFrom, valueTo;
+    int faderStep, faderValue;
+    double faderPos;
 
     ev->size += 2;
     arg1 = seq->aRAM[*p];
@@ -1455,7 +1482,19 @@ static void akaoSpcEventPanpotFade (AkaoSpcSeqStat *seq, SeqEventReport *ev)
     if (!akaoSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 
-    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_PANPOT, akaoSpcMidiPanOf(arg2 * (seq->ver.panpotIs7bit ? 2 : 1))); // TODO: OH LAZY!
+    // lazy fader, hope it won't be canceled by other vcmds
+    valueFrom = tr->panpot;
+    valueTo = arg2 * (seq->ver.panpotIs7bit ? 2 : 1);
+    for (faderStep = 1; faderStep <= arg1; faderStep++)
+    {
+        faderPos = (double)faderStep / arg1;
+        faderValue = (int)(valueTo * faderPos + valueFrom * (1.0 - faderPos)); // alphablend
+        if (tr->panpot != faderValue)
+        {
+            tr->panpot = faderValue;
+            smfInsertControl(seq->smf, ev->tick + faderStep, ev->track, ev->track, SMF_CONTROL_PANPOT, akaoSpcMidiPanOf(tr->panpot));
+        }
+    }
 }
 
 /** vcmd c8: portamento (one-shot pitch slide). */
@@ -2163,6 +2202,9 @@ static void akaoSpcEventSetTempoFade (AkaoSpcSeqStat *seq, SeqEventReport *ev)
     int arg1, arg2;
     AkaoSpcTrackStat *tr = &seq->track[ev->track];
     int *p = &seq->track[ev->track].pos;
+    int valueFrom, valueTo;
+    int faderStep, faderValue;
+    double faderPos;
 
     ev->size += 2;
     arg1 = seq->aRAM[*p];
@@ -2170,12 +2212,25 @@ static void akaoSpcEventSetTempoFade (AkaoSpcSeqStat *seq, SeqEventReport *ev)
     arg2 = seq->aRAM[*p];
     (*p)++;
 
-    seq->tempo = arg2;
-
     sprintf(ev->note, "Set Tempo, fade speed = %d, tempo = %.1f", arg1, akaoSpcTempo(seq));
     strcat(ev->classStr, " ev-tempo");
 
-    smfInsertTempoBPM(seq->smf, ev->tick, 0, akaoSpcTempo(seq)); // OH LAZY!
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    // lazy fader, hope it won't be canceled by other vcmds
+    valueFrom = seq->tempo;
+    valueTo = arg2;
+    for (faderStep = 1; faderStep <= arg1; faderStep++)
+    {
+        faderPos = (double)faderStep / arg1;
+        faderValue = (int)(valueTo * faderPos + valueFrom * (1.0 - faderPos)); // alphablend
+        if (seq->tempo != faderValue)
+        {
+            seq->tempo = faderValue;
+            smfInsertTempoBPM(seq->smf, ev->tick + faderStep, 0, akaoSpcTempo(seq));
+        }
+    }
 }
 
 /** vcmd f1: set echo volume. */
