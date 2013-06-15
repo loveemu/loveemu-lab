@@ -169,6 +169,7 @@ typedef struct TagAkaoSpcVerInfo {
     AkaoSpcEvent event[256];
     PatchFixInfo patchFix[256];
     int tempoMultiplier;
+    bool panpotIs7bit;
     bool seqDetected;
 } AkaoSpcVerInfo;
 
@@ -410,6 +411,7 @@ static int akaoSpcCheckVer (AkaoSpcSeqStat *seq)
     seq->ver.timer0Freq = -1;
     seq->ver.subId = SPC_SUBVER_UNKNOWN;
     seq->ver.tempoMultiplier = 0;
+    seq->ver.panpotIs7bit = false;
 
     // (Romancing SaGa 2)
     // mov   x,#$0e
@@ -675,6 +677,15 @@ static int akaoSpcCheckVer (AkaoSpcSeqStat *seq)
             version = SPC_VER_REV4;
         }
 
+        if (version == SPC_VER_REV4)
+        {
+            int panVCmdAddr = mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + 0x02 * 2]);
+            if (seq->aRAM[panVCmdAddr] == 0x1c) // asl
+            {
+                seq->ver.panpotIs7bit = true;
+            }
+        }
+
         // detect vcmd mapping (silly...)
         if (seq->ver.vcmdFirstByte == 0x100 - countof(FF4_VCMD_LEN_TABLE) &&
             memcmp(&seq->aRAM[seq->ver.vcmdLenTableAddr], FF4_VCMD_LEN_TABLE, sizeof(FF4_VCMD_LEN_TABLE)) == 0)
@@ -871,6 +882,7 @@ static void printHtmlInfoList (AkaoSpcSeqStat *seq)
     {
         myprintf(" (tempo multiplier $%02X)", seq->ver.tempoMultiplier);
     }
+    myprintf("          <li>Panpot Range: %d bits</li>", seq->ver.panpotIs7bit ? 7 : 8);
     myprintf("</li>\n");
 }
 
@@ -962,10 +974,6 @@ static int akaoSpcMidiVolOf (int value)
 /** convert SPC channel panpot into MIDI one. */
 static int akaoSpcMidiPanOf (int value)
 {
-    if (value > 0x7f)
-    {
-        fprintf(stderr, "Warning: Panpot %d is too large\n", value); // older version, work on it later
-    }
     return value/2; // linear (TODO: sine curve)
 }
 
@@ -1424,7 +1432,7 @@ static void akaoSpcEventPanpot (AkaoSpcSeqStat *seq, SeqEventReport *ev)
     //if (!akaoSpcLessTextInSMF)
     //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 
-    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_PANPOT, akaoSpcMidiPanOf(arg1));
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_PANPOT, akaoSpcMidiPanOf(arg1 * (seq->ver.panpotIs7bit ? 2 : 1)));
 }
 
 /** vcmd c7: set volume fade. */
@@ -1446,7 +1454,7 @@ static void akaoSpcEventPanpotFade (AkaoSpcSeqStat *seq, SeqEventReport *ev)
     if (!akaoSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 
-    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_PANPOT, akaoSpcMidiPanOf(arg2)); // TODO: OH LAZY!
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_PANPOT, akaoSpcMidiPanOf(arg2 * (seq->ver.panpotIs7bit ? 2 : 1))); // TODO: OH LAZY!
 }
 
 /** vcmd c8: portamento (one-shot pitch slide). */
@@ -2335,7 +2343,7 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
     AkaoSpcEvent *event = seq->ver.event;
     byte vcmdFirst = seq->ver.vcmdFirstByte;
     bool needsAutoEventAssign = true;
-    byte autoAssignFirstVCmd = vcmdFirst + 0x30;
+    byte autoAssignFirstVCmdOfs = 0x30;
     int endOfTrackVcmdAddr = -1;
 
     // disable them all first
@@ -2399,7 +2407,7 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
         event[0xfd] = akaoSpcEventEndOfTrackDup;
         event[0xfe] = akaoSpcEventEndOfTrackDup;
         event[0xff] = akaoSpcEventEndOfTrackDup;
-        autoAssignFirstVCmd = vcmdFirst;
+        autoAssignFirstVCmdOfs = 0;
     }
     else if (seq->ver.id == SPC_VER_REV2)
     {
@@ -2450,7 +2458,7 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
         event[0xfd] = akaoSpcEventEndOfTrackDup;
         event[0xfe] = akaoSpcEventEndOfTrackDup;
         event[0xff] = akaoSpcEventEndOfTrackDup;
-        autoAssignFirstVCmd = vcmdFirst;
+        autoAssignFirstVCmdOfs = 0;
     }
     else
     {
@@ -2493,7 +2501,7 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
             endOfTrackVcmdAddr = mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + (0x2d * 2)]);
             event[vcmdFirst + 0x21] = akaoSpcEventSetTempo;
             event[vcmdFirst + 0x22] = akaoSpcEventSetTempoFade;
-            autoAssignFirstVCmd = vcmdFirst + 0x20;
+            autoAssignFirstVCmdOfs = 0x20;
         }
         else
         {
@@ -2571,7 +2579,7 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
             }
         }
 
-        for (vcmdIndex = autoAssignFirstVCmd; vcmdIndex <= 0xff; vcmdIndex++)
+        for (vcmdIndex = vcmdFirst + autoAssignFirstVCmdOfs; vcmdIndex <= 0xff; vcmdIndex++)
         {
             int vcmdAddr = mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + ((vcmdIndex - vcmdFirst) * 2)]);
             if (event[vcmdIndex] == akaoSpcEventUnidentified)
@@ -2609,8 +2617,28 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
                             event[vcmdIndex] = akaoSpcEventJump;
                             fprintf(stderr, "Info: Auto assigned an event $%02X \"Jump\" - $%04X\n", vcmdIndex, vcmdAddr);
                         }
+                        // (Final Fantasy 5)
+                        // ; vcmd fa - goto
+                        // mov   y,a
+                        // call  $059c
+                        // cmp   x,#$10
+                        // bcs   $09a7
+                        // mov   a,y
+                        // mov   y,$04
+                        // addw  ya,$06            ; add voffset
+                        // mov   $0c+x,a
+                        // mov   $0d+x,y
+                        // ret
+                        else if (vcmdAddr + 18 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\xfd\x3f..\xc8\x10\xb0.\xdd\xeb.\x7a.\xd4.\xdb.\x6f", 18, NULL) != -1 &&
+                            seq->aRAM[vcmdAddr + 14] + 1 == seq->aRAM[vcmdAddr + 16])
+                        {
+                            event[vcmdIndex] = akaoSpcEventJump;
+                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Jump\" - $%04X\n", vcmdIndex, vcmdAddr);
+                        }
                         else
                         {
+                            fprintf(stderr, "BOO $%02X \"Jump\" - $%04X\n", vcmdIndex, vcmdAddr);
                             event[vcmdIndex] = akaoSpcEventUnknown2;
                         }
                         break;
@@ -2628,6 +2656,28 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
                         // cbne  $9e,$1ccd         ; do nothing if repeat count doesn't match
                         if (vcmdAddr + 20 <= SPC_ARAM_SIZE &&
                             indexOfHexPat(&seq->aRAM[vcmdAddr], "\xc4.\x3f..\xc4.\x3f..\xc4.\xfb.\xf6..\x2e..", 20, NULL) != -1 &&
+                            mget2l(&seq->aRAM[vcmdAddr + 3]) == mget2l(&seq->aRAM[vcmdAddr + 8]) &&
+                            seq->aRAM[vcmdAddr + 6] + 1 == seq->aRAM[vcmdAddr + 11])
+                        {
+                            event[vcmdIndex] = akaoSpcEventConditionalJump;
+                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Conditional Jump\" - $%04X\n", vcmdIndex, vcmdAddr);
+                        }
+                        // (Final Fantasy 5)
+                        // ; vcmd f9 - conditional goto
+                        // mov   $36,a
+                        // call  $059c
+                        // mov   $34,a
+                        // call  $059c
+                        // mov   $35,a
+                        // cmp   x,#$10
+                        // bcs   $09cc
+                        // mov   y,$5c+x
+                        // mov   a,$fca0+y
+                        // inc   a
+                        // mov   $fca0+y,a         ; inc current rpt ctr
+                        // cbne  $36,$09cc         ; return unless rpt == op1
+                        else if (vcmdAddr + 28 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\xc4.\x3f..\xc4.\x3f..\xc4.\xc8\x10\xb0.\xfb.\xf6..\xbc\xd6..\x2e..", 28, NULL) != -1 &&
                             mget2l(&seq->aRAM[vcmdAddr + 3]) == mget2l(&seq->aRAM[vcmdAddr + 8]) &&
                             seq->aRAM[vcmdAddr + 6] + 1 == seq->aRAM[vcmdAddr + 11])
                         {
