@@ -795,6 +795,7 @@ static bool akaoSpcDetectSeq (AkaoSpcSeqStat *seq)
     }
 
     // track list
+    result = false;
     for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
         int trackAddr = mget2l(&seq->aRAM[seqHeaderReadOfs]);
         seqHeaderReadOfs += 2;
