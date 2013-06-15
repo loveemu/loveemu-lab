@@ -168,6 +168,7 @@ typedef struct TagAkaoSpcVerInfo {
     int timer0Freq;
     AkaoSpcEvent event[256];
     PatchFixInfo patchFix[256];
+    int cpuCtledJumpFlgAddr;
     int tempoMultiplier;
     bool panpotIs7bit;
     bool seqDetected;
@@ -399,6 +400,7 @@ static int akaoSpcCheckVer (AkaoSpcSeqStat *seq)
     int vcmdExecCodeVer = SPC_VER_UNKNOWN;
     int songLdCodeAddr;
     int timerSetCodeAddr;
+    int cpuCtledJumpVCmdAddr;
 
     seq->timebase = akaoSpcTimeBase;
     //seq->ver.seqListAddr = -1;
@@ -415,6 +417,7 @@ static int akaoSpcCheckVer (AkaoSpcSeqStat *seq)
     seq->ver.timer0Freq = -1;
     seq->ver.subId = SPC_SUBVER_UNKNOWN;
     seq->ver.tempoMultiplier = 0;
+    seq->ver.cpuCtledJumpFlgAddr = -1;
     seq->ver.panpotIs7bit = false;
 
     // (Romancing SaGa 2)
@@ -545,6 +548,7 @@ static int akaoSpcCheckVer (AkaoSpcSeqStat *seq)
             seq->ver.seqHeaderAddr = mget2l(&seq->aRAM[songLdCodeAddr + 3]) + 1;
             seq->ver.useROMAddress = true;
             seq->ver.apuAddressBase = (seq->aRAM[songLdCodeAddr + 13] << 8) | seq->aRAM[songLdCodeAddr + 11];
+            seq->ver.subId = SPC_SUBVER_FFMQ;
         }
     }
     // (Romancing SaGa)
@@ -647,6 +651,28 @@ static int akaoSpcCheckVer (AkaoSpcSeqStat *seq)
         }
     }
 
+    // (Final Fantasy 5)
+    // ; vcmd fb - goto if vbit set in D1
+    // mov   y,a
+    // call  $059c
+    // cmp   x,#$10
+    // bcs   $0a41
+    // mov   a,$bf
+    // and   a,$d1
+    // beq   $0a41
+    // tclr1 $00d1
+    // mov   a,y
+    // mov   y,$04
+    // addw  ya,$06
+    // mov   $0c+x,a
+    // mov   $0d+x,y
+    // ret
+    if ((cpuCtledJumpVCmdAddr = indexOfHexPat(seq->aRAM, "\xfd\x3f..\xc8\x10\xb0\x12\xe4.\x24.\xf0\x0c\x4e..\xdd\xeb.\x7a.\xd4.\xdb.\x6f", SPC_ARAM_SIZE, NULL)) != -1 &&
+        seq->aRAM[cpuCtledJumpVCmdAddr + 23] + 1 == seq->aRAM[cpuCtledJumpVCmdAddr + 25])
+    {
+        seq->ver.cpuCtledJumpFlgAddr = mget2l(&seq->aRAM[cpuCtledJumpVCmdAddr + 15]);
+    }
+
     if (seq->ver.vcmdFirstByte % 14 == 0)
     {
         seq->ver.noteLenTableLen = seq->ver.vcmdFirstByte / 14;
@@ -699,6 +725,7 @@ static int akaoSpcCheckVer (AkaoSpcSeqStat *seq)
         }
 
         // detect vcmd mapping (silly...)
+        if (seq->ver.subId != SPC_SUBVER_FFMQ) // and
         if (seq->ver.vcmdFirstByte == 0x100 - countof(FF4_VCMD_LEN_TABLE) &&
             memcmp(&seq->aRAM[seq->ver.vcmdLenTableAddr], FF4_VCMD_LEN_TABLE, sizeof(FF4_VCMD_LEN_TABLE)) == 0)
         {
@@ -793,16 +820,25 @@ static bool akaoSpcDetectSeq (AkaoSpcSeqStat *seq)
     seqHeaderReadOfs = seq->ver.seqHeaderAddr;
     if (seq->ver.id != SPC_VER_REV1 && seq->ver.id != SPC_VER_REV2)
     {
-        seq->apuAddressOffset = (seq->ver.apuAddressBase - mget2l(&seq->aRAM[seqHeaderReadOfs])) & 0xffff;
-        seqHeaderReadOfs += 2;
         if (seq->ver.id == SPC_VER_REV3)
         {
-            seqEndOffset = mget2l(&seq->aRAM[seqHeaderReadOfs + SPC_TRACK_MAX * 2]);
+            if (seq->ver.subId == SPC_SUBVER_FFMQ)
+            {
+                seq->apuAddressOffset = (seq->ver.apuAddressBase - mget2l(&seq->aRAM[seqHeaderReadOfs])) & 0xffff;
+                seqEndOffset = mget2l(&seq->aRAM[seqHeaderReadOfs + SPC_TRACK_MAX * 2]);
+            }
+            else
+            {
+                seq->apuAddressOffset = (seq->ver.apuAddressBase - mget2l(&seq->aRAM[seqHeaderReadOfs])) & 0xffff;
+                seqHeaderReadOfs += 2;
+                seqEndOffset = mget2l(&seq->aRAM[seqHeaderReadOfs + SPC_TRACK_MAX * 2]);
+            }
         }
         else
         {
+            seq->apuAddressOffset = (seq->ver.apuAddressBase - mget2l(&seq->aRAM[seqHeaderReadOfs])) & 0xffff;
             seqEndOffset = mget2l(&seq->aRAM[seqHeaderReadOfs]);
-            seqHeaderReadOfs += 2;
+            seqHeaderReadOfs += 4;
         }
     }
 
@@ -895,8 +931,12 @@ static void printHtmlInfoList (AkaoSpcSeqStat *seq)
     {
         myprintf(" (tempo multiplier $%02X)", seq->ver.tempoMultiplier);
     }
-    myprintf("          <li>Panpot Range: %d bits</li>", seq->ver.panpotIs7bit ? 7 : 8);
     myprintf("</li>\n");
+    myprintf("          <li>Panpot Range: %d bits</li>", seq->ver.panpotIs7bit ? 7 : 8);
+    if (seq->ver.cpuCtledJumpFlgAddr >= 0)
+    {
+        myprintf("          <li>CPU Controled Jump Flag Address: $%04X</li>", seq->ver.cpuCtledJumpFlgAddr);
+    }
 }
 
 /** output seq info list detail for valid seq. */
@@ -2677,7 +2717,7 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
         event[0xf3] = akaoSpcEventPanpotFade;
         event[0xf4] = akaoSpcEventJump;
         event[0xf5] = akaoSpcEventConditionalJump;
-        event[0xf6] = akaoSpcEventUnknown2; // cpu-controled jump
+        event[0xf6] = akaoSpcEventUnknown0; // cpu-controled jump?
         event[0xf7] = akaoSpcEventEndOfTrackDup;
         event[0xf8] = akaoSpcEventEndOfTrackDup;
         event[0xf9] = akaoSpcEventEndOfTrackDup;
@@ -2872,13 +2912,45 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
                             vcmdAddr == endOfTrackVcmdAddr)
                         {
                             event[vcmdIndex] = akaoSpcEventEndOfTrackDup;
+                            fprintf(stderr, "Info: Auto assigned an event $%02X \"End of Track (duplicated)\" - $%04X\n", vcmdIndex, vcmdAddr);
                         }
                         else
                         {
                             event[vcmdIndex] = akaoSpcEventUnknown0;
                         }
                         break;
-                    case 1: event[vcmdIndex] = akaoSpcEventUnknown1; break;
+                    case 1:
+                        // (Final Fantasy 5)
+                        // ; vcmd f5 - echo volume
+                        // cmp   x,#$10
+                        // bcs   $06f6
+                        // lsr   a
+                        // mov   $b4,a             ; echo volume shadow = op1/2
+                        // mov   $b3,#$00
+                        // mov   $b7,a
+                        // ret
+                        if (vcmdAddr + 13 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\xc8\x10\xb0\x08\\\x5c\xc4.\x8f\\\x00.\xc4.\x6f", 13, NULL) != -1 &&
+                            seq->aRAM[vcmdAddr + 6] == seq->aRAM[vcmdAddr + 9] + 1)
+                        {
+                            event[vcmdIndex] = akaoSpcEventEchoVolume;
+                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Echo Volume\" - $%04X\n", vcmdIndex, vcmdAddr);
+                        }
+                        // (Final Fantasy 5)
+                        // ; vcmd f8 - master volume?
+                        // mov   $b8,a
+                        // ret
+                        else if (vcmdAddr + 3 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\xc4.\x6f", 3, NULL) != -1)
+                        {
+                            event[vcmdIndex] = akaoSpcEventUnknown1;
+                            fprintf(stderr, "Info: Event $%02X is possibly \"Master Volume\"? Apparently it is not a channel message - $%04X\n", vcmdIndex, vcmdAddr);
+                        }
+                        else
+                        {
+                            event[vcmdIndex] = akaoSpcEventUnknown1;
+                        }
+                        break;
 
                     case 2:
                         // (Romancing SaGa 3)
@@ -2929,6 +3001,71 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
                         {
                             event[vcmdIndex] = akaoSpcEventJump;
                             fprintf(stderr, "Info: Auto assigned an event $%02X \"Jump\" - $%04X\n", vcmdIndex, vcmdAddr);
+                        }
+                        // (Final Fantasy 5)
+                        // ; vcmd f6 - fade echo volume
+                        // mov   $b7,a
+                        // call  $059c
+                        // cmp   x,#$10
+                        // bcs   $072f
+                        // mov   y,$b7
+                        // beq   $06ea
+                        // lsr   a
+                        // setc
+                        // sbc   a,$b4
+                        // beq   $06f4
+                        else if (vcmdAddr + 19 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\xc4.\x3f..\xc8\x10\xb0.\xeb.\xf0.\\\x5c\x80\xa4.\xf0.", 19, NULL) != -1 &&
+                            seq->aRAM[vcmdAddr + 1] == seq->aRAM[vcmdAddr + 10])
+                        {
+                            event[vcmdIndex] = akaoSpcEventEchoVolumeFade;
+                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Echo Volume Fade\" - $%04X\n", vcmdIndex, vcmdAddr);
+                        }
+                        // (Final Fantasy 5)
+                        // ; vcmd f7 - set echo feedback, filter
+                        // mov   $d5,a             ; echo feedback shadow
+                        // call  $059c
+                        // cmp   x,#$10
+                        // bcc   $0795
+                        // ret
+                        // and   a,#$03
+                        // mov   $d4,a             ; filter shadow
+                        // asl   a
+                        // asl   a
+                        // asl   a
+                        // mov   y,a
+                        // mov   x,#$0f
+                        // mov   a,$190f+y         ; echo filter coeff
+                        // mov   $f2,x
+                        // mov   $f3,a
+                        else if (vcmdAddr + 27 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\xc4.\x3f..\xc8\x10\x90\x01\x6f\x28\x03\xc4.\x1c\x1c\x1c\xfd\xcd\x0f\xf6..\xd8\xf2\xc4\xf3", 27, NULL) != -1)
+                        {
+                            event[vcmdIndex] = akaoSpcEventEchoFeedbackFIR;
+                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Echo Feedback/FIR\" - $%04X\n", vcmdIndex, vcmdAddr);
+                        }
+                        // (Final Fantasy 5)
+                        // ; vcmd fb - goto if vbit set in D1
+                        // mov   y,a
+                        // call  $059c
+                        // cmp   x,#$10
+                        // bcs   $0a41
+                        // mov   a,$bf
+                        // and   a,$d1
+                        // beq   $0a41
+                        // tclr1 $00d1
+                        // mov   a,y
+                        // mov   y,$04
+                        // addw  ya,$06
+                        // mov   $0c+x,a
+                        // mov   $0d+x,y
+                        // ret
+                        else if (vcmdAddr + 27 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\xfd\x3f..\xc8\x10\xb0\x12\xe4.\x24.\xf0\x0c\x4e..\xdd\xeb.\x7a.\xd4.\xdb.\x6f", 27, NULL) != -1 &&
+                            seq->aRAM[vcmdAddr + 23] + 1 == seq->aRAM[vcmdAddr + 25])
+                        {
+                            event[vcmdIndex] = akaoSpcEventUnknown2;
+                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Special Jump\" - $%04X\n", vcmdIndex, vcmdAddr);
                         }
                         else
                         {

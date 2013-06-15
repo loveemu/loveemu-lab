@@ -604,7 +604,7 @@
 069c: cb 82     mov   $82,y
 069e: 6f        ret
 
-; vcmd f8 - master volume?
+; vcmd f8 - master volume
 069f: c4 b8     mov   $b8,a
 06a1: 6f        ret
 
@@ -2907,7 +2907,7 @@
 1871: dw $06ea  ; f5 - echo volume
 1873: dw $06f7  ; f6 - fade echo volume
 1875: dw $078b  ; f7 - set echo feedback, filter
-1877: dw $069f  ; f8 - master volume?
+1877: dw $069f  ; f8 - master volume
 1879: dw $09a8  ; f9 - conditional goto
 187b: dw $0996  ; fa - goto
 187d: dw $0a27  ; fb - goto if vbit set in d1
