@@ -2656,8 +2656,8 @@
 1693: dw $1d29  ; e3 - repeat end
 1695: dw $1c07  ; e4 - slur on
 1697: dw $1421  ; e5 - nop (end slur)
-1699: dw $1c2f  ; e6 - begin roll
-169b: dw $1421  ; e7 - nop (end roll)
+1699: dw $1c2f  ; e6 - begin legato
+169b: dw $1421  ; e7 - nop (end legato)
 169d: dw $1d84  ; e8 - utility rest
 169f: dw $1c3d  ; e9 - goto address in $3100+A*4
 16a1: dw $1c41  ; ea - goto address in $3102+A*4

@@ -2384,25 +2384,25 @@ static void akaoSpcEventSlurOff (AkaoSpcSeqStat *seq, SeqEventReport *ev)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
-/** vcmd e6: roll on. */
-static void akaoSpcEventRollOn (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+/** vcmd e6: legato on. */
+static void akaoSpcEventLegatoOn (AkaoSpcSeqStat *seq, SeqEventReport *ev)
 {
     AkaoSpcTrackStat *tr = &seq->track[ev->track];
 
-    sprintf(ev->note, "Roll On");
-    strcat(ev->classStr, " ev-rollon");
+    sprintf(ev->note, "Legato On");
+    strcat(ev->classStr, " ev-legatoon");
 
     if (!akaoSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
-/** vcmd e7: roll off. */
-static void akaoSpcEventRollOff (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+/** vcmd e7: legato off. */
+static void akaoSpcEventLegatoOff (AkaoSpcSeqStat *seq, SeqEventReport *ev)
 {
     AkaoSpcTrackStat *tr = &seq->track[ev->track];
 
-    sprintf(ev->note, "Roll Off");
-    strcat(ev->classStr, " ev-rolloff");
+    sprintf(ev->note, "Legato Off");
+    strcat(ev->classStr, " ev-legatooff");
 
     if (!akaoSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
@@ -2970,8 +2970,8 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
         {
             event[vcmdFirst + 0x20] = akaoSpcEventSlurOn;
             event[vcmdFirst + 0x21] = akaoSpcEventSlurOff;
-            event[vcmdFirst + 0x22] = akaoSpcEventRollOn;
-            event[vcmdFirst + 0x23] = akaoSpcEventRollOff;
+            event[vcmdFirst + 0x22] = akaoSpcEventLegatoOn;
+            event[vcmdFirst + 0x23] = akaoSpcEventLegatoOff;
             event[vcmdFirst + 0x24] = akaoSpcEventForceNextNoteLen;
             event[vcmdFirst + 0x25] = akaoSpcEventPlaySFX1;
             event[vcmdFirst + 0x26] = akaoSpcEventPlaySFX2;

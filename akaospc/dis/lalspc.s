@@ -2694,7 +2694,7 @@
 1661: 4e 5c 00  tclr1 $005c
 1664: 6f        ret
 
-; vcmd e6 - begin roll
+; vcmd e6 - begin legato
 1665: e4 8f     mov   a,$8f
 1667: c8 10     cmp   x,#$10
 1669: b0 08     bcs   $1673
@@ -3042,8 +3042,8 @@
 18df: dw $1770  ; e3 - end repeat
 18e1: dw $163b  ; e4 - begin slur
 18e3: dw $0fd1  ; e5 - nop (end slur)
-18e5: dw $1665  ; e6 - begin roll
-18e7: dw $0fd1  ; e7 - nop (end roll)
+18e5: dw $1665  ; e6 - begin legato
+18e7: dw $0fd1  ; e7 - nop (end legato)
 18e9: dw $17cb  ; e8 - utility rest
 18eb: dw $1689  ; e9 - goto address in 2C00+A*4 (play sfx)
 18ed: dw $168d  ; ea - goto address in 2C02+A*4 (play sfx)
