@@ -2181,7 +2181,7 @@
 1298: c4 76     mov   $76,a
 129a: 6f        ret
 
-; vcmd f8
+; vcmd f8 - set/fade echo FIR filter
 129b: c4 77     mov   $77,a
 129d: c4 8c     mov   $8c,a
 129f: 3f c9 05  call  $05c9
@@ -3018,7 +3018,7 @@
 18e3: dw $1665  ; f5 - loop if repeat count matched
 18e5: dw $164a  ; f6 - goto
 18e7: dw $1279  ; f7 - set/fade echo feedback
-18e9: dw $129b  ; f8
+18e9: dw $129b  ; f8 - set/fade echo FIR filter
 18eb: dw $1752  ; f9 - (inc $7B)
 18ed: dw $1755  ; fa - (zero $7B)
 18ef: dw $15b0  ; fb

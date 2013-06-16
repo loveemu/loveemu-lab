@@ -695,7 +695,25 @@ static int akaoSpcCheckVer (AkaoSpcSeqStat *seq)
     {
         seq->ver.cpuCtledJumpFlgAddr = seq->aRAM[cpuCtledJumpVCmdAddr + 7];
     }
-
+    // (Final Fantasy 6)
+    // ; vcmd fc - branch if voice bit in $dd set
+    // mov   y,a
+    // call  $05c9
+    // mov   a,$8f
+    // and   a,$dd
+    // beq   $176f
+    // tclr1 $00dd
+    // mov   a,y
+    // mov   y,$a2
+    // addw  ya,$00
+    // mov   $02+x,a
+    // mov   $03+x,y
+    // ret
+    else if ((cpuCtledJumpVCmdAddr = indexOfHexPat(seq->aRAM, "\xfd\x3f..\xe4.\x24.\xf0\x0c\x4e..\xdd\xeb.\x7a.\xd4.\xdb.\x6f", SPC_ARAM_SIZE, NULL)) != -1 &&
+        seq->aRAM[cpuCtledJumpVCmdAddr + 19] + 1 == seq->aRAM[cpuCtledJumpVCmdAddr + 21])
+    {
+        seq->ver.cpuCtledJumpFlgAddr = mget2l(&seq->aRAM[cpuCtledJumpVCmdAddr + 11]);
+    }
 
     if (seq->ver.vcmdFirstByte % 14 == 0)
     {
@@ -1244,9 +1262,9 @@ static void akaoSpcEventUnknownInline (AkaoSpcSeqStat *seq, SeqEventReport *ev)
     strcat(ev->classStr, " unknown");
 
     if (ev->unidentified)
-        fprintf(stderr, "Error: Encountered unidentified event %02X at $%04X [Track %d]\n", ev->code, *p, ev->track + 1);
+        fprintf(stderr, "Error: Encountered unidentified event %02X at $%04X [Track %d]\n", ev->code, ev->addr, ev->track + 1);
     else
-        fprintf(stderr, "Warning: Skipped unknown event %02X at $%04X [Track %d]\n", ev->code, *p, ev->track + 1);
+        fprintf(stderr, "Warning: Skipped unknown event %02X at $%04X [Track %d]\n", ev->code, ev->addr, ev->track + 1);
 }
 
 /** vcmds: unidentified event. */
@@ -2663,6 +2681,26 @@ static void akaoSpcEventEchoFeedback (AkaoSpcSeqStat *seq, SeqEventReport *ev)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
+/** vcmd xx: set echo feedback fade. */
+static void akaoSpcEventEchoFeedbackFade (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Echo Feedback Fade, speed = %d, vol = %d", arg1, arg2);
+    strcat(ev->classStr, " ev-echoparam");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
 /** vcmd f8: set echo FIR. */
 static void akaoSpcEventEchoFIR (AkaoSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -2675,6 +2713,26 @@ static void akaoSpcEventEchoFIR (AkaoSpcSeqStat *seq, SeqEventReport *ev)
     (*p)++;
 
     sprintf(ev->note, "Echo FIR, index = %d", arg1);
+    strcat(ev->classStr, " ev-echoparam");
+
+    if (!akaoSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd xx: set echo FIR fade. */
+static void akaoSpcEventEchoFIRFade (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Echo FIR Fade, speed = %d, index = %d", arg1, arg2);
     strcat(ev->classStr, " ev-echoparam");
 
     if (!akaoSpcLessTextInSMF)
@@ -3379,6 +3437,27 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
                             event[vcmdIndex] = akaoSpcEventCPUControledJump;
                             fprintf(stderr, "Info: Auto assigned an event $%02X \"CPU Controled Jump\" - $%04X\n", vcmdIndex, vcmdAddr);
                         }
+                        // (Final Fantasy 6)
+                        // ; vcmd fc - branch if voice bit in $dd set
+                        // mov   y,a
+                        // call  $05c9
+                        // mov   a,$8f
+                        // and   a,$dd
+                        // beq   $176f
+                        // tclr1 $00dd
+                        // mov   a,y
+                        // mov   y,$a2
+                        // addw  ya,$00
+                        // mov   $02+x,a
+                        // mov   $03+x,y
+                        // ret
+                        else if (vcmdAddr + 23 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\xfd\x3f..\xe4.\x24.\xf0\x0c\x4e..\xdd\xeb.\x7a.\xd4.\xdb.\x6f", 23, NULL) != -1 &&
+                            seq->aRAM[vcmdAddr + 19] + 1 == seq->aRAM[vcmdAddr + 21])
+                        {
+                            event[vcmdIndex] = akaoSpcEventCPUControledJump;
+                            fprintf(stderr, "Info: Auto assigned an event $%02X \"CPU Controled Jump\" - $%04X\n", vcmdIndex, vcmdAddr);
+                        }
                         // (Live A Live)
                         // ; vcmd fb - branch if voice bit in $dd set
                         // mov   y,a
@@ -3398,6 +3477,60 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
                         {
                             event[vcmdIndex] = akaoSpcEventCPUControledJump;
                             fprintf(stderr, "Info: Auto assigned an event $%02X \"CPU Controled Jump\" - $%04X\n", vcmdIndex, vcmdAddr);
+                        }
+                        // (Final Fantasy 6)
+                        // ; vcmd f7 - set/fade echo feedback
+                        // mov   $78,a
+                        // mov   $8c,a
+                        // call  $05c9
+                        // mov   y,$8c
+                        // beq   $1298
+                        // eor   a,#$80
+                        // not1  $1c0e,6
+                        // setc
+                        // sbc   a,$76             ; echo feedback shadow
+                        // not1  $1c0e,6
+                        // call  $0cc5
+                        // mov   x,$a3
+                        // movw  $79,ya
+                        // bra   $129a
+                        // mov   $76,a
+                        // ret
+                        else if (vcmdAddr + 34 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\xc4.\xc4.\x3f..\xeb.\xf0\x14\x48\x80\xea.\xe0\x80\xa4.\xea.\xe0\x3f..\xf8.\xda.\x2f\x02\xc4.\x6f", 34, NULL) != -1 &&
+                            seq->aRAM[vcmdAddr + 18] == seq->aRAM[vcmdAddr + 32])
+                        {
+                            event[vcmdIndex] = akaoSpcEventEchoFeedbackFade;
+                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Echo Feedback Fade\" - $%04X\n", vcmdIndex, vcmdAddr);
+                        }
+                        // (Final Fantasy 6)
+                        // ; vcmd f8 - set/fade echo FIR filter
+                        // mov   $77,a
+                        // mov   $8c,a
+                        // call  $05c9
+                        // and   a,#$03
+                        // inc   a
+                        // asl   a
+                        // asl   a
+                        // asl   a
+                        // mov   y,a
+                        // mov   x,#$10
+                        // mov   a,$8c
+                        // beq   $12d6
+                        // mov   a,#$00
+                        // mov   $63+x,a
+                        // mov   a,$64+x
+                        // eor   a,#$80
+                        // mov   $98,a
+                        // mov   a,$17a8+y
+                        // eor   a,#$80
+                        // setc
+                        // sbc   a,$98
+                        else if (vcmdAddr + 38 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\xc4.\xc4.\x3f..\x28\x03\xbc\x1c\x1c\x1c\xfd\xcd\x10\xe4.\xf0.\xe8\x00\xd4.\xf4.\x48\x80\xc4.\xf6..\x48\x80\x80\xa4.", 38, NULL) != -1)
+                        {
+                            event[vcmdIndex] = akaoSpcEventEchoFIRFade;
+                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Echo FIR Fade\" - $%04X\n", vcmdIndex, vcmdAddr);
                         }
                         else
                         {
