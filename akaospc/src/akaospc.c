@@ -2976,14 +2976,15 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
             event[vcmdFirst + 0x26] = akaoSpcEventPlaySFX2;
             event[vcmdFirst + 0x27] = akaoSpcEventEndOfTrack;
             endOfTrackVcmdAddr = mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + (0x27 * 2)]);
-            event[vcmdFirst + 0x28] = akaoSpcEventEndOfTrackDup;
-            event[vcmdFirst + 0x29] = akaoSpcEventEndOfTrackDup;
-            event[vcmdFirst + 0x2a] = akaoSpcEventEndOfTrackDup;
-            event[vcmdFirst + 0x2b] = akaoSpcEventEndOfTrackDup;
+            //event[vcmdFirst + 0x28] = akaoSpcEventEndOfTrackDup;
+            //event[vcmdFirst + 0x29] = akaoSpcEventEndOfTrackDup;
+            //event[vcmdFirst + 0x2a] = akaoSpcEventEndOfTrackDup;
+            //event[vcmdFirst + 0x2b] = akaoSpcEventEndOfTrackDup;
             event[vcmdFirst + 0x2c] = akaoSpcEventSetTempo; // f0
             event[vcmdFirst + 0x2d] = akaoSpcEventSetTempoFade;
             event[vcmdFirst + 0x2e] = akaoSpcEventEchoVolume;
             event[vcmdFirst + 0x2f] = akaoSpcEventEchoVolumeFade;
+            autoAssignFirstVCmdOfs = 0x28;
         }
 
         switch (seq->ver.subId)
@@ -3106,6 +3107,18 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
                         {
                             event[vcmdIndex] = akaoSpcEventUnknown0;
                             fprintf(stderr, "Info: Event $%02X is possibly \"Ignore Master Volume\" (or ($%02x),($%02x))? Apparently it is not a channel message - $%04X\n", vcmdIndex, seq->aRAM[vcmdAddr + 2], seq->aRAM[vcmdAddr + 1], vcmdAddr);
+                        }
+                        // (Romancing SaGa 2)
+                        // ; vcmd fa - mute channel
+                        // cmp   x,#$10
+                        // bcs   $14b1
+                        // or    ($61),($8e)
+                        // ret
+                        else if (vcmdAddr + 8 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\xc8\x10\xb0\x03\x09..\x6f", 8, NULL) != -1)
+                        {
+                            event[vcmdIndex] = akaoSpcEventUnknown0;
+                            fprintf(stderr, "Info: Event $%02X is possibly \"Mute Channel\" (or ($%02x),($%02x))? Apparently it is not a channel message - $%04X\n", vcmdIndex, seq->aRAM[vcmdAddr + 6], seq->aRAM[vcmdAddr + 5], vcmdAddr);
                         }
                         else
                         {
@@ -3268,6 +3281,32 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
                         {
                             event[vcmdIndex] = akaoSpcEventEchoVolumeFade;
                             fprintf(stderr, "Info: Auto assigned an event $%02X \"Echo Volume Fade\" - $%04X\n", vcmdIndex, vcmdAddr);
+                        }
+                        // (Romancing SaGa 2)
+                        // ; vcmd f4 - echo feedback, FIR filter
+                        // mov   $97,a
+                        // call  $05d8
+                        // cmp   x,#$10
+                        // bcc   $129b
+                        // ret
+                        // mov   ($65),($97)
+                        // mov   $64,a
+                        // mov   a,$64
+                        // and   a,#$03
+                        // asl   a
+                        // asl   a
+                        // asl   a
+                        // mov   y,a
+                        // mov   x,#$0f
+                        // mov   a,$168a+y
+                        // mov   $f2,x
+                        // mov   $f3,a
+                        else if (vcmdAddr + 32 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\xc4.\x3f..\xc8\x10\x90\x01\x6f\xfa..\xc4.\xe4.\x28\x03\x1c\x1c\x1c\xfd\xcd\x0f\xf6..\xd8\xf2\xc4\xf3", 32, NULL) != -1 &&
+                            seq->aRAM[vcmdAddr + 14] == seq->aRAM[vcmdAddr + 16])
+                        {
+                            event[vcmdIndex] = akaoSpcEventEchoFeedbackFIR;
+                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Echo Feedback/FIR\" - $%04X\n", vcmdIndex, vcmdAddr);
                         }
                         // (Live A Live)
                         // ; vcmd f4 - echo feedback, FIR filter
