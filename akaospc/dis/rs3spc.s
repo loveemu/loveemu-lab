@@ -2636,8 +2636,8 @@
 166b: dw $1b09  ; cf - set noise frequency
 166d: dw $1ad1  ; d0 - noise on
 166f: dw $1af9  ; d1 - noise off
-1671: dw $1b29  ; d2
-1673: dw $1b4a  ; d3
+1671: dw $1b29  ; d2 - pitchmod on
+1673: dw $1b4a  ; d3 - pitchmod off
 1675: dw $1aad  ; d4 - echo on
 1677: dw $1ac1  ; d5 - echo off
 1679: dw $1aa6  ; d6 - set octave
@@ -2655,9 +2655,9 @@
 1691: dw $1cf9  ; e2 - repeat start
 1693: dw $1d29  ; e3 - repeat end
 1695: dw $1c07  ; e4 - slur on
-1697: dw $1421  ; e5 - nop (end slur)
-1699: dw $1c2f  ; e6 - begin legato
-169b: dw $1421  ; e7 - nop (end legato)
+1697: dw $1421  ; e5 - nop (slur off)
+1699: dw $1c2f  ; e6 - legato on
+169b: dw $1421  ; e7 - nop (legato off)
 169d: dw $1d84  ; e8 - force next note length
 169f: dw $1c3d  ; e9 - goto address in $3100+A*4
 16a1: dw $1c41  ; ea - goto address in $3102+A*4
@@ -3250,7 +3250,7 @@
 1b25: c4 63     mov   $63,a
 1b27: 2f b4     bra   $1add
 
-; vcmd d2
+; vcmd d2 - pitchmod on
 1b29: c8 10     cmp   x,#$10
 1b2b: b0 05     bcs   $1b32
 1b2d: 09 92 58  or    ($58),($92)
@@ -3268,7 +3268,7 @@
 1b47: c4 8c     mov   $8c,a
 1b49: 6f        ret
 
-; vcmd d3
+; vcmd d3 - pitchmod off
 1b4a: e4 92     mov   a,$92
 1b4c: c8 10     cmp   x,#$10
 1b4e: b0 05     bcs   $1b55
@@ -3396,7 +3396,7 @@
 1c2b: 4e 61 00  tclr1 $0061
 1c2e: 6f        ret
 
-; vcmd e6
+; vcmd e6 - legato on
 1c2f: e4 92     mov   a,$92
 1c31: c8 10     cmp   x,#$10
 1c33: b0 04     bcs   $1c39
