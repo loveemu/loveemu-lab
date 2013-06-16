@@ -3201,7 +3201,7 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
                             fprintf(stderr, "Info: Auto assigned an event $%02X \"Echo Volume\" - $%04X\n", vcmdIndex, vcmdAddr);
                         }
                         // (Final Fantasy 5)
-                        // ; vcmd f8 - master volume?
+                        // ; vcmd f8 - master volume
                         // mov   $b8,a
                         // ret
                         else if (vcmdAddr + 3 <= SPC_ARAM_SIZE &&
@@ -3209,6 +3209,29 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
                         {
                             event[vcmdIndex] = akaoSpcEventUnknown1;
                             fprintf(stderr, "Info: Event $%02X is possibly \"Master Volume\" (mov $%02x,a)? Apparently it is not a channel message - $%04X\n", vcmdIndex, seq->aRAM[vcmdAddr + 1], vcmdAddr);
+                        }
+                        // (Chrono Trigger)
+                        // ; vcmd f4
+                        // mov   $4d,a
+                        // or    ($d0),($53)
+                        // ret
+                        else if (vcmdAddr + 6 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\xc4.\x09..\x6f", 6, NULL) != -1)
+                        {
+                            event[vcmdIndex] = akaoSpcEventUnknown1;
+                            fprintf(stderr, "Info: Event $%02X is possibly \"Master Volume\" (mov $%02x,a)? Apparently it is not a channel message - $%04X\n", vcmdIndex, seq->aRAM[vcmdAddr + 1], vcmdAddr);
+                        }
+                        // (Chrono Trigger)
+                        // ; vcmd fd
+                        // asl   a
+                        // mov   $f220+x,a
+                        // or    ($d0),($91)
+                        // ret
+                        else if (vcmdAddr + 8 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\x1d\xd5..\x09..\x6f", 8, NULL) != -1)
+                        {
+                            event[vcmdIndex] = akaoSpcEventUnknown1;
+                            fprintf(stderr, "Info: Event $%02X is possibly \"Volume (Alternate)\" (mov $%04x,a*2)? Apparently it is not a channel message - $%04X\n", vcmdIndex, mget2l(&seq->aRAM[vcmdAddr + 2]), vcmdAddr);
                         }
                         // (Romancing SaGa 3)
                         // ; vcmd f7 - echo feedback
@@ -3259,6 +3282,17 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
                         {
                             event[vcmdIndex] = akaoSpcEventEchoFIR;
                             fprintf(stderr, "Info: Auto assigned an event $%02X \"Echo FIR\" - $%04X\n", vcmdIndex, vcmdAddr);
+                        }
+                        // (Chrono Trigger, Romancing SaGa 3)
+                        // ; vcmd f9 - (related to vcmd fa)
+                        // and   a,#$0f
+                        // mov   $7b,a
+                        // ret
+                        else if (vcmdAddr + 5 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\x28\x0f\xc4.\x6f", 5, NULL) != -1)
+                        {
+                            event[vcmdIndex] = akaoSpcEventUnknown1;
+                            fprintf(stderr, "Info: Event $%02X is possibly \"Set CPU-shared Var Value (Rev.4 New)\" (mov $%02x,a&#15)? Apparently it is not a channel message - $%04X\n", vcmdIndex, seq->aRAM[vcmdAddr + 3], vcmdAddr);
                         }
                         else if (seq->aRAM[vcmdAddr] == 0x6f) // ret
                         {
@@ -3478,7 +3512,7 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
                             event[vcmdIndex] = akaoSpcEventCPUControledJump;
                             fprintf(stderr, "Info: Auto assigned an event $%02X \"CPU Controled Jump\" - $%04X\n", vcmdIndex, vcmdAddr);
                         }
-                        // (Final Fantasy 6)
+                        // (Final Fantasy 6, Chrono Trigger (slightly different))
                         // ; vcmd f7 - set/fade echo feedback
                         // mov   $78,a
                         // mov   $8c,a
@@ -3493,16 +3527,21 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
                         // call  $0cc5
                         // mov   x,$a3
                         // movw  $79,ya
-                        // bra   $129a
-                        // mov   $76,a
-                        // ret
-                        else if (vcmdAddr + 34 <= SPC_ARAM_SIZE &&
-                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\xc4.\xc4.\x3f..\xeb.\xf0\x14\x48\x80\xea.\xe0\x80\xa4.\xea.\xe0\x3f..\xf8.\xda.\x2f\x02\xc4.\x6f", 34, NULL) != -1 &&
-                            seq->aRAM[vcmdAddr + 18] == seq->aRAM[vcmdAddr + 32])
+                        else if (vcmdAddr + 29 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\xc4.\xc4.\x3f..\xeb.\xf0.\x48\x80\xea.\xe0\x80\xa4.\xea.\xe0\x3f..\xf8.\xda.", 29, NULL) != -1)
                         {
                             event[vcmdIndex] = akaoSpcEventEchoFeedbackFade;
                             fprintf(stderr, "Info: Auto assigned an event $%02X \"Echo Feedback Fade\" - $%04X\n", vcmdIndex, vcmdAddr);
                         }
+                        else if (vcmdAddr + 37 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\xe3.\x03\xe8\x30\xec\xe8\\\x00\xc4.\xc4.\xe4.\xeb.\xf0\x13\x48\x80\xea.\xe0\x80\xa4.\xea.\xe0\x3f..\xf8.\xda.\x6f", 37, NULL) != -1 &&
+                            seq->aRAM[vcmdAddr + 21] == seq->aRAM[vcmdAddr + 25] &&
+                            seq->aRAM[vcmdAddr + 21] == seq->aRAM[vcmdAddr + 27])
+                        {
+                            event[vcmdIndex] = akaoSpcEventEchoFeedbackFade;
+                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Echo Feedback Fade\" - $%04X\n", vcmdIndex, vcmdAddr);
+                        }
+
                         // (Final Fantasy 6)
                         // ; vcmd f8 - set/fade echo FIR filter
                         // mov   $77,a
@@ -3636,6 +3675,29 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
                         {
                             event[vcmdIndex] = akaoSpcEventConditionalJump;
                             fprintf(stderr, "Info: Auto assigned an event $%02X \"Conditional Jump (Rev.1)\" - $%04X\n", vcmdIndex, vcmdAddr);
+                        }
+                        // (Chrono Trigger, Romancing SaGa 3)
+                        // ; vcmd fa - CPU-controled branch (used for Magical Tank Battle SFX)
+                        // and   a,#$0f
+                        // mov   $a6,a
+                        // cmp   a,$d4
+                        // bcc   $1d9a
+                        // mov   $d4,a
+                        // mov   a,$d3
+                        // cmp   a,$a6
+                        // bcs   $1dad
+                        // inc   $02+x
+                        // bne   $1da6
+                        // inc   $03+x
+                        // inc   $02+x
+                        // bne   $1dac
+                        // inc   $03+x
+                        else if (vcmdAddr + 28 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\x28\x0f\xc4.\x64.\x90\x02\xc4.\xe4.\x64.\xb0.\xbb.\xd0\x02\xbb.\xbb.\xd0.\xbb.", 28, NULL) != -1 &&
+                            seq->aRAM[vcmdAddr + 17] + 1 == seq->aRAM[vcmdAddr + 21] && seq->aRAM[vcmdAddr + 17] == seq->aRAM[vcmdAddr + 23] && seq->aRAM[vcmdAddr + 21] == seq->aRAM[vcmdAddr + 27])
+                        {
+                            event[vcmdIndex] = akaoSpcEventUnknown3;
+                            fprintf(stderr, "Info: Event $%02X is possibly \"CPU-controled Jump (Rev.4 New)\"? Apparently it is not a channel message - $%04X\n", vcmdIndex, vcmdAddr);
                         }
                         else
                         {

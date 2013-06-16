@@ -2575,7 +2575,7 @@
 15c0: dw $1cfb  ; fa
 15c2: dw $1ac5  ; fb
 15c4: dw $1ac9  ; fc
-15c6: dw $1757  ; fd
+15c6: dw $1757  ; fd - expression
 15c8: dw $1d4a  ; fe - halt
 15ca: dw $1d4a  ; ff - halt
 
@@ -2713,7 +2713,7 @@
 1753: 09 53 d0  or    ($d0),($53)
 1756: 6f        ret
 
-; vcmd fd
+; vcmd fd - expression
 1757: 1c        asl   a
 1758: d5 20 f2  mov   $f220+x,a
 175b: 09 91 d0  or    ($d0),($91)
