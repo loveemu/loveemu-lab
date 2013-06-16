@@ -2002,31 +2002,30 @@ static void akaoSpcEventDetune (AkaoSpcSeqStat *seq, SeqEventReport *ev)
 {
     int arg1;
     int *p = &seq->track[ev->track].pos;
-    int midiScaled;
+    //int midiScaled;
 
     ev->size++;
     arg1 = utos1(seq->aRAM[*p]);
     (*p)++;
 
-    sprintf(ev->note, "Tuning, key += %.1f cents", arg1 * 100 / 16.0);
+    sprintf(ev->note, "Tuning, key += %.1f cents?", arg1 * 100 / 16.0);
     strcat(ev->classStr, " ev-tuning");
 
     if (!akaoSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 
-    midiScaled = arg1 * 64 / 16;
-    if (midiScaled >= -64 && midiScaled <= 64)
-    {
-        if (midiScaled == 64)
-        {
-            midiScaled = 63; // just a hack!
-        }
-
-        smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNM, 0);
-        smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNL, 1);
-        smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_DATAENTRYM, 64 + midiScaled);
-        //smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_DATAENTRYL, 0);
-    }
+    //midiScaled = arg1 * 64 / 16;
+    //if (midiScaled >= -64 && midiScaled <= 64)
+    //{
+    //    if (midiScaled == 64)
+    //    {
+    //        midiScaled = 63; // just a hack!
+    //    }
+    //    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNM, 0);
+    //    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNL, 1);
+    //    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_DATAENTRYM, 64 + midiScaled);
+    //    //smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_DATAENTRYL, 0);
+    //}
 }
 
 /** vcmd dc: set instrument. */

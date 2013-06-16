@@ -2658,7 +2658,7 @@
 1697: dw $1421  ; e5 - nop (end slur)
 1699: dw $1c2f  ; e6 - begin legato
 169b: dw $1421  ; e7 - nop (end legato)
-169d: dw $1d84  ; e8 - utility rest
+169d: dw $1d84  ; e8 - force next note length
 169f: dw $1c3d  ; e9 - goto address in $3100+A*4
 16a1: dw $1c41  ; ea - goto address in $3102+A*4
 16a3: dw $1e1a  ; eb - end of track
@@ -2668,8 +2668,8 @@
 16ab: dw $1ee8  ; ef
 16ad: dw $1827  ; f0 - tempo
 16af: dw $1830  ; f1 - tempo fade
-16b1: dw $1882  ; f2 - (echo depth?)
-16b3: dw $188d  ; f3 - (echo depth fade?)
+16b1: dw $1882  ; f2 - echo volume
+16b3: dw $188d  ; f3 - echo volume fade
 16b5: dw $1848  ; f4 - master volume
 16b7: dw $1c9e  ; f5 - conditional jump in repeat
 16b9: dw $1c83  ; f6 - goto
@@ -2874,7 +2874,7 @@
 187e: d5 61 f2  mov   $f261+x,a
 1881: 6f        ret
 
-; vcmd f2
+; vcmd f2 - echo volume
 1882: 28 7f     and   a,#$7f
 1884: c4 4f     mov   $4f,a
 1886: e8 00     mov   a,#$00
@@ -2882,7 +2882,7 @@
 188a: c4 52     mov   $52,a
 188c: 6f        ret
 
-; vcmd f3
+; vcmd f3 - echo volume fade
 188d: 5f 47 07  jmp   $0747
 
 ; vcmd c6 - panpot
@@ -3607,7 +3607,7 @@
 1d81: c4 95     mov   $95,a
 1d83: 6f        ret
 
-; vcmd e8 - utility rest
+; vcmd e8 - force next note length
 1d84: d4 26     mov   $26+x,a
 1d86: 6f        ret
 
