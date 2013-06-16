@@ -1614,7 +1614,7 @@ static void akaoSpcEventPanpotFade (AkaoSpcSeqStat *seq, SeqEventReport *ev)
     // lazy fader, hope it won't be canceled by other vcmds
     if (arg1 == 0)
     {
-        tr->panpot = arg2;
+        tr->panpot = arg2 * (seq->ver.panpotIs7bit ? 2 : 1);
         smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_PANPOT, akaoSpcMidiPanOf(tr->panpot));
     }
     else
