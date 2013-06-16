@@ -195,6 +195,7 @@ struct TagAkaoSpcTrackStat {
     AkaoSpcNoteParam note;     // current note param
     AkaoSpcNoteParam lastNote; // note params for last note
     int lastNoteLen;        // last note length ($0230+x)
+    int forceNextNoteLen;   // force next note length (0=inactive)
     int looped;             // how many times looped (internal)
     byte octave;            // octave
     int patch;              // patch number (for pitch fix)
@@ -346,6 +347,7 @@ static void akaoSpcResetTrackParam (AkaoSpcSeqStat *seq, int track)
     tr->rhythmChannel = false;
     tr->repNestLevel = 0;
     tr->repNestLevelMax = 4;
+    tr->forceNextNoteLen = 0;
 }
 
 /** reset before play/convert song. */
@@ -1412,6 +1414,11 @@ static void akaoSpcEventNote (AkaoSpcSeqStat *seq, SeqEventReport *ev)
     }
 
     len = seq->aRAM[seq->ver.noteLenTableAddr + lenIndex];
+    if (tr->forceNextNoteLen != 0)
+    {
+        len = tr->forceNextNoteLen;
+        tr->forceNextNoteLen = 0;
+    }
     dur = len;
     if (!tie && !rest)
     {
@@ -2401,8 +2408,8 @@ static void akaoSpcEventRollOff (AkaoSpcSeqStat *seq, SeqEventReport *ev)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
-/** vcmd e8: utility rest. */
-static void akaoSpcEventUtilityRest (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+/** vcmd e8: force next note lenth. */
+static void akaoSpcEventForceNextNoteLen (AkaoSpcSeqStat *seq, SeqEventReport *ev)
 {
     int arg1;
     AkaoSpcTrackStat *tr = &seq->track[ev->track];
@@ -2412,13 +2419,13 @@ static void akaoSpcEventUtilityRest (AkaoSpcSeqStat *seq, SeqEventReport *ev)
     arg1 = seq->aRAM[*p];
     (*p)++;
 
-    sprintf(ev->note, "Utility Rest, tick = %d", arg1);
-    strcat(ev->classStr, " ev-rest");
+    sprintf(ev->note, "Force Next Note Length, tick = %d", arg1);
+    strcat(ev->classStr, " ev-notelen");
 
     //if (!akaoSpcLessTextInSMF)
     //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 
-    tr->tick += arg1;
+    tr->forceNextNoteLen = arg1;
 }
 
 /** vcmd e9: play SFX #1. */
@@ -2965,7 +2972,7 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
             event[vcmdFirst + 0x21] = akaoSpcEventSlurOff;
             event[vcmdFirst + 0x22] = akaoSpcEventRollOn;
             event[vcmdFirst + 0x23] = akaoSpcEventRollOff;
-            event[vcmdFirst + 0x24] = akaoSpcEventUtilityRest;
+            event[vcmdFirst + 0x24] = akaoSpcEventForceNextNoteLen;
             event[vcmdFirst + 0x25] = akaoSpcEventPlaySFX1;
             event[vcmdFirst + 0x26] = akaoSpcEventPlaySFX2;
             event[vcmdFirst + 0x27] = akaoSpcEventEndOfTrack;
