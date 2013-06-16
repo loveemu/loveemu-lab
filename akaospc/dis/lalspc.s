@@ -2169,7 +2169,7 @@
 1292: da 4a     movw  $4a,ya
 1294: 6f        ret
 
-; vcmd f5 - set volume multiplier
+; vcmd f5 - set master volume
 1295: c4 51     mov   $51,a
 1297: 6f        ret
 
@@ -2262,7 +2262,7 @@
 132e: d5 21 f7  mov   $f721+x,a
 1331: 6f        ret
 
-; vcmd f4 - set/fade filter
+; vcmd f4 - echo feedback, FIR filter
 1332: c4 65     mov   $65,a
 1334: 3f 90 05  call  $0590
 1337: c4 64     mov   $64,a
@@ -2668,7 +2668,7 @@
 162f: f6 81 1a  mov   a,$1a81+y
 1632: d5 01 f9  mov   $f901+x,a
 1635: 2f 98     bra   $15cf
-; vcmd fa - ignore volume multiplier
+; vcmd fa - ignore master volume (per channel)
 1637: 09 8f 61  or    ($61),($8f)
 163a: 6f        ret
 
@@ -2920,11 +2920,11 @@
 17ce: d5 60 f7  mov   $f760+x,a
 17d1: 6f        ret
 
-; vcmd f8 - advance cue point
+; vcmd f8 - increment cpu-shared counter
 17d2: ab 66     inc   $66
 17d4: 6f        ret
 
-; vcmd f9 - zero cue point
+; vcmd f9 - zero cpu-shared counter
 17d5: 8f 00 66  mov   $66,#$00
 17d8: 6f        ret
 
@@ -3056,13 +3056,13 @@
 18fb: dw $127d  ; f1 - tempo "fade"
 18fd: dw $12c6  ; f2 - set echo volume
 18ff: dw $12d4  ; f3 - fade echo volume
-1901: dw $1332  ; f4 - set/fade filter
-1903: dw $1295  ; f5 - set volume multiplier
+1901: dw $1332  ; f4 - echo feedback, FIR filter
+1903: dw $1295  ; f5 - set master volume
 1905: dw $16e5  ; f6 - loop if repeat count matched (conditional loop)
 1907: dw $16ca  ; f7 - goto
-1909: dw $17d2  ; f8 - advance cue point
-190b: dw $17d5  ; f9 - zero cue point
-190d: dw $1637  ; fa - ignore volume multiplier
+1909: dw $17d2  ; f8 - increment cpu-shared counter
+190b: dw $17d5  ; f9 - zero cpu-shared counter
+190d: dw $1637  ; fa - ignore master volume
 190f: dw $17d9  ; fb - branch if voice bit in $dd set
 1911: dw $17ed  ; fc - (halt)
 1913: dw $17ed  ; fd - (halt)

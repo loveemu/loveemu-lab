@@ -1010,7 +1010,7 @@
 0a22: eb 9d     mov   y,$9d
 0a24: cb f2     mov   $f2,y
 0a26: c4 f3     mov   $f3,a
-0a28: ea 9c 00  not1  $0013,4
+0a28: ea 9c 00  not1  $009c,0
 0a2b: ab 9d     inc   $9d
 0a2d: 23 9d 08  bbs1  $9d,$0a38
 0a30: e4 9e     mov   a,$9e
@@ -1074,28 +1074,32 @@
 
 0a9d: 1f c0 0a  jmp   ($0ac0+x)
 
-0aa0: 23 0b 20  bbs1  $0b,$0ac3
-0aa3: 0b 1d     asl   $1d
-0aa5: 0b d9     asl   $d9
-0aa7: 0a 1d 0b  or1   c,$0163,5
-0aaa: d5 0a 1d  mov   $1d0a+x,a
-0aad: 0b d0     asl   $d0
-0aaf: 0a 23 0b  or1   c,$0164,3
-0ab2: 20        clrp
-0ab3: 0b 1d     asl   $1d
-0ab5: 0b ef     asl   $ef
-0ab7: 0a 1d 0b  or1   c,$0163,5
-0aba: ea 0a 1d  not1  $03a1,2
-0abd: 0b e3     asl   $e3
-0abf: 0a 0e 0b  or1   c,$0161,6
-0ac2: 20        clrp
-0ac3: 0b 0e     asl   $0e
-0ac5: 0b 04     asl   $04
-0ac7: 0b 0e     asl   $0e
-0ac9: 0b 00     asl   $00
-0acb: 0b 0e     asl   $0e
-0acd: 0b fb     asl   $fb
-0acf: 0a e4 b4  or1   c,$169c,4
+0aa0: dw $0b23
+0aa2: dw $0b20
+0aa4: dw $0b1d
+0aa6: dw $0ad9
+0aa8: dw $0b1d
+0aaa: dw $0ad5
+0aac: dw $0b1d
+0aae: dw $0ad0
+0ab0: dw $0b23
+0ab2: dw $0b20
+0ab4: dw $0b1d
+0ab6: dw $0aef
+0ab8: dw $0b1d
+0aba: dw $0aea
+0abd: dw $0b1d
+0abe: dw $0ae3
+0ac0: dw $0b0e
+0ac2: dw $0b20
+0ac4: dw $0b0e
+0ac6: dw $0b04
+0ac8: dw $0b0e
+0aca: dw $0b00
+0acc: dw $0b0e
+0ace: dw $0afb
+
+0ad0: e4 b4     mov   a,$b4
 0ad2: 5c        lsr   a
 0ad3: 5c        lsr   a
 0ad4: 6f        ret
@@ -2292,7 +2296,7 @@
 13e2: e4 8f     mov   a,$8f
 13e4: 60        clrc
 13e5: 88 ff     adc   a,#$ff
-13e7: ca 89 a0  mov1  $1411,1,c
+13e7: ca 89 a0  mov1  $0089,5,c
 13ea: b0 03     bcs   $13ef
 13ec: e8 27     mov   a,#$27
 13ee: ec e8 01  mov   y,$01e8
@@ -2312,7 +2316,7 @@
 1407: e4 90     mov   a,$90
 1409: 60        clrc
 140a: 88 ff     adc   a,#$ff
-140c: ca 89 e0  mov1  $1c11,1,c
+140c: ca 89 e0  mov1  $0089,7,c
 140f: 6f        ret
 
 1410: 68 f0     cmp   a,#$f0
@@ -2539,7 +2543,7 @@
 15ae: da f4     movw  $f4,ya
 15b0: ba 9e     movw  ya,$9e
 15b2: da f6     movw  $f6,ya
-15b4: ea 89 80  not1  $1011,1
+15b4: ea 89 80  not1  $0089,4
 15b7: 6f        ret
 
 15b8: e5 64 f1  mov   a,$f164
@@ -2654,9 +2658,9 @@
 1697: dw $1421  ; e5 - nop (end slur)
 1699: dw $1c2f  ; e6 - begin roll
 169b: dw $1421  ; e7 - nop (end roll)
-169d: dw $1d84  ; e8 - (force note length?)
-169f: dw $1c3d  ; e9 - (related to SFX?)
-16a1: dw $1c41  ; ea - (related to SFX?)
+169d: dw $1d84  ; e8 - utility rest
+169f: dw $1c3d  ; e9 - goto address in $3100+A*4
+16a1: dw $1c41  ; ea - goto address in $3102+A*4
 16a3: dw $1e1a  ; eb - end of track
 16a5: dw $1e1a  ; ec - end of track (duplicated)
 16a7: dw $1e1a  ; ed - end of track (duplicated)
@@ -2671,11 +2675,11 @@
 16b9: dw $1c83  ; f6 - goto
 16bb: dw $18d3  ; f7 - echo feedback
 16bd: dw $18fb  ; f8 - echo FIR
-16bf: dw $1d8b  ; f9
-16c1: dw $1d90  ; fa
+16bf: dw $1d8b  ; f9 - (related to vcmd fa)
+16c1: dw $1d90  ; fa - CPU-controled branch
 16c3: dw $1b5a  ; fb - rhythm kit on
 16c5: dw $1b5e  ; fc - rhythm kit off
-16c7: dw $1dc8  ; fd
+16c7: dw $1dc8  ; fd - play SFX
 16c9: dw $1e1a  ; fe - end of track (duplicated)
 16cb: dw $1e1a  ; ff - end of track (duplicated)
 
@@ -2925,16 +2929,17 @@
 18d3: e3 89 03  bbs7  $89,$18d9
 18d6: e8 30     mov   a,#$30
 18d8: ec e8 00  mov   y,$00e8
+;18d9:   e8 00  mov   a,#$00
 18db: c4 78     mov   $78,a
 18dd: c4 8f     mov   $8f,a
 18df: e4 a6     mov   a,$a6
 18e1: eb 78     mov   y,$78
 18e3: f0 13     beq   $18f8
 18e5: 48 80     eor   a,#$80
-18e7: ea 76 e0  not1  $1c0e,6
+18e7: ea 76 e0  not1  $0076,7
 18ea: 80        setc
 18eb: a4 76     sbc   a,$76
-18ed: ea 76 e0  not1  $1c0e,6
+18ed: ea 76 e0  not1  $0076,7
 18f0: 3f 38 0f  call  $0f38
 18f3: f8 a7     mov   x,$a7
 18f5: da 79     movw  $79,ya
@@ -2947,6 +2952,7 @@
 18fb: e3 89 03  bbs7  $89,$1901
 18fe: e8 30     mov   a,#$30
 1900: ec e8 00  mov   y,$00e8
+;1901:   e8 00  mov   a,#$00
 1903: c4 77     mov   $77,a
 1905: c4 8f     mov   $8f,a
 1907: e4 a6     mov   a,$a6
@@ -3400,10 +3406,10 @@
 1c39: 0e 61 00  tset1 $0061
 1c3c: 6f        ret
 
-; vcmd e9
+; vcmd e9 - goto address in $3100+A*4
 1c3d: 8d 00     mov   y,#$00
 1c3f: 2f 02     bra   $1c43
-; vcmd ea
+; vcmd ea - goto address in $3102+A*4
 1c41: 8d 02     mov   y,#$02
 1c43: 3f 51 1c  call  $1c51
 1c46: d4 02     mov   $02+x,a
@@ -3414,16 +3420,17 @@
 
 1c50: 6f        ret
 
+; get song ptr from table at 3100, indexed by A width 4, Y selects 0 or 2
 1c51: 8f 00 97  mov   $97,#$00
 1c54: 1c        asl   a
 1c55: 2b 97     rol   $97
 1c57: 1c        asl   a
 1c58: 2b 97     rol   $97
-1c5a: c4 96     mov   $96,a
+1c5a: c4 96     mov   $96,a             ; $96/7 = A * 4
 1c5c: dd        mov   a,y
 1c5d: 8d 31     mov   y,#$31
 1c5f: 7a 96     addw  ya,$96
-1c61: da 96     movw  $96,ya
+1c61: da 96     movw  $96,ya            ; $92/3 += #$3100 or #$3102
 1c63: 8d 00     mov   y,#$00
 1c65: f7 96     mov   a,($96)+y
 1c67: 2d        push  a
@@ -3600,7 +3607,7 @@
 1d81: c4 95     mov   $95,a
 1d83: 6f        ret
 
-; vcmd e8
+; vcmd e8 - utility rest
 1d84: d4 26     mov   $26+x,a
 1d86: 6f        ret
 
@@ -3608,12 +3615,12 @@
 1d87: d5 a0 f3  mov   $f3a0+x,a
 1d8a: 6f        ret
 
-; vcmd f9
+; vcmd f9 - (related to vcmd fa)
 1d8b: 28 0f     and   a,#$0f
 1d8d: c4 7b     mov   $7b,a
 1d8f: 6f        ret
 
-; vcmd fa
+; vcmd fa - CPU-controled branch (used for Magical Tank Battle SFX)
 1d90: 28 0f     and   a,#$0f
 1d92: c4 a6     mov   $a6,a
 1d94: 64 d4     cmp   a,$d4
@@ -3629,7 +3636,7 @@
 1da8: d0 02     bne   $1dac
 1daa: bb 03     inc   $03+x
 1dac: 6f        ret
-
+; redirect to goto vcmd
 1dad: 3f 47 07  call  $0747
 1db0: 5f 83 1c  jmp   $1c83
 
@@ -3646,8 +3653,8 @@
 1dc4: fc        inc   y
 1dc5: 5f 91 1c  jmp   $1c91
 
-; vcmd fd
-1dc8: 43 88 3e  bbs2  $88,$1e09
+; vcmd fd - play SFX (used for Surprise of the Death Eaters and Jungle)
+1dc8: 43 88 3e  bbs2  $88,$1e09         ; arg1 is around 12x~13x
 1dcb: c4 8f     mov   $8f,a
 1dcd: f5 81 f2  mov   a,$f281+x
 1dd0: c4 90     mov   $90,a

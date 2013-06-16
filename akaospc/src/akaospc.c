@@ -16,7 +16,7 @@
 
 #define APPNAME "Square AKAO SPC2MIDI"
 #define APPSHORTNAME "akaospc"
-#define VERSION "[2013-06-15]"
+#define VERSION "[2013-06-16]"
 
 static int akaoSpcLoopMax = 2;            // maximum loop count of parser
 static int akaoSpcTextLoopMax = 1;        // maximum loop count of text output
@@ -2401,6 +2401,26 @@ static void akaoSpcEventRollOff (AkaoSpcSeqStat *seq, SeqEventReport *ev)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
+/** vcmd e8: utility rest. */
+static void akaoSpcEventUtilityRest (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Utility Rest, tick = %d", arg1);
+    strcat(ev->classStr, " ev-rest");
+
+    //if (!akaoSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    tr->tick += arg1;
+}
+
 /** vcmd e9: play SFX #1. */
 static void akaoSpcEventPlaySFX1 (AkaoSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -2412,7 +2432,7 @@ static void akaoSpcEventPlaySFX1 (AkaoSpcSeqStat *seq, SeqEventReport *ev)
     arg1 = seq->aRAM[*p];
     (*p)++;
 
-    sprintf(ev->note, "Play SFX #1, index = %d", arg1);
+    sprintf(ev->note, "Redirect to SFX #1, index = %d", arg1);
     strcat(ev->classStr, " ev-playsfx");
 
     if (!akaoSpcLessTextInSMF)
@@ -2437,7 +2457,7 @@ static void akaoSpcEventPlaySFX2 (AkaoSpcSeqStat *seq, SeqEventReport *ev)
     arg1 = seq->aRAM[*p];
     (*p)++;
 
-    sprintf(ev->note, "Play SFX #2, index = %d at $%04X [Track %d]\n", arg1, ev->addr, ev->track + 1);
+    sprintf(ev->note, "Redirect to SFX #2, index = %d\n", arg1);
     strcat(ev->classStr, " ev-playsfx");
 
     if (!akaoSpcLessTextInSMF)
@@ -2447,7 +2467,7 @@ static void akaoSpcEventPlaySFX2 (AkaoSpcSeqStat *seq, SeqEventReport *ev)
     // the destination address is determined by a table and index (arg1).
     // it's probably not used in usual songs, and it will never return to
     // the main score data (perhaps), thus, the tool ends conversion here.
-    fprintf(stderr, "Redirect to SFX #2 (index = %d)\n", arg1);
+    fprintf(stderr, "Redirect to SFX #2 (index = %d) at $%04X [Track %d]\n", arg1, ev->addr, ev->track + 1);
     akaoSpcInactiveTrack(seq, ev->track);
 }
 
@@ -2669,34 +2689,6 @@ static void akaoSpcEventEchoFeedbackFIR (AkaoSpcSeqStat *seq, SeqEventReport *ev
     (*p)++;
 
     sprintf(ev->note, "Echo Feedback/FIR, feedback = %d, FIR = %d", arg1, arg2);
-    strcat(ev->classStr, " ev-echoparam");
-
-    if (!akaoSpcLessTextInSMF)
-        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
-}
-
-/** vcmd fx: set/fade echo FIR. */
-static void akaoSpcEventEchoFIRFade (AkaoSpcSeqStat *seq, SeqEventReport *ev)
-{
-    int arg1, arg2;
-    AkaoSpcTrackStat *tr = &seq->track[ev->track];
-    int *p = &seq->track[ev->track].pos;
-
-    ev->size += 2;
-    arg1 = seq->aRAM[*p];
-    (*p)++;
-    arg2 = seq->aRAM[*p];
-    (*p)++;
-
-    if (arg1 == 0)
-    {
-        sprintf(ev->note, "Echo FIR, index = %d", arg2);
-    }
-    else
-    {
-        // fade?
-        sprintf(ev->note, "Echo FIR Fade, speed = %d, index = %d", arg1, arg2);
-    }
     strcat(ev->classStr, " ev-echoparam");
 
     if (!akaoSpcLessTextInSMF)
@@ -2973,7 +2965,7 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
             event[vcmdFirst + 0x21] = akaoSpcEventSlurOff;
             event[vcmdFirst + 0x22] = akaoSpcEventRollOn;
             event[vcmdFirst + 0x23] = akaoSpcEventRollOff;
-            event[vcmdFirst + 0x24] = akaoSpcEventUnknown1; // duration related event
+            event[vcmdFirst + 0x24] = akaoSpcEventUtilityRest;
             event[vcmdFirst + 0x25] = akaoSpcEventPlaySFX1;
             event[vcmdFirst + 0x26] = akaoSpcEventPlaySFX2;
             event[vcmdFirst + 0x27] = akaoSpcEventEndOfTrack;
@@ -2992,39 +2984,6 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
         {
         case SPC_SUBVER_SD2:
             event[0xfc] = akaoSpcEventResetRepeatIncCount;
-            break;
-
-        case SPC_SUBVER_LAL:
-            event[0xf4] = akaoSpcEventEchoFIRFade;
-            event[0xf5] = akaoSpcEventUnknown1; // master volume?
-            event[0xf6] = akaoSpcEventConditionalJump;
-            event[0xf7] = akaoSpcEventJump;
-            event[0xf8] = akaoSpcEventUnknown0; // increment shared counter (CPU can read it, but cannot change it)
-            event[0xf9] = akaoSpcEventUnknown0; // zero shared counter (CPU can read it, but cannot change it)
-            event[0xfa] = akaoSpcEventUnknown0; // ignore master volume?
-            event[0xfb] = akaoSpcEventCPUControledJump;
-            event[0xfc] = akaoSpcEventEndOfTrackDup;
-            event[0xfd] = akaoSpcEventEndOfTrackDup;
-            event[0xfe] = akaoSpcEventEndOfTrackDup;
-            event[0xff] = akaoSpcEventEndOfTrackDup;
-            needsAutoEventAssign = false;
-            break;
-
-        case SPC_SUBVER_RS3:
-            event[0xef] = akaoSpcEventUnknown1;
-            event[0xf4] = akaoSpcEventUnknown1; // master volume
-            event[0xf5] = akaoSpcEventConditionalJump;
-            event[0xf6] = akaoSpcEventJump;
-            event[0xf7] = akaoSpcEventEchoFeedback;
-            event[0xf8] = akaoSpcEventEchoFIR;
-            event[0xf9] = akaoSpcEventUnidentified;
-            //event[0xfa] = akaoSpcEventUnidentified;
-            event[0xfb] = akaoSpcEventRhythmOn;
-            event[0xfc] = akaoSpcEventRhythmOff;
-            event[0xfd] = akaoSpcEventUnknown1;
-            event[0xfe] = akaoSpcEventEndOfTrackDup;
-            event[0xff] = akaoSpcEventEndOfTrackDup;
-            needsAutoEventAssign = false;
             break;
         }
     }
@@ -3078,7 +3037,69 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
                             indexOfHexPat(&seq->aRAM[vcmdAddr], "\xc8\x10\xb0\x05\xe8\\\x00\xd5..\x6f", 10, NULL) != -1)
                         {
                             event[vcmdIndex] = akaoSpcEventUnknown0;
-                            fprintf(stderr, "Info: Event $%02X is possibly \"Reset Repeat Conditional Counter\"? Apparently it is not a channel message - $%04X\n", vcmdIndex, vcmdAddr);
+                            fprintf(stderr, "Info: Event $%02X is possibly \"Reset Repeat Conditional Counter\" (mov $%04x+x,#0)? Apparently it is not a channel message - $%04X\n", vcmdIndex, mget2l(&seq->aRAM[vcmdAddr + 7]), vcmdAddr);
+                        }
+                        // (Live A Live)
+                        // ; vcmd f8 - increment cpu-shared counter
+                        // inc   $66
+                        // ret
+                        else if (vcmdAddr + 3 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\xab.\x6f", 3, NULL) != -1)
+                        {
+                            event[vcmdIndex] = akaoSpcEventUnknown0;
+                            fprintf(stderr, "Info: Event $%02X is possibly \"Increment CPU-shared Counter\" (inc $%02x)? Apparently it is not a channel message - $%04X\n", vcmdIndex, seq->aRAM[vcmdAddr + 1], vcmdAddr);
+                        }
+                        // (Live A Live)
+                        // ; vcmd f9 - zero cpu-shared counter
+                        // mov   $66,#$00
+                        // ret
+                        else if (vcmdAddr + 4 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\x8f\\\x00.\x6f", 4, NULL) != -1)
+                        {
+                            event[vcmdIndex] = akaoSpcEventUnknown0;
+                            fprintf(stderr, "Info: Event $%02X is possibly \"Zero CPU-shared Counter\" (mov $%02x,#0)? Apparently it is not a channel message - $%04X\n", vcmdIndex, seq->aRAM[vcmdAddr + 2], vcmdAddr);
+                        }
+                        // (Romancing SaGa 3)
+                        // ; vcmd fb - rhythm kit on
+                        // or    ($7c),($92)
+                        // ret
+                        // ; vcmd fc - rhythm kit off
+                        // mov   a,$92
+                        // tclr1 $007c
+                        // ret
+                        else if (vcmdAddr + 10 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\x09..\x6f\xe4.\x4e.\\\x00\x6f", 10, NULL) != -1 &&
+                            seq->aRAM[vcmdAddr + 1] == seq->aRAM[vcmdAddr + 5] &&
+                            seq->aRAM[vcmdAddr + 2] == seq->aRAM[vcmdAddr + 7])
+                        {
+                            event[vcmdIndex] = akaoSpcEventRhythmOn;
+                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Rhythm Kit On\" - $%04X\n", vcmdIndex, vcmdAddr);
+                        }
+                        // (Romancing SaGa 3)
+                        // ; vcmd fb - rhythm kit on
+                        // or    ($7c),($92)
+                        // ret
+                        // ; vcmd fc - rhythm kit off
+                        // mov   a,$92
+                        // tclr1 $007c
+                        // ret
+                        else if (vcmdAddr >= 4 && vcmdAddr + 6 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr - 4], "\x09..\x6f\xe4.\x4e.\\\x00\x6f", 10, NULL) != -1 &&
+                            seq->aRAM[vcmdAddr - 4 + 1] == seq->aRAM[vcmdAddr - 4 + 5] &&
+                            seq->aRAM[vcmdAddr - 4 + 2] == seq->aRAM[vcmdAddr - 4 + 7])
+                        {
+                            event[vcmdIndex] = akaoSpcEventRhythmOff;
+                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Rhythm Kit Off\" - $%04X\n", vcmdIndex, vcmdAddr);
+                        }
+                        // (Live A Live)
+                        // ; vcmd fa - ignore master volume (per channel)
+                        // or    ($61),($8f)
+                        // ret
+                        else if (vcmdAddr + 4 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\x09..\x6f", 4, NULL) != -1)
+                        {
+                            event[vcmdIndex] = akaoSpcEventUnknown0;
+                            fprintf(stderr, "Info: Event $%02X is possibly \"Ignore Master Volume\" (or ($%02x),($%02x))? Apparently it is not a channel message - $%04X\n", vcmdIndex, seq->aRAM[vcmdAddr + 2], seq->aRAM[vcmdAddr + 1], vcmdAddr);
                         }
                         else
                         {
@@ -3110,7 +3131,57 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
                             indexOfHexPat(&seq->aRAM[vcmdAddr], "\xc4.\x6f", 3, NULL) != -1)
                         {
                             event[vcmdIndex] = akaoSpcEventUnknown1;
-                            fprintf(stderr, "Info: Event $%02X is possibly \"Master Volume\"? Apparently it is not a channel message - $%04X\n", vcmdIndex, vcmdAddr);
+                            fprintf(stderr, "Info: Event $%02X is possibly \"Master Volume\" (mov $%02x,a)? Apparently it is not a channel message - $%04X\n", vcmdIndex, seq->aRAM[vcmdAddr + 1], vcmdAddr);
+                        }
+                        // (Romancing SaGa 3)
+                        // ; vcmd f7 - echo feedback
+                        // bbs7  $89,$18d9
+                        // mov   a,#$30
+                        // mov   y,$00e8
+                        // mov   a,#$00
+                        // mov   $78,a
+                        // mov   $8f,a
+                        // mov   a,$a6
+                        // mov   y,$78
+                        // beq   $18f8
+                        // eor   a,#$80
+                        // not1  $0076,7
+                        // setc
+                        // sbc   a,$76
+                        // not1  $0076,7
+                        // call  $0f38
+                        // mov   x,$a7
+                        // movw  $79,ya
+                        // ret
+                        else if (vcmdAddr + 37 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\xe3.\x03\xe8\x30\xec\xe8\\\x00\xc4.\xc4.\xe4.\xeb.\xf0\x13\x48\x80\xea.\xe0\x80\xa4.\xea.\xe0\x3f..\xf8.\xda.\x6f", 37, NULL) != -1 &&
+                            seq->aRAM[vcmdAddr + 21] == seq->aRAM[vcmdAddr + 25] &&
+                            seq->aRAM[vcmdAddr + 21] == seq->aRAM[vcmdAddr + 27])
+                        {
+                            event[vcmdIndex] = akaoSpcEventEchoFeedback;
+                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Echo Feedback\" - $%04X\n", vcmdIndex, vcmdAddr);
+                        }
+                        // (Romancing SaGa 3)
+                        // ; vcmd f8 - echo FIR
+                        // bbs7  $89,$1901
+                        // mov   a,#$30
+                        // mov   y,$00e8
+                        // mov   a,#$00
+                        // mov   $77,a
+                        // mov   $8f,a
+                        // mov   a,$a6
+                        // and   a,#$03
+                        // inc   a
+                        // asl   a
+                        // asl   a
+                        // asl   a
+                        // mov   y,a
+                        // mov   x,#$10
+                        else if (vcmdAddr + 23 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\xe3.\x03\xe8\x30\xec\xe8\\\x00\xc4.\xc4.\xe4.\x28\x03\xbc\x1c\x1c\x1c\xfd\xcd\x10", 23, NULL) != -1)
+                        {
+                            event[vcmdIndex] = akaoSpcEventEchoFIR;
+                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Echo FIR\" - $%04X\n", vcmdIndex, vcmdAddr);
                         }
                         else if (seq->aRAM[vcmdAddr] == 0x6f) // ret
                         {
@@ -3191,6 +3262,31 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
                         {
                             event[vcmdIndex] = akaoSpcEventEchoVolumeFade;
                             fprintf(stderr, "Info: Auto assigned an event $%02X \"Echo Volume Fade\" - $%04X\n", vcmdIndex, vcmdAddr);
+                        }
+                        // (Live A Live)
+                        // ; vcmd f4 - echo feedback, FIR filter
+                        // mov   $65,a
+                        // call  $0590
+                        // mov   $64,a
+                        // mov1  c,$1010,5
+                        // bcc   $133f
+                        // ret
+                        // mov   a,$64
+                        // and   a,#$03
+                        // asl   a
+                        // asl   a
+                        // asl   a
+                        // mov   y,a
+                        // mov   x,#$0f
+                        // mov   a,$1826+y
+                        // mov   $f2,x
+                        // mov   $f3,a
+                        else if (vcmdAddr + 30 <= SPC_ARAM_SIZE &&
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\xc4.\x3f..\xc4.\xaa..\x90\x01\x6f\xe4.\x28\x03\x1c\x1c\x1c\xfd\xcd\x0f\xf6..\xd8\xf2\xc4\xf3", 30, NULL) != -1 &&
+                            seq->aRAM[vcmdAddr + 6] == seq->aRAM[vcmdAddr + 14])
+                        {
+                            event[vcmdIndex] = akaoSpcEventEchoFeedbackFIR;
+                            fprintf(stderr, "Info: Auto assigned an event $%02X \"Echo Feedback/FIR\" - $%04X\n", vcmdIndex, vcmdAddr);
                         }
                         // (Final Fantasy 5)
                         // ; vcmd f7 - set echo feedback, filter
