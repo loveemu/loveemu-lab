@@ -1528,6 +1528,26 @@ static void akaoSpcEventVolume (AkaoSpcSeqStat *seq, SeqEventReport *ev)
     smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_VOLUME, akaoSpcMidiVolOf(tr->volume));
 }
 
+/** vcmd xx: set alternate volume. */
+static void akaoSpcEventAltVolume (AkaoSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    AkaoSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Volume (Alternate), vol = %d", arg1);
+    strcat(ev->classStr, " ev-vol");
+
+    //if (!akaoSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_EXPRESSION, akaoSpcMidiVolOf(tr->volume));
+}
+
 /** vcmd c5: set volume fade. */
 static void akaoSpcEventVolumeFade (AkaoSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -3032,8 +3052,8 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
             event[vcmdFirst + 0x24] = akaoSpcEventForceNextNoteLen;
             event[vcmdFirst + 0x25] = akaoSpcEventPlaySFX1;
             event[vcmdFirst + 0x26] = akaoSpcEventPlaySFX2;
-            event[vcmdFirst + 0x27] = akaoSpcEventEndOfTrack;
-            endOfTrackVcmdAddr = mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + (0x27 * 2)]);
+            //event[vcmdFirst + 0x27] = akaoSpcEventEndOfTrack; // use autodetect, there is a difference between RS2 and Gun Hazard
+            //endOfTrackVcmdAddr = mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + (0x27 * 2)]);
             //event[vcmdFirst + 0x28] = akaoSpcEventEndOfTrackDup;
             //event[vcmdFirst + 0x29] = akaoSpcEventEndOfTrackDup;
             //event[vcmdFirst + 0x2a] = akaoSpcEventEndOfTrackDup;
@@ -3061,13 +3081,24 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
 
         if (endOfTrackVcmdAddr == -1)
         {
+            if (seq->ver.id == SPC_VER_REV4 &&
+                mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + (0x27 * 2)]) == mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + (0x28 * 2)])) // rev.4 common
+            {
+                event[vcmdFirst + 0x27] = akaoSpcEventEndOfTrack;
+            }
+            else if (seq->ver.id == SPC_VER_REV4 &&
+                mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + (0x28 * 2)]) == mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + (0x29 * 2)])) // Gun Hazard, BS Games
+            {
+                event[vcmdFirst + 0x28] = akaoSpcEventEndOfTrack;
+            }
             // assume: last 2 events are end of track (duplicated)
-            if (mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + ((0xff - vcmdFirst) * 2)]) == mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + ((0xfe - vcmdFirst) * 2)]) &&
+            else if (mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + ((0xff - vcmdFirst) * 2)]) == mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + ((0xfe - vcmdFirst) * 2)]) &&
                 seq->aRAM[seq->ver.vcmdLenTableAddr + (0xff - vcmdFirst)] == seq->aRAM[seq->ver.vcmdLenTableAddr + (0xfe - vcmdFirst)] &&
                 seq->aRAM[seq->ver.vcmdLenTableAddr + (0xff - vcmdFirst)] == 0)
             {
                 endOfTrackVcmdAddr = mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + ((0xff - vcmdFirst) * 2)]);
-                fprintf(stderr, "Info: Auto assigned an event \"End of Track\" - $%04X\n", endOfTrackVcmdAddr);
+                //fprintf(stderr, "Info: Auto detected an event \"End of Track\" - $%04X\n", endOfTrackVcmdAddr);
+
             }
         }
 
@@ -3222,14 +3253,15 @@ static void akaoSpcSetEventList (AkaoSpcSeqStat *seq)
                             fprintf(stderr, "Info: Event $%02X is possibly \"Master Volume\" (mov $%02x,a)? Apparently it is not a channel message - $%04X\n", vcmdIndex, seq->aRAM[vcmdAddr + 1], vcmdAddr);
                         }
                         // (Chrono Trigger)
-                        // ; vcmd fd
+                        // ; vcmd fd - expression
                         // asl   a
                         // mov   $f220+x,a
                         // or    ($d0),($91)
                         // ret
                         else if (vcmdAddr + 8 <= SPC_ARAM_SIZE &&
-                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\x1d\xd5..\x09..\x6f", 8, NULL) != -1)
+                            indexOfHexPat(&seq->aRAM[vcmdAddr], "\x1c\xd5..\x09..\x6f", 8, NULL) != -1)
                         {
+                            //event[vcmdIndex] = akaoSpcEventAltVolume;
                             event[vcmdIndex] = akaoSpcEventUnknown1;
                             fprintf(stderr, "Info: Event $%02X is possibly \"Volume (Alternate)\" (mov $%04x,a*2)? Apparently it is not a channel message - $%04X\n", vcmdIndex, mget2l(&seq->aRAM[vcmdAddr + 2]), vcmdAddr);
                         }
