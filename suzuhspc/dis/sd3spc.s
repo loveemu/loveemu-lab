@@ -1749,17 +1749,17 @@
 0ff2: e8 00     mov   a,#$00
 0ff4: 1f ed 16  jmp   ($16ed+x)
 
-; vcmds c4,f6,fe,ff
+; vcmd c4,f6,fe,ff - octave up
 0ff7: f6 d1 17  mov   a,$17d1+y
 0ffa: bc        inc   a
 0ffb: 2f 0b     bra   $1008
 
-; vcmd c5
+; vcmd c5 - octave down
 0ffd: f6 d1 17  mov   a,$17d1+y
 1000: 9c        dec   a
 1001: 2f 05     bra   $1008
 
-; vcmd c6
+; vcmd c6 - set octave
 1003: 5d        mov   x,a
 1004: e7 2c     mov   a,($2c+x)
 1006: 3a 2c     incw  $2c
@@ -1771,7 +1771,7 @@
 1013: d6 d1 17  mov   $17d1+y,a
 1016: 6f        ret
 
-; vcmd c7
+; vcmd c7 - nop
 1017: 6f        ret
 
 ; vcmd c8 - set noise freq
@@ -1895,7 +1895,7 @@
 10e5: 3a 2c     incw  $2c
 10e7: 6f        ret
 
-; vcmd d0
+; vcmd d0 - back to loop point
 10e8: f8 23     mov   x,$23
 10ea: f5 aa 1b  mov   a,$1baa+x
 10ed: c4 2d     mov   $2d,a
@@ -1931,7 +1931,7 @@
 112b: 3f d3 14  call  $14d3
 112e: 6f        ret
 
-; vcmd d1
+; vcmd d1 - tempo
 112f: 5d        mov   x,a
 1130: e7 2c     mov   a,($2c+x)
 1132: 3a 2c     incw  $2c
@@ -1945,61 +1945,62 @@
 1140: c4 4e     mov   $4e,a
 1142: 6f        ret
 
-; vcmd d2,d3,d4
+; vcmd d2,d3,d4 - repeat start
 1143: f6 d1 17  mov   a,$17d1+y
 1146: c4 06     mov   $06,a
 1148: f6 d9 1b  mov   a,$1bd9+y
 114b: bc        inc   a
-114c: d6 d9 1b  mov   $1bd9+y,a
+114c: d6 d9 1b  mov   $1bd9+y,a         ; increment nest level
 114f: 3f 25 16  call  $1625
 1152: 8d 00     mov   y,#$00
 1154: f7 2c     mov   a,($2c)+y
 1156: 3a 2c     incw  $2c
 1158: 9c        dec   a
-1159: d5 f1 1b  mov   $1bf1+x,a
+1159: d5 f1 1b  mov   $1bf1+x,a         ; push repeat count
 115c: e4 06     mov   a,$06
-115e: d5 f2 1b  mov   $1bf2+x,a
+115e: d5 f2 1b  mov   $1bf2+x,a         ; push octave
 1161: e4 2c     mov   a,$2c
 1163: d5 81 1c  mov   $1c81+x,a
 1166: e4 2d     mov   a,$2d
-1168: d5 82 1c  mov   $1c82+x,a
+1168: d5 82 1c  mov   $1c82+x,a         ; push vcmd ptr
 116b: 6f        ret
 
-; vcmd d5
+; vcmd d5 - repeat end
 116c: 3f 25 16  call  $1625
 116f: f5 f1 1b  mov   a,$1bf1+x
 1172: f0 32     beq   $11a6
 1174: 9c        dec   a
-1175: d5 f1 1b  mov   $1bf1+x,a
+1175: d5 f1 1b  mov   $1bf1+x,a         ; decrement repeat count
 1178: f5 f2 1b  mov   a,$1bf2+x
-117b: d6 d1 17  mov   $17d1+y,a
+117b: d6 d1 17  mov   $17d1+y,a         ; reload octave
 117e: e4 2c     mov   a,$2c
 1180: d5 11 1d  mov   $1d11+x,a
 1183: e4 2d     mov   a,$2d
-1185: d5 12 1d  mov   $1d12+x,a
+1185: d5 12 1d  mov   $1d12+x,a         ; save loop end point
 1188: f5 82 1c  mov   a,$1c82+x
 118b: fd        mov   y,a
 118c: f5 81 1c  mov   a,$1c81+x
-118f: da 2c     movw  $2c,ya
+118f: da 2c     movw  $2c,ya            ; reload vcmd ptr
 1191: 6f        ret
 
-; vcmd d6
+; vcmd d6 - repeat break
 1192: 3f 25 16  call  $1625
 1195: f5 f1 1b  mov   a,$1bf1+x
-1198: f0 01     beq   $119b
+1198: f0 01     beq   $119b             ; only work at the last time
 119a: 6f        ret
-
+; break the loop
 119b: f5 12 1d  mov   a,$1d12+x
 119e: fd        mov   y,a
 119f: f5 11 1d  mov   a,$1d11+x
-11a2: da 2c     movw  $2c,ya
+11a2: da 2c     movw  $2c,ya            ; jump to loop end
 11a4: eb 22     mov   y,$22
+; decrement nest level
 11a6: f6 d9 1b  mov   a,$1bd9+y
 11a9: 9c        dec   a
 11aa: d6 d9 1b  mov   $1bd9+y,a
 11ad: 6f        ret
 
-; vcmd d7
+; vcmd d7 - set loop point
 11ae: f8 23     mov   x,$23
 11b0: e4 2c     mov   a,$2c
 11b2: d5 a9 1b  mov   $1ba9+x,a
@@ -2106,7 +2107,7 @@
 125d: d6 01 18  mov   $1801+y,a
 1260: 6f        ret
 
-; vcmd de
+; vcmd de - set instrument
 1261: 5d        mov   x,a
 1262: e7 2c     mov   a,($2c+x)
 1264: 3a 2c     incw  $2c
@@ -2752,10 +2753,10 @@
 16eb: dw $096a  ; 30
 
 ; vcmd dispatch table (c4-??)
-16ed: dw $0ff7  ; c4
-16ef: dw $0ffd  ; c5
-16f1: dw $1003  ; c6
-16f3: dw $1017  ; c7 (nop)
+16ed: dw $0ff7  ; c4 - octave up
+16ef: dw $0ffd  ; c5 - octave down
+16f1: dw $1003  ; c6 - set octave
+16f3: dw $1017  ; c7 - nop
 16f5: dw $1018  ; c8
 16f7: dw $1035  ; c9
 16f9: dw $1042  ; ca
@@ -2764,21 +2765,21 @@
 16ff: dw $1098  ; cd
 1701: dw $10a5  ; ce
 1703: dw $10cb  ; cf
-1705: dw $10e8  ; d0
-1707: dw $112f  ; d1
-1709: dw $1143  ; d2
-170b: dw $1143  ; d3
-170d: dw $1143  ; d4
-170f: dw $116c  ; d5
-1711: dw $1192  ; d6
-1713: dw $11ae  ; d7
+1705: dw $10e8  ; d0 - back to loop point
+1707: dw $112f  ; d1 - tempo
+1709: dw $1143  ; d2 - repeat start
+170b: dw $1143  ; d3 - repeat start
+170d: dw $1143  ; d4 - repeat start
+170f: dw $116c  ; d5 - repeat end
+1711: dw $1192  ; d6 - repeat break
+1713: dw $11ae  ; d7 - set loop point
 1715: dw $11bb  ; d8
 1717: dw $11ee  ; d9
 1719: dw $1202  ; da
 171b: dw $1218  ; db
 171d: dw $1236  ; dc
 171f: dw $1258  ; dd
-1721: dw $1261  ; de
+1721: dw $1261  ; de - set instrument
 1723: dw $101f  ; df
 1725: dw $1293  ; e0
 1727: dw $0000  ; e1
@@ -2814,12 +2815,12 @@
 1763: dw $0ff7  ; ff
 
 ; oplens
-1765: db $01,$01,$02,$00,$02,$01,$01,$01,$01,$02,$02,$02
+1765: db                 $01,$01,$02,$00,$02,$01,$01,$01,$01,$02,$02,$02
 1771: db $ff,$02,$02,$02,$02,$01,$01,$01,$01,$02,$02,$02,$02,$02,$02,$02
 1781: db $02,$02,$02,$02,$03,$03,$01,$02,$03,$03,$01,$01,$02,$02,$01,$01
 1791: db $03,$04,$02,$01,$03,$04,$01,$01,$01,$ff,$01,$01,$01,$01,$01,$01
 
-; durations ($17a0)
+; durations (-1)
 17a1: db $bf,$8f,$5f,$47,$2f,$23,$1f,$17,$0f,$0b,$07,$05,$02,$00
 
 ; pitch table?

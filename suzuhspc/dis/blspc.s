@@ -1713,7 +1713,7 @@
 100a: eb 1e     mov   y,$1e
 100c: 1f a9 16  jmp   ($16a9+x)
 
-; vcmd c4,e1,ca-cb,fc-fd
+; vcmd c4,e1,ca-cb,fc-fd - octave up
 100f: f6 a4 17  mov   a,$17a4+y
 1012: bc        inc   a
 1013: 2f 08     bra   $101d
@@ -1828,7 +1828,7 @@
 10c3: d6 54 19  mov   $1954+y,a
 10c6: 6f        ret
 
-; vcmd d0
+; vcmd d0 - back to loop point
 10c7: f8 1f     mov   x,$1f
 10c9: f5 7c 1b  mov   a,$1b7c+x
 10cc: c4 29     mov   $29,a
@@ -1852,7 +1852,7 @@
 10f5: 3f 85 14  call  $1485
 10f8: 6f        ret
 
-; vcmd d1
+; vcmd d1 - tempo
 10f9: e4 0e     mov   a,$0e
 10fb: e3 26 08  bbs7  $26,$1106
 10fe: c4 5d     mov   $5d,a
@@ -1931,7 +1931,7 @@
 1183: d6 ac 1b  mov   $1bac+y,a
 1186: 6f        ret
 
-; vcmd d7
+; vcmd d7 - set loop point
 1187: f8 1f     mov   x,$1f
 1189: e4 29     mov   a,$29
 118b: d5 7c 1b  mov   $1b7c+x,a
@@ -2029,7 +2029,7 @@
 1229: d6 d4 17  mov   $17d4+y,a
 122c: 6f        ret
 
-; vcmd de
+; vcmd de - set instrument
 122d: e4 0e     mov   a,$0e
 122f: d6 d8 01  mov   $01d8+y,a
 1232: 5d        mov   x,a
@@ -2659,9 +2659,9 @@
 16a5: dw $094b  ; 2f
 16a7: dw $095d  ; 30
 
-16a9: dw $100f  ; c4
-16ab: dw $1015  ; c5
-16ad: dw $101b  ; c6
+16a9: dw $100f  ; c4 - octave up
+16ab: dw $1015  ; c5 - octave down
+16ad: dw $101b  ; c6 - set octave
 16af: dw $1021  ; c7 - nop
 16b1: dw $1022  ; c8
 16b3: dw $1039  ; c9
@@ -2671,21 +2671,21 @@
 16bb: dw $1091  ; cd
 16bd: dw $1098  ; ce
 16bf: dw $10ad  ; cf
-16c1: dw $10c7  ; d0
-16c3: dw $10f9  ; d1
+16c1: dw $10c7  ; d0 - back to loop point
+16c3: dw $10f9  ; d1 - tempo
 16c5: dw $110b  ; d2
 16c7: dw $110f  ; d3
 16c9: dw $1114  ; d4
 16cb: dw $1139  ; d5
 16cd: dw $116b  ; d6
-16cf: dw $1187  ; d7
+16cf: dw $1187  ; d7 - set loop point
 16d1: dw $1194  ; d8
 16d3: dw $11c7  ; d9
 16d5: dw $11d8  ; da
 16d7: dw $11eb  ; db
 16d9: dw $1206  ; dc
 16db: dw $1227  ; dd
-16dd: dw $122d  ; de
+16dd: dw $122d  ; de - set instrument
 16df: dw $1026  ; df
 16e1: dw $125e  ; e0
 16e3: dw $100f  ; e1
@@ -2720,7 +2720,7 @@
 171d: dw $14a4  ; fe
 171f: dw $14a4  ; ff
 
-1720: db                 $01,$01,$02,$11,$02,$01,$01,$01,$01,$02,$02,$02
+1721: db                 $01,$01,$02,$11,$02,$01,$01,$01,$01,$02,$02,$02
 172d: db $31,$02,$02,$02,$02,$41,$51,$01,$01,$02,$02,$02,$02,$02,$02,$02
 173d: db $02,$02,$02,$02,$03,$03,$01,$02,$03,$03,$01,$01,$02,$02,$01,$01
 174d: db $03,$04,$02,$01,$03,$04,$02,$01,$01,$21,$01,$01,$01,$01,$01,$01

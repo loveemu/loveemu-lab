@@ -1728,20 +1728,29 @@
 1031: eb 1e     mov   y,$1e
 1033: 1f 3f 17  jmp   ($173f+x)
 
+; vcmd c4,e1,ea,ab,fd,ff - octave up
 1036: f6 3c 18  mov   a,$183c+y
 1039: bc        inc   a
 103a: 2f 08     bra   $1044
+
+; vcmd c5 - octave down
 103c: f6 3c 18  mov   a,$183c+y
 103f: 9c        dec   a
 1040: 2f 02     bra   $1044
+
+; vcmd c6 - set octave
 1042: e4 0e     mov   a,$0e
 1044: d6 3c 18  mov   $183c+y,a
 1047: 6f        ret
 
+; vcmd c7 - nop
 1048: 6f        ret
 
+; vcmd c8
 1049: e4 0e     mov   a,$0e
 104b: 2f 05     bra   $1052
+
+; vcmd df
 104d: e4 0e     mov   a,$0e
 104f: 60        clrc
 1050: 84 38     adc   a,$38
@@ -1751,11 +1760,14 @@
 1059: c4 38     mov   $38,a
 105b: 8f 6c f2  mov   $f2,#$6c
 105e: c4 f3     mov   $f3,a
+; vcmd c9
 1060: e3 26 05  bbs7  $26,$1068
 1063: 09 20 5b  or    ($5b),($20)
 1066: 2f 16     bra   $107e
 1068: 09 20 4c  or    ($4c),($20)
 106b: 2f 11     bra   $107e
+
+; vcmd ca
 106d: e4 20     mov   a,$20
 106f: 48 ff     eor   a,#$ff
 1071: e3 26 06  bbs7  $26,$107a
@@ -1772,12 +1784,15 @@
 1089: c4 f3     mov   $f3,a
 108b: 6f        ret
 
+; vcmd cb
 108c: e3 26 05  bbs7  $26,$1094
 108f: 09 20 5c  or    ($5c),($20)
 1092: 2f 19     bra   $10ad
 1094: 13 1e f4  bbc0  $1e,$108b
 1097: 09 20 4d  or    ($4d),($20)
 109a: 2f 11     bra   $10ad
+
+; vcmd cc
 109c: e4 20     mov   a,$20
 109e: 48 ff     eor   a,#$ff
 10a0: e3 26 06  bbs7  $26,$10a9
@@ -1794,9 +1809,12 @@
 10b8: c4 f3     mov   $f3,a
 10ba: 6f        ret
 
+; vcmd cd
 10bb: e4 0e     mov   a,$0e
 10bd: 3f f9 04  call  $04f9
 10c0: 2f 07     bra   $10c9
+
+; vcmd ce
 10c2: e4 0e     mov   a,$0e
 10c4: 3f f9 04  call  $04f9
 10c7: bc        inc   a
@@ -1810,6 +1828,7 @@
 10d4: c4 2a     mov   $2a,a
 10d6: 6f        ret
 
+; vcmd cf
 10d7: e4 0e     mov   a,$0e
 10d9: 30 05     bmi   $10e0
 10db: 9f        xcn   a
@@ -1825,6 +1844,7 @@
 10ed: d6 ec 19  mov   $19ec+y,a
 10f0: 6f        ret
 
+; vcmd d0 - back to loop point
 10f1: f8 1f     mov   x,$1f
 10f3: f5 2d 1c  mov   a,$1c2d+x
 10f6: c4 2a     mov   $2a,a
@@ -1848,6 +1868,7 @@
 111f: 3f 6d 10  call  $106d
 1122: 6f        ret
 
+; vcmd d1 - tempo
 1123: e4 0e     mov   a,$0e
 1125: e3 26 0b  bbs7  $26,$1133
 1128: c4 5f     mov   $5f,a
@@ -1861,68 +1882,78 @@
 1135: c4 4f     mov   $4f,a
 1137: 6f        ret
 
+; vcmd d2
 1138: fa 0e 69  mov   ($69),($0e)
 113b: 6f        ret
 
+; vcmd d3
 113c: 60        clrc
 113d: 89 0e 69  adc   ($69),($0e)
 1140: 6f        ret
 
+; vcmd d4 - repeat start
 1141: f6 3c 18  mov   a,$183c+y
 1144: c4 06     mov   $06,a
 1146: f6 5c 1c  mov   a,$1c5c+y
 1149: bc        inc   a
-114a: d6 5c 1c  mov   $1c5c+y,a
+114a: d6 5c 1c  mov   $1c5c+y,a         ; increment nest level
 114d: 3f 5b 16  call  $165b
 1150: e4 0e     mov   a,$0e
 1152: 9c        dec   a
-1153: d5 74 1c  mov   $1c74+x,a
+1153: d5 74 1c  mov   $1c74+x,a         ; push repeat count
 1156: e4 06     mov   a,$06
-1158: d5 75 1c  mov   $1c75+x,a
+1158: d5 75 1c  mov   $1c75+x,a         ; push octave
 115b: e4 29     mov   a,$29
 115d: d5 04 1d  mov   $1d04+x,a
 1160: e4 2a     mov   a,$2a
-1162: d5 05 1d  mov   $1d05+x,a
+1162: d5 05 1d  mov   $1d05+x,a         ; push vcmd ptr
 1165: 6f        ret
 
+; vcmd d5 - repeat end
 1166: 3f 5b 16  call  $165b
 1169: f5 74 1c  mov   a,$1c74+x
 116c: f0 3f     beq   $11ad
 116e: 9c        dec   a
-116f: d5 74 1c  mov   $1c74+x,a
-1172: 2f 0b     bra   $117f
+116f: d5 74 1c  mov   $1c74+x,a         ; decrement nest level
+1172: 2f 0b     bra   $117f             ; continue
+
+; vcmd fe
 1174: 3f 5b 16  call  $165b
 1177: f5 74 1c  mov   a,$1c74+x
 117a: bc        inc   a
 117b: 64 58     cmp   a,$58
 117d: f0 2e     beq   $11ad
+; repeat continue
 117f: f5 75 1c  mov   a,$1c75+x
-1182: d6 3c 18  mov   $183c+y,a
+1182: d6 3c 18  mov   $183c+y,a         ; reload octave
 1185: e4 29     mov   a,$29
 1187: d5 94 1d  mov   $1d94+x,a
 118a: e4 2a     mov   a,$2a
-118c: d5 95 1d  mov   $1d95+x,a
+118c: d5 95 1d  mov   $1d95+x,a         ; save loop end point
 118f: f5 05 1d  mov   a,$1d05+x
 1192: fd        mov   y,a
 1193: f5 04 1d  mov   a,$1d04+x
-1196: da 29     movw  $29,ya
+1196: da 29     movw  $29,ya            ; reload vcmd ptr
 1198: 6f        ret
 
+; vcmd d6 - repeat break
 1199: 3f 5b 16  call  $165b
 119c: f5 74 1c  mov   a,$1c74+x
 119f: f0 01     beq   $11a2
 11a1: 6f        ret
-
+; jump to loop end
 11a2: f5 95 1d  mov   a,$1d95+x
 11a5: fd        mov   y,a
 11a6: f5 94 1d  mov   a,$1d94+x
 11a9: da 29     movw  $29,ya
 11ab: eb 1e     mov   y,$1e
+; decrement repeat nest level
 11ad: f6 5c 1c  mov   a,$1c5c+y
 11b0: 9c        dec   a
 11b1: d6 5c 1c  mov   $1c5c+y,a
 11b4: 6f        ret
 
+; vcmd d7 - set loop point
 11b5: f8 1f     mov   x,$1f
 11b7: e4 29     mov   a,$29
 11b9: d5 2c 1c  mov   $1c2c+x,a
@@ -1930,6 +1961,7 @@
 11be: d5 2d 1c  mov   $1c2d+x,a
 11c1: 6f        ret
 
+; vcmd d8
 11c2: f6 24 18  mov   a,$1824+y
 11c5: 5d        mov   x,a
 11c6: f5 80 46  mov   a,$4680+x
@@ -1957,6 +1989,7 @@
 11f3: c6        mov   (x),a
 11f4: 6f        ret
 
+; vcmd d9
 11f5: e4 21     mov   a,$21
 11f7: 08 05     or    a,#$05
 11f9: c4 f2     mov   $f2,a
@@ -1965,6 +1998,8 @@
 1200: 28 f0     and   a,#$f0
 1202: 04 0e     or    a,$0e
 1204: 2f 42     bra   $1248
+
+; vcmd da
 1206: e4 21     mov   a,$21
 1208: 08 05     or    a,#$05
 120a: c4 f2     mov   $f2,a
@@ -1975,6 +2010,8 @@
 1214: 04 0e     or    a,$0e
 1216: 9f        xcn   a
 1217: 2f 2f     bra   $1248
+
+; vcmd db
 1219: e4 21     mov   a,$21
 121b: 08 06     or    a,#$06
 121d: c4 f2     mov   $f2,a
@@ -1989,6 +2026,8 @@
 122f: 1c        asl   a
 1230: 04 06     or    a,$06
 1232: 2f 14     bra   $1248
+
+; vcmd dc
 1234: e4 21     mov   a,$21
 1236: 08 06     or    a,#$06
 1238: c4 f2     mov   $f2,a
@@ -2007,10 +2046,12 @@
 1252: cb f3     mov   $f3,y
 1254: 6f        ret
 
+; vcmd dd
 1255: e4 0e     mov   a,$0e
 1257: d6 6c 18  mov   $186c+y,a
 125a: 6f        ret
 
+; vcmd de - set instrument
 125b: e4 0e     mov   a,$0e
 125d: d6 24 18  mov   $1824+y,a
 1260: 5d        mov   x,a
@@ -2032,6 +2073,7 @@
 1289: 92 26     clr4  $26
 128b: 6f        ret
 
+; vcmd e0
 128c: eb 1f     mov   y,$1f
 128e: f6 61 01  mov   a,$0161+y
 1291: 28 e0     and   a,#$e0
@@ -2040,6 +2082,7 @@
 1298: 82 26     set4  $26
 129a: 6f        ret
 
+; vcmd e2
 129b: e4 0e     mov   a,$0e
 129d: f8 1f     mov   x,$1f
 129f: d5 35 1a  mov   $1a35+x,a
@@ -2048,6 +2091,7 @@
 12a7: f6 48 01  mov   a,$0148+y
 12aa: 5f 3a 15  jmp   $153a
 
+; vcmd e3
 12ad: e4 0e     mov   a,$0e
 12af: f8 1f     mov   x,$1f
 12b1: 60        clrc
@@ -2057,6 +2101,7 @@
 12ba: f6 48 01  mov   a,$0148+y
 12bd: 5f 3a 15  jmp   $153a
 
+; vcmd e4
 12c0: e4 0e     mov   a,$0e
 12c2: f0 36     beq   $12fa
 12c4: c4 0c     mov   $0c,a
@@ -2086,6 +2131,7 @@
 12f8: 62 28     set3  $28
 12fa: 6f        ret
 
+; vcmd e5
 12fb: fa 0e 0a  mov   ($0a),($0e)
 12fe: fa 0f 0b  mov   ($0b),($0f)
 1301: e4 0a     mov   a,$0a
@@ -2131,6 +2177,7 @@
 1352: 62 27     set3  $27
 1354: 6f        ret
 
+; vcmd e6
 1355: a3 27 03  bbs5  $27,$135b
 1358: a2 27     set5  $27
 135a: 6f        ret
@@ -2139,6 +2186,7 @@
 135d: 72 27     clr3  $27
 135f: 6f        ret
 
+; vcmd e7
 1360: 92 28     clr4  $28
 1362: e4 0e     mov   a,$0e
 1364: f8 1f     mov   x,$1f
@@ -2146,6 +2194,7 @@
 1369: f6 48 01  mov   a,$0148+y
 136c: 5f 3a 15  jmp   $153a
 
+; vcmd e8
 136f: e4 0e     mov   a,$0e
 1371: f0 3b     beq   $13ae
 1373: c4 0c     mov   $0c,a
@@ -2177,6 +2226,7 @@
 13ac: c2 28     set6  $28
 13ae: 6f        ret
 
+; vcmd e9
 13af: b2 28     clr5  $28
 13b1: e4 0e     mov   a,$0e
 13b3: d6 9c 1b  mov   $1b9c+y,a
@@ -2200,6 +2250,7 @@
 
 13da: 6f        ret
 
+; vcmd ec
 13db: 3f 01 14  call  $1401
 13de: f8 1f     mov   x,$1f
 13e0: e4 06     mov   a,$06
@@ -2208,6 +2259,7 @@
 13e7: d5 ed 19  mov   $19ed+x,a
 13ea: 6f        ret
 
+; vcmd ed
 13eb: 3f 01 14  call  $1401
 13ee: f8 1f     mov   x,$1f
 13f0: f5 ed 19  mov   a,$19ed+x
@@ -2238,16 +2290,20 @@
 141c: d6 54 18  mov   $1854+y,a
 141f: 6f        ret
 
+; vcmd f6
 1420: e4 0e     mov   a,$0e
 1422: d6 1c 1a  mov   $1a1c+y,a
 1425: 6f        ret
 
+; vcmd ee
 1426: a2 26     set5  $26
 1428: 6f        ret
 
+; vcmd ef
 1429: b2 26     clr5  $26
 142b: 6f        ret
 
+; vcmd f0
 142c: 32 27     clr1  $27
 142e: e4 0e     mov   a,$0e
 1430: f0 2d     beq   $145f
@@ -2278,11 +2334,13 @@
 1463: d6 d4 19  mov   $19d4+y,a
 1466: 6f        ret
 
+; vcmd f1
 1467: 3f 2c 14  call  $142c
 146a: e4 10     mov   a,$10
 146c: d6 d4 19  mov   $19d4+y,a
 146f: 6f        ret
 
+; vcmd f2
 1470: e4 0e     mov   a,$0e
 1472: e3 26 0c  bbs7  $26,$1481
 1475: 84 5f     adc   a,$5f
@@ -2297,9 +2355,11 @@
 1485: c4 fb     mov   $fb,a
 1487: 6f        ret
 
+; vcmd f3
 1488: 12 27     clr0  $27
 148a: 6f        ret
 
+; vcmd f4
 148b: e4 0e     mov   a,$0e
 148d: d6 dc 1a  mov   $1adc+y,a
 1490: d6 c4 1a  mov   $1ac4+y,a
@@ -2310,24 +2370,29 @@
 149d: 02 28     set0  $28
 149f: 6f        ret
 
+; vcmd f5
 14a0: 3f 8b 14  call  $148b
 14a3: e4 10     mov   a,$10
 14a5: d6 0c 1b  mov   $1b0c+y,a
 14a8: 6f        ret
 
+; vcmd f7
 14a9: 12 28     clr0  $28
 14ab: f6 48 01  mov   a,$0148+y
 14ae: 5f 3a 15  jmp   $153a
 
 14b1: 6f        ret
 
+; vcmd f8
 14b2: 62 26     set3  $26
 14b4: 6f        ret
 
+; vcmd f9
 14b5: 72 26     clr3  $26
 14b7: 52 26     clr2  $26
 14b9: 6f        ret
 
+; vcmd fa
 14ba: e3 26 05  bbs7  $26,$14c2
 14bd: 09 20 5d  or    ($5d),($20)
 14c0: 2f 1e     bra   $14e0
@@ -2337,6 +2402,8 @@
 14c9: 24 57     and   a,$57
 14cb: c4 57     mov   $57,a
 14cd: 2f 11     bra   $14e0
+
+; vcmd fb
 14cf: e4 20     mov   a,$20
 14d1: 48 ff     eor   a,#$ff
 14d3: e3 26 06  bbs7  $26,$14dc
@@ -2354,6 +2421,7 @@
 14ed: c4 f3     mov   $f3,a
 14ef: 6f        ret
 
+; vcmd fc
 14f0: fa 0e 64  mov   ($64),($0e)
 14f3: fa 0f 65  mov   ($65),($0f)
 14f6: fa 10 66  mov   ($66),($10)
@@ -2666,10 +2734,10 @@
 173b: dw $0912  ; 32
 173d: dw $0919  ; 33
 
-173f: dw $1036  ; c4
-1741: dw $103c  ; c5
-1743: dw $1042  ; c6
-1745: dw $1048  ; c7
+173f: dw $1036  ; c4 - octave up
+1741: dw $103c  ; c5 - octave down
+1743: dw $1042  ; c6 - set octave
+1745: dw $1048  ; c7 - nop
 1747: dw $1049  ; c8
 1749: dw $1060  ; c9
 174b: dw $106d  ; ca
@@ -2678,21 +2746,21 @@
 1751: dw $10bb  ; cd
 1753: dw $10c2  ; ce
 1755: dw $10d7  ; cf
-1757: dw $10f1  ; d0
-1759: dw $1123  ; d1
+1757: dw $10f1  ; d0 - back to loop point
+1759: dw $1123  ; d1 - tempo
 175b: dw $1138  ; d2
 175d: dw $113c  ; d3
-175f: dw $1141  ; d4
-1761: dw $1166  ; d5
-1763: dw $1199  ; d6
-1765: dw $11b5  ; d7
+175f: dw $1141  ; d4 - repeat start
+1761: dw $1166  ; d5 - repeat end
+1763: dw $1199  ; d6 - repeat break
+1765: dw $11b5  ; d7 - set loop point
 1767: dw $11c2  ; d8
 1769: dw $11f5  ; d9
 176b: dw $1206  ; da
 176d: dw $1219  ; db
 176f: dw $1234  ; dc
 1771: dw $1255  ; dd
-1773: dw $125b  ; de
+1773: dw $125b  ; de - set instrument
 1775: dw $104d  ; df
 1777: dw $128c  ; e0
 1779: dw $1036  ; e1
