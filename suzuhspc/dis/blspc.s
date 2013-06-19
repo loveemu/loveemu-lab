@@ -2688,7 +2688,7 @@
 16dd: dw $122d  ; de - set instrument
 16df: dw $1026  ; df
 16e1: dw $125e  ; e0
-16e3: dw $100f  ; e1
+16e3: dw $100f  ; e1 - octave up (duplicated)
 16e5: dw $126d  ; e2
 16e7: dw $127f  ; e3
 16e9: dw $1291  ; e4
@@ -2697,8 +2697,8 @@
 16ef: dw $1331  ; e7
 16f1: dw $1340  ; e8
 16f3: dw $1380  ; e9
-16f5: dw $100f  ; ea
-16f7: dw $100f  ; eb
+16f5: dw $100f  ; ea - octave up (duplicated)
+16f7: dw $100f  ; eb - octave up (duplicated)
 16f9: dw $139c  ; ec
 16fb: dw $13ac  ; ed
 16fd: dw $13e7  ; ee
@@ -2715,8 +2715,8 @@
 1713: dw $1473  ; f9
 1715: dw $1478  ; fa
 1717: dw $1485  ; fb
-1719: dw $100f  ; fc
-171b: dw $100f  ; fd
+1719: dw $100f  ; fc - octave up (duplicated)
+171b: dw $100f  ; fd - octave up (duplicated)
 171d: dw $14a4  ; fe
 171f: dw $14a4  ; ff
 

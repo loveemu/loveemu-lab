@@ -16,7 +16,7 @@
 
 #define APPNAME "Square SUZUKI Hidenori SPC2MIDI"
 #define APPSHORTNAME "suzuhspc"
-#define VERSION "[2013-06-18]"
+#define VERSION "[2013-06-19]"
 
 static int suzuhSpcLoopMax = 2;            // maximum loop count of parser
 static int suzuhSpcTextLoopMax = 1;        // maximum loop count of text output
@@ -68,6 +68,7 @@ typedef struct TagSuzuhSpcVerInfo {
     int seqHeaderAddr;
     int vcmdTableAddr;
     int vcmdLenTableAddr;
+    int sfxBaseAddr;
     SuzuhSpcEvent event[256];
     PatchFixInfo patchFix[256];
     bool seqDetected;
@@ -105,7 +106,9 @@ struct TagSuzuhSpcTrackStat {
     bool rhythmChannel;     // rhythm channel / melody channel
     int volume;             // current volume (used for fade control)
     int panpot;             // current panpot (used for fade control)
-    int loopPointAddr;          // song loop point (0=no loop)
+    int loopPointAddr;      // song loop point (0=no loop)
+    int sfxReturnAddr;      // sfx return address (0=not used)
+    int transpose;          // per-voice transpose (4=semitone +1)
 };
 
 struct TagSuzuhSpcSeqStat {
@@ -117,6 +120,7 @@ struct TagSuzuhSpcSeqStat {
     int tempo;                  // tempo (bpm)
     int transpose;              // global transpose
     int looped;                 // how many times the song looped (internal)
+    int noiseFreqReg;       // noise clock reg value
     bool active;                // if the seq is still active
     SuzuhSpcVerInfo ver;        // game version info
     SuzuhSpcTrackStat track[SPC_TRACK_MAX]; // status of each tracks
@@ -232,16 +236,17 @@ static void suzuhSpcResetTrackParam (SuzuhSpcSeqStat *seq, int track)
     tr->prevTick = tr->tick;
     tr->looped = 0;
     tr->octave = 6;
-    tr->note.transpose = 0;
+    tr->transpose = 0;
     tr->lastNote.active = false;
     tr->lastNoteLen = 0;
     tr->patch = 0;
-    tr->volume = 0x46; // TODO
-    tr->panpot = 0x80; // TODO
+    tr->volume = 0x3c;
+    tr->panpot = 0x80;
     tr->rhythmChannel = false;
     tr->repNestLevel = 0;
-    tr->repNestLevelMax = 4;
+    tr->repNestLevelMax = 0xff; // I don't really care
     tr->loopPointAddr = 0;
+    tr->sfxReturnAddr = 0;
 }
 
 /** reset before play/convert song. */
@@ -255,6 +260,7 @@ static void suzuhSpcResetParam (SuzuhSpcSeqStat *seq)
     seq->tempo = 0x81; // I dunno
     seq->transpose = 0;
     seq->looped = 0;
+    seq->noiseFreqReg = 0;
     seq->active = true;
 
     // reset each track as well
@@ -288,6 +294,7 @@ static int suzuhSpcCheckVer (SuzuhSpcSeqStat *seq)
     int songLdCodeAddr = -1;
     int vcmdExecCodeAddr = -1;
     int vcmdLenLdCodeAddr = -1;
+    int sfxBaseLdCodeAddr = -1;
 
     seq->timebase = suzuhSpcTimeBase;
     //seq->ver.seqListAddr = -1;
@@ -295,6 +302,7 @@ static int suzuhSpcCheckVer (SuzuhSpcSeqStat *seq)
     seq->ver.seqHeaderAddr = -1;
     seq->ver.vcmdTableAddr = -1;
     seq->ver.vcmdLenTableAddr = -1;
+    seq->ver.sfxBaseAddr = -1;
     seq->ver.seqDetected = false;
 
     // (Seiken Densetsu 3)
@@ -402,9 +410,25 @@ static int suzuhSpcCheckVer (SuzuhSpcSeqStat *seq)
         }
     }
 
+    // (Seiken Densetsu 3)
+    // mov   y,#$04
+    // mul   ya
+    // push  a
+    // mov   a,y
+    // clrc
+    // adc   a,#$40
+    // mov   y,a
+    // pop   a
+    // ret
+    if ((sfxBaseLdCodeAddr = indexOfHexPat(seq->aRAM, "\x8d\x04\xcf\x2d\xdd\x60\x88.\xfd\xae\x6f", SPC_ARAM_SIZE, NULL)) != -1)
+    {
+        seq->ver.sfxBaseAddr = seq->aRAM[sfxBaseLdCodeAddr + 7] << 8;
+    }
+
     if (seq->ver.seqHeaderAddr == -1 ||
         seq->ver.vcmdTableAddr == -1 ||
-        seq->ver.vcmdLenTableAddr == -1)
+        seq->ver.vcmdLenTableAddr == -1 ||
+        seq->ver.sfxBaseAddr == -1)
     {
         version = SPC_VER_UNKNOWN;
     }
@@ -432,17 +456,26 @@ static bool suzuhSpcDetectSeq (SuzuhSpcSeqStat *seq)
         while (seq->aRAM[seqHeaderReadOfs] < 0x80)
         {
             seqHeaderReadOfs += 5;
+            if (seqHeaderReadOfs >= SPC_ARAM_SIZE)
+            {
+                return false;
+            }
         }
         seqHeaderReadOfs++;
     }
 
     // track list
+    result = false;
     for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
         int trackAddr = mget2l(&seq->aRAM[seqHeaderReadOfs]);
         seqHeaderReadOfs += 2;
 
-        seq->track[tr].pos = trackAddr;
-        seq->track[tr].active = true;
+        if (trackAddr != 0)
+        {
+            seq->track[tr].pos = trackAddr;
+            seq->track[tr].active = true;
+            result = true;
+        }
     }
 
     return result;
@@ -507,6 +540,7 @@ static void printHtmlInfoList (SuzuhSpcSeqStat *seq)
     myprintf("</li>\n");
     myprintf("          <li>Voice Command Table: $%04X</li>", seq->ver.vcmdTableAddr);
     myprintf("          <li>Voice Command Length Table: $%04X</li>", seq->ver.vcmdLenTableAddr);
+    myprintf("          <li>SFX Base Address: $%04X</li>", seq->ver.sfxBaseAddr);
 }
 
 /** output seq info list detail for valid seq. */
@@ -964,7 +998,7 @@ static void suzuhSpcEventNote (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
         strcat(ev->classStr, " ev-tie");
     }
     else {
-        getNoteName(ev->note, note + seq->transpose + tr->note.transpose
+        getNoteName(ev->note, note + seq->transpose + (tr->transpose / 4)
             + seq->ver.patchFix[tr->note.patch].key
             + (tr->rhythmChannel ? 0 : SPC_NOTE_KEYSHIFT));
         sprintf(argDumpStr, ", len = %d", len);
@@ -991,7 +1025,7 @@ static void suzuhSpcEventNote (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
             tr->lastNote.dur = dur;
             tr->lastNote.key = note;
             tr->lastNote.vel = 100;
-            tr->lastNote.transpose = seq->transpose + tr->note.transpose;
+            tr->lastNote.transpose = seq->transpose + (tr->transpose / 4);
             tr->lastNote.patch = tr->note.patch;
             tr->lastNote.active = true;
         }
@@ -1039,26 +1073,179 @@ static void suzuhSpcEventSetOctave (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
     tr->octave = arg1;
 }
 
+/** vcmd c8: set noise clock. */
+static void suzuhSpcEventNoiseFreq (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size += 1;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    seq->noiseFreqReg = arg1 & 0x1f;
+
+    sprintf(ev->note, "Set Noise Frequency, NCK = %d", seq->noiseFreqReg);
+    strcat(ev->classStr, " ev-noisefreq");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd c9: noise on. */
+static void suzuhSpcEventNoiseOn (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Noise On");
+    strcat(ev->classStr, " ev-noiseon");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd ca: noise off. */
+static void suzuhSpcEventNoiseOff (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Noise Off");
+    strcat(ev->classStr, " ev-noiseoff");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd cb: pitchmod on. */
+static void suzuhSpcEventPitchModOn (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Pitch Mod On");
+    strcat(ev->classStr, " ev-pitchmodon");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd cc: pitchmod off. */
+static void suzuhSpcEventPitchModOff (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Pitch Mod Off");
+    strcat(ev->classStr, " ev-pitchmodoff");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd cd: jump to SFX (lo). */
+static void suzuhSpcEventJumpToSFXLo (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+    int dest;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    dest = seq->ver.sfxBaseAddr + (arg1 * 4);
+
+    sprintf(ev->note, "Jump to SFX (Lo), index = %d, dest = $%04X", arg1, dest);
+    strcat(ev->classStr, " ev-jumpsfx");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    *p = dest;
+}
+
+/** vcmd ce: jump to SFX (hi). */
+static void suzuhSpcEventJumpToSFXHi (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+    int dest;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    dest = seq->ver.sfxBaseAddr + 2 + (arg1 * 4);
+
+    sprintf(ev->note, "Jump to SFX (Hi), index = %d, dest = $%04X", arg1, dest);
+    strcat(ev->classStr, " ev-jumpsfx");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    *p = dest;
+}
+
+/** vcmd cf: detune. */
+static void suzuhSpcEventDetune (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    //int midiScaled;
+
+    ev->size++;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    sprintf(ev->note, "Tuning, key += %.1f cents?", arg1 * 100 / 16.0);
+    strcat(ev->classStr, " ev-tuning");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    //midiScaled = arg1 * 64 / 16;
+    //if (midiScaled >= -64 && midiScaled <= 64)
+    //{
+    //    if (midiScaled == 64)
+    //    {
+    //        midiScaled = 63; // just a hack!
+    //    }
+    //    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNM, 0);
+    //    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNL, 1);
+    //    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_DATAENTRYM, 64 + midiScaled);
+    //    //smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_DATAENTRYL, 0);
+    //}
+}
+
 /** vcmd d0: song repeat / end of track. */
 static void suzuhSpcEventEndOfTrack (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
 {
     SuzuhSpcTrackStat *tr = &seq->track[ev->track];
     int *p = &seq->track[ev->track].pos;
 
-    if ((tr->loopPointAddr & 0xff00) == 0)
+    if ((tr->loopPointAddr & 0xff00) != 0)
+    {
+        sprintf(ev->note, "Jump To Loop Point, dest = $%04X", tr->loopPointAddr);
+        strcat(ev->classStr, " ev-loop");
+
+        suzuhSpcAddTrackLoopCount(seq, ev->track, 1);
+        *p = tr->loopPointAddr;
+    }
+    else if ((tr->sfxReturnAddr & 0xff00) != 0)
+    {
+        sprintf(ev->note, "Return From SFX, dest = $%04X", tr->sfxReturnAddr);
+        strcat(ev->classStr, " ev-ret");
+
+        *p = tr->sfxReturnAddr;
+        tr->sfxReturnAddr = 0;
+    }
+    else
     {
         sprintf(ev->note, "End of Track");
         strcat(ev->classStr, " ev-end");
 
         suzuhSpcInactiveTrack(seq, ev->track);
-    }
-    else
-    {
-        sprintf(ev->note, "Jump to Loop Point, dest = $%04X", tr->loopPointAddr);
-        strcat(ev->classStr, " ev-loop");
-
-        suzuhSpcAddTrackLoopCount(seq, ev->track, 1);
-        *p = tr->loopPointAddr;
     }
 
     //if (!suzuhSpcLessTextInSMF)
@@ -1082,6 +1269,55 @@ static void suzuhSpcEventSetTempo (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
     strcat(ev->classStr, " ev-tempo");
 
     smfInsertTempoBPM(seq->smf, ev->tick, 0, suzuhSpcTempo(seq));
+}
+
+/** vcmd f2: change tempo. */
+static void suzuhSpcEventAddTempo (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    seq->tempo = (seq->tempo + arg1) & 0xff;
+
+    sprintf(ev->note, "Add/Subtract Tempo, tempo = %.1f", suzuhSpcTempo(seq));
+    strcat(ev->classStr, " ev-tempo");
+
+    smfInsertTempoBPM(seq->smf, ev->tick, 0, suzuhSpcTempo(seq));
+}
+
+/** vcmd d2: set timer1 freq. */
+static void suzuhSpcEventSetTimer1Freq (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Set Timer 1 Frequency, freq = %.2f ms", 0.125 * arg1);
+    strcat(ev->classStr, " ev-timer1freq");
+}
+
+/** vcmd d3: change timer1 freq. */
+static void suzuhSpcEventAddTimer1Freq (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    sprintf(ev->note, "Add/Subtract Timer 1 Frequency, freq += %.2f ms", 0.125 * arg1);
+    strcat(ev->classStr, " ev-timer1freq");
 }
 
 /** vcmd d4: loop start. */
@@ -1119,8 +1355,8 @@ static void suzuhSpcEventLoopStart (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
     tr->repOctave[tr->repNestLevel] = tr->octave;
     tr->repNestLevel++;
 
-    if (!suzuhSpcLessTextInSMF)
-        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+    //if (!suzuhSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmd d5: loop end. */
@@ -1165,8 +1401,8 @@ static void suzuhSpcEventLoopEnd (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
         *p = tr->repHeadAddr[nestIndex];
     }
 
-    if (!suzuhSpcLessTextInSMF)
-        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+    //if (!suzuhSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmd d6: loop break. */
@@ -1198,8 +1434,8 @@ static void suzuhSpcEventLoopBreak (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
         tr->repNestLevel = nestIndex;
     }
 
-    if (!suzuhSpcLessTextInSMF)
-        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+    //if (!suzuhSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmd d7: set loop point. */
@@ -1215,6 +1451,109 @@ static void suzuhSpcEventSetLoopPoint (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
 
     //if (!suzuhSpcLessTextInSMF)
     //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd d8: set default ADSR. */
+static void suzuhSpcEventSetDefaultADSR (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    sprintf(ev->note, "Set Default ADSR");
+    strcat(ev->classStr, " ev-setdefaultADSR");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd d9: set attack rate (AR). */
+static void suzuhSpcEventSetAR (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Set Attack Rate, AR = %d", arg1 & 15);
+    strcat(ev->classStr, " ev-setAR");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd da: set decay rate (DR). */
+static void suzuhSpcEventSetDR (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Set Decay Rate, DR = %d", arg1 & 7);
+    strcat(ev->classStr, " ev-setDR");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd db: set sustain level (SL). */
+static void suzuhSpcEventSetSL (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Set Sustain Level, SL = %d", arg1 & 7);
+    strcat(ev->classStr, " ev-setSL");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd dc: set sustain rate (SR). */
+static void suzuhSpcEventSetSR (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Set Sustain Rate, SR = %d", arg1 & 31);
+    strcat(ev->classStr, " ev-setSR");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd dd: set duration rate. */
+static void suzuhSpcEventDurationRate (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Set Duration Rate, rate = %d", arg1);
+    strcat(ev->classStr, " ev-durrate");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmd de: set instrument. */
@@ -1235,6 +1574,545 @@ static void suzuhSpcEventInstrument (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
 
     sprintf(ev->note, "Set Instrument, patch = %d", arg1);
     strcat(ev->classStr, " ev-patch");
+}
+
+/** vcmd df: change noise clock. */
+static void suzuhSpcEventAddNoiseFreq (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size += 1;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    seq->noiseFreqReg = (seq->noiseFreqReg + arg1) & 0x1f;
+
+    sprintf(ev->note, "Add/Subtract Noise Frequency, NCK = %d", seq->noiseFreqReg);
+    strcat(ev->classStr, " ev-noisefreq");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd e0: set volume. */
+static void suzuhSpcEventVolume (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Volume, vol = %d", arg1);
+    strcat(ev->classStr, " ev-vol");
+
+    //if (!suzuhSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    tr->volume = arg1;
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_VOLUME, suzuhSpcMidiVolOf(tr->volume));
+}
+
+/** vcmd e3: change volume. */
+static void suzuhSpcEventAddVolume (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    tr->volume = (tr->volume + arg1) & 0x7f;
+
+    sprintf(ev->note, "Add/Subtract Volume, vol = %d", tr->volume);
+    strcat(ev->classStr, " ev-vol");
+
+    //if (!suzuhSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_VOLUME, suzuhSpcMidiVolOf(tr->volume));
+}
+
+/** vcmd e4: set volume fade. */
+static void suzuhSpcEventVolumeFade (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    int *p = &seq->track[ev->track].pos;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+    int valueFrom, valueTo;
+    int faderStep, faderValue;
+    double faderPos;
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Volume Fade, speed = %d, vol = %d", arg1, arg2);
+    strcat(ev->classStr, " ev-vol");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    // lazy fader, hope it won't be canceled by other vcmds
+    // (for instance, Chrono Trigger Title)
+    if (arg1 == 0)
+    {
+        tr->volume = arg2;
+        smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_VOLUME, suzuhSpcMidiVolOf(tr->volume));
+    }
+    else
+    {
+        valueFrom = tr->volume;
+        valueTo = arg2;
+        for (faderStep = 1; faderStep <= arg1; faderStep++)
+        {
+            faderPos = (double)faderStep / arg1;
+            faderValue = (int)(valueTo * faderPos + valueFrom * (1.0 - faderPos)); // alphablend
+            if (tr->volume != faderValue)
+            {
+                tr->volume = faderValue;
+                smfInsertControl(seq->smf, ev->tick + faderStep, ev->track, ev->track, SMF_CONTROL_VOLUME, suzuhSpcMidiVolOf(tr->volume));
+            }
+        }
+    }
+}
+
+/** vcmd e5: portamento. */
+static void suzuhSpcEventPortamento (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    int *p = &seq->track[ev->track].pos;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Portamento, arg1 = %d, arg2 = %d", arg1, arg2);
+    strcat(ev->classStr, " ev-portamento");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd e6: portamento toggle. */
+static void suzuhSpcEventPortamentoToggle (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int *p = &seq->track[ev->track].pos;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Portamento Toggle");
+    strcat(ev->classStr, " ev-portamento");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd e7: set panpot. */
+static void suzuhSpcEventPanpot (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Panpot, balance = %d", arg1);
+    strcat(ev->classStr, " ev-pan");
+
+    //if (!suzuhSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    tr->panpot = arg1;
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_PANPOT, suzuhSpcMidiPanOf(tr->panpot));
+}
+
+/** vcmd e8: set panpot fade. */
+static void suzuhSpcEventPanpotFade (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    int *p = &seq->track[ev->track].pos;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+    int valueFrom, valueTo;
+    int faderStep, faderValue;
+    double faderPos;
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Panpot Fade, speed = %d, vol = %d", arg1, arg2);
+    strcat(ev->classStr, " ev-pan");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    // lazy fader, hope it won't be canceled by other vcmds
+    if (arg1 == 0)
+    {
+        tr->panpot = arg2;
+        smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_PANPOT, suzuhSpcMidiPanOf(tr->panpot));
+    }
+    else
+    {
+        valueFrom = tr->panpot;
+        valueTo = arg2;
+        for (faderStep = 1; faderStep <= arg1; faderStep++)
+        {
+            faderPos = (double)faderStep / arg1;
+            faderValue = (int)(valueTo * faderPos + valueFrom * (1.0 - faderPos)); // alphablend
+            if (tr->panpot != faderValue)
+            {
+                tr->panpot = faderValue;
+                smfInsertControl(seq->smf, ev->tick + faderStep, ev->track, ev->track, SMF_CONTROL_PANPOT, suzuhSpcMidiPanOf(tr->panpot));
+            }
+        }
+    }
+}
+
+/** vcmd e9: set panpot LFO on. */
+static void suzuhSpcEventPanLFOOn (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    int *p = &seq->track[ev->track].pos;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Panpot LFO, depth = %d, rate = %d", arg1, arg2);
+    strcat(ev->classStr, " ev-panLFO");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd ea: restart panpot LFO. */
+static void suzuhSpcEventPanLFORestart (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int *p = &seq->track[ev->track].pos;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Panpot LFO Restart");
+    strcat(ev->classStr, " ev-panLFOrestart");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd eb: set panpot LFO off. */
+static void suzuhSpcEventPanLFOOff (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int *p = &seq->track[ev->track].pos;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Panpot LFO Off");
+    strcat(ev->classStr, " ev-panLFOoff");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd ec: transpose (absolute). */
+static void suzuhSpcEventTransposeAbs (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+    int oldTranspose = tr->transpose;
+
+    ev->size++;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    tr->transpose = arg1;
+
+    sprintf(ev->note, "Transpose, key = %d/4", arg1);
+    strcat(ev->classStr, " ev-transpose");
+
+    if (oldTranspose % 4 != 0 || tr->transpose % 4 != 0)
+    {
+        if (!suzuhSpcLessTextInSMF)
+            smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+    }
+}
+
+/** vcmd ed: transpose (relative). */
+static void suzuhSpcEventTransposeRel (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+    int oldTranspose = tr->transpose;
+
+    ev->size++;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    tr->transpose += arg1;
+
+    sprintf(ev->note, "Transpose, key += %d/4", arg1);
+    strcat(ev->classStr, " ev-transpose");
+
+    if (oldTranspose % 4 != 0 || tr->transpose % 4 != 0)
+    {
+        if (!suzuhSpcLessTextInSMF)
+            smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+    }
+}
+
+/** vcmd ee: rhythm channel on. */
+static void suzuhSpcEventRhythmOn (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+
+    strcpy(ev->note, "Rhythm Channel On");
+    strcat(ev->classStr, " ev-rhythmon");
+    tr->rhythmChannel = true;
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    // put program change to SMF (better than nothing)
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_BANKSELM, seq->ver.patchFix[255].bankSelM);
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_BANKSELL, seq->ver.patchFix[255].bankSelL);
+    smfInsertProgram(seq->smf, ev->tick, ev->track, ev->track, seq->ver.patchFix[255].patchNo);
+}
+
+/** vcmd ef: rhythm channel off. */
+static void suzuhSpcEventRhythmOff (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+
+    strcpy(ev->note, "Rhythm Channel Off");
+    strcat(ev->classStr, " ev-rhythmoff");
+    tr->rhythmChannel = false;
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd f0: set vibrato on. */
+static void suzuhSpcEventVibratoOn (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    int *p = &seq->track[ev->track].pos;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Vibrato, rate = %d, depth = %d", arg1, arg2);
+    strcat(ev->classStr, " ev-vibrato");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd f1: set vibrato on (w/delay). */
+static void suzuhSpcEventVibratoOnWithDelay (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2, arg3;
+    int *p = &seq->track[ev->track].pos;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size += 3;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+    arg3 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Vibrato, rate = %d, depth = %d, delay = %d", arg1, arg2, arg3);
+    strcat(ev->classStr, " ev-vibrato");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd f3: set vibrato off. */
+static void suzuhSpcEventVibratoOff (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int *p = &seq->track[ev->track].pos;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Vibrato Off");
+    strcat(ev->classStr, " ev-vibratooff");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd f4: set tremolo on. */
+static void suzuhSpcEventTremoloOn (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    int *p = &seq->track[ev->track].pos;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Tremolo, rate = %d, depth = %d", arg1, arg2);
+    strcat(ev->classStr, " ev-tremolo");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd f5: set tremolo on (w/delay). */
+static void suzuhSpcEventTremoloOnWithDelay (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2, arg3;
+    int *p = &seq->track[ev->track].pos;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size += 3;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+    arg3 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Tremolo, rate = %d, depth = %d, delay = %d", arg1, arg2, arg3);
+    strcat(ev->classStr, " ev-tremolo");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd f7: set tremolo off. */
+static void suzuhSpcEventTremoloOff (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int *p = &seq->track[ev->track].pos;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Tremolo Off");
+    strcat(ev->classStr, " ev-tremolooff");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd f8: slur on. */
+static void suzuhSpcEventSlurOn (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Slur On");
+    strcat(ev->classStr, " ev-sluron");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd f9: slur off. */
+static void suzuhSpcEventSlurOff (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Slur Off");
+    strcat(ev->classStr, " ev-sluroff");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd fa: echo on. */
+static void suzuhSpcEventEchoOn (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Echo On");
+    strcat(ev->classStr, " ev-echoon");
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_REVERB, 100);
+}
+
+/** vcmd fb: echo off. */
+static void suzuhSpcEventEchoOff (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Echo Off");
+    strcat(ev->classStr, " ev-echooff");
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_REVERB, 100);
+}
+
+/** vcmd fc: call SFX (lo). */
+static void suzuhSpcEventCallSFXLo (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+    int dest;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    dest = seq->ver.sfxBaseAddr + (arg1 * 4);
+
+    sprintf(ev->note, "Call SFX (Lo), index = %d, dest = $%04X", arg1, dest);
+    strcat(ev->classStr, " ev-jumpsfx");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    tr->sfxReturnAddr = *p;
+    *p = dest;
+}
+
+/** vcmd fd: call SFX (hi). */
+static void suzuhSpcEventCallSFXHi (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    SuzuhSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+    int dest;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    dest = seq->ver.sfxBaseAddr + 2 + (arg1 * 4);
+
+    sprintf(ev->note, "Call SFX (Hi), index = %d, dest = $%04X", arg1, dest);
+    strcat(ev->classStr, " ev-jumpsfx");
+
+    if (!suzuhSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    tr->sfxReturnAddr = *p;
+    *p = dest;
 }
 
 /** set pointers of each event. */
@@ -1259,18 +2137,100 @@ static void suzuhSpcSetEventList (SuzuhSpcSeqStat *seq)
     event[0xc4] = suzuhSpcEventOctaveUp;
     event[0xc5] = suzuhSpcEventOctaveDown;
     event[0xc6] = suzuhSpcEventSetOctave;
+    event[0xc7] = suzuhSpcEventNOP;
+    event[0xc8] = suzuhSpcEventNoiseFreq;
+    event[0xc9] = suzuhSpcEventNoiseOn;
+    event[0xca] = suzuhSpcEventNoiseOff;
+    event[0xcb] = suzuhSpcEventPitchModOn;
+    event[0xcc] = suzuhSpcEventPitchModOff;
+    event[0xcd] = suzuhSpcEventJumpToSFXLo;
+    event[0xce] = suzuhSpcEventJumpToSFXHi;
+    event[0xcf] = suzuhSpcEventDetune;
     event[0xd0] = suzuhSpcEventEndOfTrack;
     event[0xd1] = suzuhSpcEventSetTempo;
     if (seq->ver.id == SPC_VER_REV1)
     {
-        event[0xd2] = suzuhSpcEventLoopStart;
-        event[0xd3] = suzuhSpcEventLoopStart;
+        //event[0xd2] = suzuhSpcEventLoopStart;
+        //event[0xd3] = suzuhSpcEventLoopStart;
+    }
+    else
+    {
+        event[0xd2] = suzuhSpcEventSetTimer1Freq;
+        event[0xd3] = suzuhSpcEventAddTimer1Freq;
     }
     event[0xd4] = suzuhSpcEventLoopStart;
     event[0xd5] = suzuhSpcEventLoopEnd;
     event[0xd6] = suzuhSpcEventLoopBreak;
     event[0xd7] = suzuhSpcEventSetLoopPoint;
+    event[0xd8] = suzuhSpcEventSetDefaultADSR;
+    event[0xd9] = suzuhSpcEventSetAR;
+    event[0xda] = suzuhSpcEventSetDR;
+    event[0xdb] = suzuhSpcEventSetSL;
+    event[0xdc] = suzuhSpcEventSetSR;
+    event[0xdd] = suzuhSpcEventDurationRate;
     event[0xde] = suzuhSpcEventInstrument;
+    event[0xdf] = suzuhSpcEventAddNoiseFreq;
+    event[0xe0] = suzuhSpcEventVolume;
+    event[0xe1] = suzuhSpcEventUnidentified;
+    event[0xe2] = suzuhSpcEventVolume; // duplicated
+    event[0xe3] = suzuhSpcEventAddVolume;
+    event[0xe4] = suzuhSpcEventVolumeFade;
+    event[0xe5] = suzuhSpcEventPortamento;
+    event[0xe6] = suzuhSpcEventPortamentoToggle;
+    event[0xe7] = suzuhSpcEventPanpot;
+    event[0xe8] = suzuhSpcEventPanpotFade;
+    event[0xe9] = suzuhSpcEventPanLFOOn;
+    event[0xea] = suzuhSpcEventPanLFORestart;
+    event[0xeb] = suzuhSpcEventPanLFOOff;
+    event[0xec] = suzuhSpcEventTransposeAbs;
+    event[0xed] = suzuhSpcEventTransposeRel;
+    event[0xee] = suzuhSpcEventRhythmOn;
+    event[0xef] = suzuhSpcEventRhythmOff;
+    event[0xf0] = suzuhSpcEventVibratoOn;
+    event[0xf1] = suzuhSpcEventVibratoOnWithDelay;
+    event[0xf2] = suzuhSpcEventAddTempo;
+    event[0xf3] = suzuhSpcEventVibratoOff;
+    event[0xf4] = suzuhSpcEventTremoloOn;
+    event[0xf5] = suzuhSpcEventTremoloOnWithDelay;
+    if (seq->ver.id == SPC_VER_REV1)
+    {
+        //event[0xf6] = suzuhSpcEventOctaveUp; // duplicated
+    }
+    else
+    {
+        event[0xf6] = suzuhSpcEventUnknown1;
+    }
+    event[0xf7] = suzuhSpcEventTremoloOff;
+    event[0xf8] = suzuhSpcEventSlurOn;
+    event[0xf9] = suzuhSpcEventSlurOff;
+    event[0xfa] = suzuhSpcEventEchoOn;
+    event[0xfb] = suzuhSpcEventEchoOff;
+    if (seq->ver.id == SPC_VER_REV1)
+    {
+        event[0xfc] = suzuhSpcEventCallSFXLo;
+        event[0xfd] = suzuhSpcEventCallSFXHi;
+        //event[0xfe] = suzuhSpcEventOctaveUp; // duplicated
+        //event[0xff] = suzuhSpcEventOctaveUp; // duplicated
+    }
+    else
+    {
+        if (seq->aRAM[seq->ver.vcmdLenTableAddr + (0xfc - 0xc4)] == 4)
+        {
+            // Super Mario RPG
+            event[0xfc] = suzuhSpcEventUnknown3;
+            //event[0xfd] = suzuhSpcEventOctaveUp; // duplicated
+            event[0xfe] = suzuhSpcEventUnknown0;
+            //event[0xff] = suzuhSpcEventOctaveUp; // duplicated
+        }
+        else
+        {
+            // Bahamut Lagoon
+            //event[0xfc] = suzuhSpcEventOctaveUp; // duplicated
+            //event[0xfd] = suzuhSpcEventOctaveUp; // duplicated
+            event[0xfe] = suzuhSpcEventUnknown0;
+            event[0xff] = suzuhSpcEventUnknown0;
+        }
+    }
 
     if (needsAutoEventAssign)
     {
@@ -1283,14 +2243,21 @@ static void suzuhSpcSetEventList (SuzuhSpcSeqStat *seq)
             int vcmdAddr = mget2l(&seq->aRAM[seq->ver.vcmdTableAddr + ((vcmdIndex - vcmdFirst) * 2)]);
             if (event[vcmdIndex] == suzuhSpcEventUnidentified)
             {
-                int len = seq->aRAM[seq->ver.vcmdLenTableAddr + vcmdIndex - vcmdFirst];
-                switch(len) // &7
+                if (vcmdAddr == 0)
                 {
-                    case 1: event[vcmdIndex] = suzuhSpcEventUnknown0; break;
-                    case 2: event[vcmdIndex] = suzuhSpcEventUnknown1; break;
-                    case 3: event[vcmdIndex] = suzuhSpcEventUnknown2; break;
-                    case 4: event[vcmdIndex] = suzuhSpcEventUnknown3; break;
-                    case 5: event[vcmdIndex] = suzuhSpcEventUnknown4; break;
+                    event[vcmdIndex] = suzuhSpcEventUnidentified;
+                }
+                else
+                {
+                    int len = seq->aRAM[seq->ver.vcmdLenTableAddr + vcmdIndex - vcmdFirst];
+                    switch(len) // &7
+                    {
+                        case 1: event[vcmdIndex] = suzuhSpcEventUnknown0; break;
+                        case 2: event[vcmdIndex] = suzuhSpcEventUnknown1; break;
+                        case 3: event[vcmdIndex] = suzuhSpcEventUnknown2; break;
+                        case 4: event[vcmdIndex] = suzuhSpcEventUnknown3; break;
+                        case 5: event[vcmdIndex] = suzuhSpcEventUnknown4; break;
+                    }
                 }
             }
         }
