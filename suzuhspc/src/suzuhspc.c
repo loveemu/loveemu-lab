@@ -16,7 +16,7 @@
 
 #define APPNAME "Square SUZUKI Hidenori SPC2MIDI"
 #define APPSHORTNAME "suzuhspc"
-#define VERSION "[2013-06-19]"
+#define VERSION "[2013-06-20]"
 
 static int suzuhSpcLoopMax = 2;            // maximum loop count of parser
 static int suzuhSpcTextLoopMax = 1;        // maximum loop count of text output
@@ -970,8 +970,8 @@ static void suzuhSpcEventNote (SuzuhSpcSeqStat *seq, SeqEventReport *ev)
     bool tie;
     const int noteLenTable[] = { 0xc0, 0x90, 0x60, 0x48, 0x30, 0x24, 0x20, 0x18, 0x10, 0x0c, 0x08, 0x06, 0x03 };
 
-    tie = (keyIndex == 12);
-    rest = (keyIndex == 13);
+    rest = (keyIndex == 12);
+    tie = (keyIndex == 13);
 
     if (lenIndex == 13)
     {
