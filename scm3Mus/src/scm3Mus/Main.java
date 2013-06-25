@@ -8,9 +8,13 @@ import java.io.RandomAccessFile;
 import java.util.Arrays;
 import java.util.LinkedList;
 
+import javax.sound.midi.InvalidMidiDataException;
+import javax.sound.midi.MidiSystem;
+import javax.sound.midi.Sequence;
+
 /**
  * SCM3LT to MIDI converter by loveemu
- * Original source (c) 2012 by Bregalad
+ * Based on GbaMusRiper source (c) 2012 by Bregalad
  * This is free and open source software
  */
 
@@ -21,7 +25,7 @@ public class Main
     //Output MIDI file
     static DataOutputStream outMID;
     //Input ROM file
-    static RandomAccessFile inGBA;
+    static RandomAccessFile inROM;
 
     //Offset of MCM music archive data in ROM
     static int mcm_offset;
@@ -55,7 +59,10 @@ public class Main
     //Which sound engine version is used
     static SCM3LT engine_ver;
     //Output midi stream
-    static MIDI midi;
+    static Sequence midi;
+
+    //Current tick
+    static long midiTick;
 
     public static void main(String[] args) throws Exception
     {
@@ -64,8 +71,8 @@ public class Main
         parseArguments(args);
 
         byte[] signature = new byte[4];
-        inGBA.seek(mcm_offset);
-        inGBA.read(signature);
+        inROM.seek(mcm_offset);
+        inROM.read(signature);
         if (!Arrays.equals(signature, MCM_SIGNATURE))
         {
             System.out.println(String.format("Invalid MCM signature at %1$08x", mcm_offset));
@@ -75,13 +82,13 @@ public class Main
         int numHdrTables;
         System.out.println();
         System.out.println(String.format("MCM Header Start at %1$08x", mcm_offset));
-        System.out.println(String.format("0004: %1$d", Integer.reverseBytes(inGBA.readInt())));
-        System.out.println(String.format("0008: %1$d", Integer.reverseBytes(inGBA.readInt())));
-        numHdrTables = Integer.reverseBytes(inGBA.readInt());
+        System.out.println(String.format("0004: %1$d", Integer.reverseBytes(inROM.readInt())));
+        System.out.println(String.format("0008: %1$d", Integer.reverseBytes(inROM.readInt())));
+        numHdrTables = Integer.reverseBytes(inROM.readInt());
         System.out.println(String.format("000c: %1$d", numHdrTables));
-        System.out.println(String.format("0010: %1$d", Integer.reverseBytes(inGBA.readInt())));
-        inGBA.skipBytes(4 * numHdrTables);
-        num_songs = Integer.reverseBytes(inGBA.readInt());
+        System.out.println(String.format("0010: %1$d", Integer.reverseBytes(inROM.readInt())));
+        inROM.skipBytes(4 * numHdrTables);
+        num_songs = Integer.reverseBytes(inROM.readInt());
         if (num_songs > 1024) // for safe
         {
             System.out.println(String.format("Too many songs - %1$d", num_songs));
@@ -91,7 +98,7 @@ public class Main
         for(int song=0; song < num_songs; song++)
         {
             int rom_offset = song_hdr_table_offset + 0x10 + (song * 0x60);
-            inGBA.seek(rom_offset);
+            inROM.seek(rom_offset);
 
             //Output MIDIs are in a new folder called "music"
             File dir = new File("music");
@@ -100,16 +107,21 @@ public class Main
             System.out.println();
             System.out.println("Converting song " + song + "...");
 
-            midi = new MIDI(24);
+            midi = new Sequence(Sequence.PPQ, 24);
+            for (int trackIndex = 0; trackIndex < SCM3LT.MAX_TRACK_COUNT; trackIndex++)
+            {
+                midi.createTrack();
+            }
 
-            midi.addMarker("Converted by Scm3Mus");
-            //GS reset
-            midi.addSysex(new byte[] {0x41, 0x10, 0x42, 0x12, 0x40, 0x00, 0x7f, 0x00, 0x41});
+            midi.getTracks()[0].add(MidiEventCreator.createSequenceNameEvent(0, "Converted by Scm3Mus"));
+            midi.getTracks()[0].add(MidiEventCreator.createGMResetEvent(0));
+            midi.getTracks()[0].add(MidiEventCreator.createGSResetEvent(0));
 
             //Exit if there is no song to be converted anymore
             if(!engine_ver.init()) break;
 
             //Reset counters
+            midiTick = 0;
             for(int i=0; i<counter.length; i++)
                 counter[i] = 0;
 
@@ -147,14 +159,14 @@ public class Main
                 continue;
             }
             System.out.println("Dump complete. Now outputing MIDI file...");
-            midi.write(outMID);
+            MidiSystem.write(midi, 1, outMID);
         }
         //Close files
-        inGBA.close();
+        inROM.close();
         System.out.println(" Done !");
     }
 
-    static boolean tick() throws IOException
+    static boolean tick() throws IOException, InvalidMidiDataException
     {
         //Process all tracks
         for(int track = 0; track<counter.length; track++)
@@ -187,10 +199,15 @@ public class Main
 
         //Add pending note ons after all events are processed
         while(!pending_note_on_key.isEmpty())
-            midi.addNoteOn(pending_note_on_chn.removeFirst(), pending_note_on_key.removeFirst(), pending_note_on_vel.removeFirst());
+        {
+            int channel = pending_note_on_chn.removeFirst().intValue();
+            int key = pending_note_on_key.removeFirst().intValue();
+            int vel = pending_note_on_vel.removeFirst().intValue();
+            midi.getTracks()[channel].add(MidiEventCreator.createNoteOnEvent(midiTick, channel, key, vel));
+        }
 
         //Increment MIDI time
-        midi.time_ctr++;
+        midiTick++;
         return true;
     }
 
@@ -217,7 +234,7 @@ public class Main
         //Open the input and output files
         try
         {
-            inGBA = new RandomAccessFile(args[1], "r");
+            inROM = new RandomAccessFile(args[1], "r");
         }
         catch(FileNotFoundException e)
         {

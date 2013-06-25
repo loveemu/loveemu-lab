@@ -4,12 +4,15 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.LinkedList;
 
+import javax.sound.midi.InvalidMidiDataException;
+import javax.sound.midi.Sequence;
+
 public class DC2 implements SCM3LT
 {
     final static int KEY_OFFSET = 15;
 
     RandomAccessFile inGBA;
-    MIDI midi;
+    Sequence midi;
     int[] track_ptr;
     int[] counter;
     boolean[] note_flag;
@@ -25,10 +28,10 @@ public class DC2 implements SCM3LT
     {
     }
 
-    public boolean init() throws IOException
+    public boolean init() throws IOException, InvalidMidiDataException
     {
         //Copy pointers from the main class
-        inGBA = Main.inGBA;
+        inGBA = Main.inROM;
         midi = Main.midi;
         track_ptr = Main.track_ptr = new int[MAX_TRACK_COUNT];
         counter = Main.counter = new int[MAX_TRACK_COUNT];
@@ -55,13 +58,14 @@ public class DC2 implements SCM3LT
         // Print pointers
         for(int i=0; i<MAX_TRACK_COUNT; i++)
         {
+            midi.getTracks()[i].add(MidiEventCreator.createTrackNameEvent(0, String.format("Track %1$d - %2$08x", i, Main.song_base_offset + track_ptr[i])));
             System.out.println(String.format("Track %1$d starts from %2$08x", i, Main.song_base_offset + track_ptr[i]));
         }
 
         return true;
     }
 
-    public void process_event(int track) throws IOException
+    public void process_event(int track) throws IOException, InvalidMidiDataException
     {
         int event_addr = track_ptr[track] + Main.song_base_offset;
 
@@ -88,7 +92,9 @@ public class DC2 implements SCM3LT
         {
             //End track command
             if(note_flag[track])
-                midi.addNoteOff(track, current_key[track], 0);
+            {
+                midi.getTracks()[track].add(MidiEventCreator.createNoteOffEvent(Main.midiTick, track, current_key[track]));
+            }
             track_completed[track] = true;
             return;
         }
@@ -98,14 +104,18 @@ public class DC2 implements SCM3LT
             {
                 // rest
                 if(note_flag[track])
-                    midi.addNoteOff(track, current_key[track], 0);
+                {
+                    midi.getTracks()[track].add(MidiEventCreator.createNoteOffEvent(Main.midiTick, track, current_key[track]));
+                }
                 note_flag[track] = false;
             }
             else
             {
                 // note
                 if(note_flag[track])
-                    midi.addNoteOff(track, current_key[track], 0);
+                {
+                    midi.getTracks()[track].add(MidiEventCreator.createNoteOffEvent(Main.midiTick, track, current_key[track]));
+                }
 
                 current_key[track] = command + KEY_OFFSET;
 
@@ -136,160 +146,194 @@ public class DC2 implements SCM3LT
             int arg4 = inGBA.read();
             int arg5 = inGBA.read();
             int arg6 = inGBA.read();
-            //track_ptr[track] += argTbl[command-0xc4]; // TODO
+            //track_ptr[track] += argTbl[command-0xc4]; // TODO: oplen table
             switch(command)
             {
                 case 0x80:
                     //simple volume change
-                    midi.addController(track, 7, arg1 * 4);
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createControlChangeEvent(Main.midiTick, track, 7, arg1 * 4));
                     track_ptr[track] += 1;
                     return;
 
                 case 0x81:
-                    midi.addMarker("event 81 (" + arg1 + ", " + arg2 + ")");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "event 81 (" + arg1 + ", " + arg2 + ")"));
                     track_ptr[track] += 2;
                     return;
 
                 case 0x82:
-                    midi.addMarker("event 82 (" + arg1 + ")");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "event 82 (" + arg1 + ")"));
                     track_ptr[track] += 1;
                     return;
 
                 case 0x83:
-                    midi.addMarker("event 83");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "event 83"));
                     return;
 
                 case 0x84:
-                    midi.addMarker("event 84");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "event 84"));
                     return;
 
                 case 0x85:
-                    midi.addMarker("event 85");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "event 85"));
                     return;
 
                 case 0x86:
-                    midi.addMarker("event 86");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "event 86"));
                     return;
 
                 case 0x87:
-                    midi.addTempoChange(arg1 * 1.18); // TODO: 1.18 is just a random value
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTempoEvent(Main.midiTick, arg1 * 1.18)); // TODO: tempo * 1.18 is just a random value
                     track_ptr[track] += 1;
                     return;
 
                 case 0x88:
-                    midi.addMarker("event 88 (" + arg1 + ")");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "event 88 (" + arg1 + ")"));
                     track_ptr[track] += 1;
                     return;
 
                 case 0x8c:
-                    midi.addMarker("event 8c");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "event 8c"));
                     return;
 
                 case 0x90:
-                    midi.addMarker("event 90 (" + arg1 + ", " + arg2 + ", " + arg3 + ", " + arg5 + ", " + arg6 + ")");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "event 90 (" + arg1 + ", " + arg2 + ", " + arg3 + ", " + arg5 + ", " + arg6 + ")"));
                     track_ptr[track] += 6;
                     return;
 
                 case 0x94:
-                    midi.addMarker("event 94 (" + arg1 + ", " + arg2 + ")");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "event 94 (" + arg1 + ", " + arg2 + ")"));
                     track_ptr[track] += 2;
                     return;
 
                 case 0x96:
-                    midi.addMarker("event 96 (" + arg1 + ")");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "event 96 (" + arg1 + ")"));
                     track_ptr[track] += 1;
                     return;
 
                 case 0x97:
-                    midi.addMarker("event 97 (" + arg1 + ")");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "event 97 (" + arg1 + ")"));
                     track_ptr[track] += 1;
                     return;
 
                 case 0x98:
-                    midi.addMarker("event 98");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "event 98"));
                     return;
 
                 case 0x99:
-                    midi.addMarker("event 99");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "event 99"));
                     return;
 
                 case 0x9a:
-                    midi.addMarker("event 9a");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "event 9a"));
                     return;
 
                 case 0xa0:
-                    midi.addMarker("event a0 (" + arg1 + ", " + arg2 + ", " + arg3 + ", " + arg4 + ")");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "event a0 (" + arg1 + ", " + arg2 + ", " + arg3 + ", " + arg4 + ")"));
                     track_ptr[track] += 4;
                     return;
 
                 case 0xa1:
-                    midi.addMarker("event a1 (" + arg1 + ", " + arg2 + ", " + arg3 + ", " + arg4 + ")");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "event a1 (" + arg1 + ", " + arg2 + ", " + arg3 + ", " + arg4 + ")"));
                     track_ptr[track] += 4;
                     return;
 
                 case 0xa5:
-                    midi.addMarker("event a5 (" + arg1 + ", " + arg2 + ")");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "event a5 (" + arg1 + ", " + arg2 + ")"));
                     track_ptr[track] += 2;
                     return;
 
                 case 0xa6:
-                    midi.addMarker("event a6 (" + arg1 + ", " + arg2 + ")");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "event a6 (" + arg1 + ", " + arg2 + ")"));
                     track_ptr[track] += 2;
                     return;
 
                 case 0xab:
-                    midi.addMarker("event ab");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "event ab"));
                     return;
 
                 case 0xc0:
-                    midi.addMarker("event c0 (" + arg1 + ")");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "repeat start (" + arg1 + ")"));
                     track_ptr[track] += 1;
                     return;
 
                 case 0xc1:
-                    midi.addMarker("event c1 (" + arg1 + ", " + arg2 + ")");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "repeat break (" + arg1 + ", " + arg2 + ")"));
                     track_ptr[track] += 2;
                     return;
 
                 case 0xc2:
-                    midi.addMarker("event c2 (" + arg1 + ", " + arg2 + ")");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "repeat end (" + arg1 + ", " + arg2 + ")"));
                     track_ptr[track] += 2;
                     return;
 
                 case 0xc8:
-                    midi.addMarker("event c8");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "event c8"));
                     return;
 
                 case 0xcf:
-                    midi.addMarker("Loop Start");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createMarkerEvent(Main.midiTick, "Loop"));
                     return;
 
                 case 0xf1:
-                    midi.addMarker("event f1 (" + arg1 + ")");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "event f1 (" + arg1 + ")"));
                     track_ptr[track] += 1;
                     return;
 
                 case 0xf2:
-                    midi.addMarker("event f2 (" + arg1 + ")");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "event f2 (" + arg1 + ")"));
                     track_ptr[track] += 1;
                     return;
 
                 case 0xf3:
-                    midi.addMarker("event f3 (" + arg1 + ", " + arg2 + ")");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "event f3 (" + arg1 + ", " + arg2 + ")"));
                     track_ptr[track] += 2;
                     return;
 
                 case 0xff:
-                    midi.addMarker("event ff");
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "event ff"));
                     return;
 
                 default :
-                    midi.addMarker(String.format("Track %1$d : ignored command 0x%2$02X at %3$08x", track, command, event_addr));
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, String.format("Ignored command 0x%1$02X at %2$08x", command, event_addr)));
                     System.out.println(String.format("Track %1$d : Ignored command 0x%2$02X at %3$08x", track, command, event_addr));
 
                     //End track for the safe
                     if(note_flag[track])
-                        midi.addNoteOff(track, current_key[track], 0);
+                    {
+                        midi.getTracks()[track].add(MidiEventCreator.createNoteOffEvent(Main.midiTick, track, current_key[track]));
+                    }
                     track_completed[track] = true;
             }
         }
