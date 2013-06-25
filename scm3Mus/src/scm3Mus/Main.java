@@ -155,7 +155,7 @@ public class Main
             }
             catch(Exception e)
             {
-                System.out.println("An exception occured");
+                e.printStackTrace();
                 continue;
             }
             System.out.println("Dump complete. Now outputing MIDI file...");

@@ -118,6 +118,11 @@ public class DC2 implements SCM3LT
                 }
 
                 current_key[track] = command + KEY_OFFSET;
+                if (current_key[track] > 127)
+                {
+                    System.out.println("Warning: key out of range: " + current_key[track] + String.format(" at %1$08x", event_addr));
+                    current_key[track] = 127;
+                }
 
                 pending_note_on_chn.add(track);
                 pending_note_on_key.add(current_key[track]);
