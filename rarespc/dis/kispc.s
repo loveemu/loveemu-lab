@@ -654,7 +654,7 @@
 0ab8: d5 64 02  mov   $0264+x,a
 0abb: 5f 60 0c  jmp   $0c60
 
-; vcmd 23 - echo delay, instrument
+; vcmd 23 - echo delay
 0abe: 3f 55 0a  call  $0a55
 0ac1: f7 00     mov   a,($00)+y
 0ac3: 3f 9b 0e  call  $0e9b             ; enable echo
@@ -673,7 +673,7 @@
 0ada: c4 f3     mov   $f3,a             ; ESA
 0adc: c4 eb     mov   $eb,a
 0ade: fd        mov   y,a
-0adf: e8 00     mov   a,#$00
+0adf: e8 00     mov   a,#$00            ; load ESA into YA
 0ae1: da 00     movw  $00,ya
 0ae3: fd        mov   y,a
 0ae4: d7 00     mov   ($00)+y,a
@@ -683,7 +683,7 @@
 0aeb: eb 01     mov   y,$01
 0aed: ad 00     cmp   y,#$00
 0aef: d0 f2     bne   $0ae3
-0af1: 5f 69 0a  jmp   $0a69             ; instrument
+0af1: 5f 69 0a  jmp   $0a69
 
 ; vcmd 03 - jump
 0af4: 3f 55 0a  call  $0a55
@@ -1026,7 +1026,7 @@
 0d7a: dw $0c66  ; 20 - reset ADSR
 0d7c: dw $0c6e  ; 21 - reset ADSR (soft attack)
 0d7e: dw $0a88  ; 22 - set voice params
-0d80: dw $0abe  ; 23 - echo delay, instrument
+0d80: dw $0abe  ; 23 - echo delay
 0d82: dw $0000  ; 24
 0d84: dw $0000  ; 25
 0d86: dw $0cd9  ; 26 - pitch slide down (simpler)
