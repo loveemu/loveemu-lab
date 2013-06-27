@@ -68,6 +68,7 @@
 05bf: d0 f0     bne   $05b1
 05c1: 8f 00 eb  mov   $eb,#$00
 05c4: 6f        ret
+
 05c5: 1c        asl   a
 05c6: a8 c0     sbc   a,#$c0
 05c8: 4d        push  x
@@ -78,6 +79,7 @@
 05d1: ce        pop   x
 05d2: 2f e8     bra   $05bc
 05d4: 1f d7 05  jmp   ($05d7+x)         ; dispatch CPU cmd
+
 ; CPU cmd dispatch table
 05d7: dw $06d6  ; e0
 05d9: dw $06d6  ; e1
@@ -113,6 +115,7 @@
 0615: dw $06ea  ; ff
 ; CPU cmds FA,FB,FD
 0637: 6f        ret
+
 ; CPU cmd F1
 0638: 5f da 08  jmp   $08da
 ; CPU cmd F2
@@ -126,6 +129,7 @@
 064b: 08 30     or    a,#$30
 064d: c4 01     mov   $01,a
 064f: 6f        ret
+
 ; CPU cmd F4
 0650: 6d        push  y
 0651: f6 20 00  mov   a,$0020+y
@@ -140,6 +144,7 @@
 0665: 08 20     or    a,#$20
 0667: c4 01     mov   $01,a
 0669: 6f        ret
+
 066a: cd 0e     mov   x,#$0e
 066c: f4 80     mov   a,$80+x
 066e: f0 08     beq   $0678
@@ -153,6 +158,7 @@
 067e: c4 70     mov   $70,a
 0680: 8f ff 71  mov   $71,#$ff
 0683: 6f        ret
+
 ; CPU cmd F6
 0684: e4 01     mov   a,$01
 0686: 08 02     or    a,#$02
@@ -241,6 +247,7 @@
 0724: d8 ea     mov   $ea,x
 0726: 7d        mov   a,x
 0727: 5f 61 05  jmp   $0561
+
 072a: d8 f4     mov   $f4,x
 072c: cb 38     mov   $38,y
 072e: 8d 00     mov   y,#$00
@@ -277,6 +284,7 @@
 076f: f4 80     mov   a,$80+x
 0771: d0 03     bne   $0776
 0773: 5f 3b 08  jmp   $083b
+
 0776: f5 60 03  mov   a,$0360+x         ; tempo value
 0779: f0 09     beq   $0784             ; #$00 means no wait (16ms/tick)
 077b: 60        clrc
@@ -321,7 +329,7 @@
 07cf: d0 03     bne   $07d4             ; wait for duration
 07d1: 3f bd 0c  call  $0cbd             ; do vcmds
 07d4: 3f c5 0e  call  $0ec5             ; read ADSR
-07d7: 3f 0b 0f  call  $0f0b
+07d7: 3f 0b 0f  call  $0f0b             ; process software envelope
 07da: f4 90     mov   a,$90+x
 07dc: 10 03     bpl   $07e1
 07de: 3f 4f 0f  call  $0f4f
@@ -369,6 +377,7 @@
 083c: 8b 2c     dec   $2c
 083e: 30 03     bmi   $0843
 0840: 5f 6a 07  jmp   $076a
+
 0843: 1d        dec   x
 0844: 30 09     bmi   $084f
 0846: f4 a0     mov   a,$a0+x
@@ -448,7 +457,7 @@
 08d4: 8f 4c f2  mov   $f2,#$4c
 08d7: c4 f3     mov   $f3,a             ; set $40 to KON
 08d9: 6f        ret
-;
+
 08da: 8f 6c f2  mov   $f2,#$6c
 08dd: 8f 60 f3  mov   $f3,#$60          ; set #$6c to FLG (mute all voices, disable echo)
 08e0: e4 01     mov   a,$01
@@ -457,16 +466,16 @@
 08e6: e5 00 18  mov   a,$1800
 08e9: c4 50     mov   $50,a
 08eb: e5 01 18  mov   a,$1801
-08ee: c4 51     mov   $51,a             ; set $50/1 to $1800/1
+08ee: c4 51     mov   $51,a             ; set song table address to $50/1
 08f0: e5 02 18  mov   a,$1802
 08f3: c4 52     mov   $52,a
 08f5: 60        clrc
 08f6: 88 11     adc   a,#$11
 08f8: c4 54     mov   $54,a
 08fa: e5 03 18  mov   a,$1803
-08fd: c4 53     mov   $53,a             ; set $52/3 to $1802/3 (duration table address)
+08fd: c4 53     mov   $53,a             ; set duration table address to $52/3
 08ff: 88 00     adc   a,#$00
-0901: c4 55     mov   $55,a             ; set $54/5 to $1802/3+#$0011
+0901: c4 55     mov   $55,a             ; set percussion table address to $54/5
 0903: e5 04 18  mov   a,$1804
 0906: c4 56     mov   $56,a
 0908: e5 05 18  mov   a,$1805
@@ -486,7 +495,7 @@
 092b: e5 0c 18  mov   a,$180c
 092e: c4 5e     mov   $5e,a
 0930: e5 0d 18  mov   a,$180d
-0933: c4 5f     mov   $5f,a             ; set $5E/F to $180C/D
+0933: c4 5f     mov   $5f,a             ; set ADSR pattern table address to $5e/f
 0935: 8f 5d f2  mov   $f2,#$5d
 0938: e5 0e 18  mov   a,$180e
 093b: c4 f3     mov   $f3,a             ; set $180E to SRCN
@@ -499,7 +508,7 @@
 094c: e5 14 18  mov   a,$1814
 094f: c4 64     mov   $64,a
 0951: e5 15 18  mov   a,$1815
-0954: c4 65     mov   $65,a             ; set $64/5 to $1814/5
+0954: c4 65     mov   $65,a             ; set panpot envelope table address to $64/5
 0956: e5 16 18  mov   a,$1816
 0959: c4 66     mov   $66,a
 095b: e5 17 18  mov   a,$1817
@@ -541,6 +550,7 @@
 09a1: 10 f7     bpl   $099a
 09a3: ce        pop   x
 09a4: 6f        ret
+
 ; vcmd dispatch table
 09a5: dw $0a09  ; 80 - jump
 09a7: dw $0a14  ; 81 - loop end
@@ -573,11 +583,11 @@
 09dd: dw $0b23  ; 9c
 09df: dw $0ba6  ; 9d
 09e1: dw $0b1b  ; 9e
-09e3: dw $0bda  ; 9f - set ADSR
+09e3: dw $0bda  ; 9f - set ADSR pattern
 09e5: dw $0baa  ; a0 - set sample
 09e7: dw $0b92  ; a1 - slur on
 09e9: dw $0b9a  ; a2 - slur off
-09eb: dw $0c20  ; a3
+09eb: dw $0c20  ; a3 - set panpot envelope pattern
 09ed: dw $0a48  ; a4 - conditional do
 09ef: dw $0a3c  ; a5 - branch channel
 09f1: dw $0c68  ; a6 - nop (*)
@@ -598,9 +608,10 @@
 0a0a: fc        inc   y
 0a0b: f7 34     mov   a,($34)+y
 0a0d: c4 35     mov   $35,a
-0a0f: d8 34     mov   $34,x             ; set $34/5 to arg1/2
+0a0f: d8 34     mov   $34,x             ; goto arg1/2
 0a11: 8d ff     mov   y,#$ff            ; clear reading index
 0a13: 6f        ret
+
 ; vcmd 81 - jump if (--counter != 0)
 0a14: 60        clrc
 0a15: 84 2b     adc   a,$2b
@@ -614,6 +625,7 @@
 0a24: 2f e3     bra   $0a09             ; if (counter != 0) jump to arg2/3
 0a26: fc        inc   y
 0a27: 6f        ret
+
 ; vcmd AD - jump if (--counter == 0)
 0a28: 60        clrc
 0a29: 84 2b     adc   a,$2b
@@ -627,12 +639,14 @@
 0a38: 2f cf     bra   $0a09             ; if (counter == 0) jump to arg2/3
 0a3a: fc        inc   y
 0a3b: 6f        ret
+
 ; vcmd A5 - branch channel
 0a3c: fc        inc   y
 0a3d: 75 70 03  cmp   a,$0370+x
 0a40: f0 02     beq   $0a44             ; branch if (arg1 == curChannel)
 0a42: fc        inc   y
 0a43: 6f        ret
+
 0a44: f7 34     mov   a,($34)+y
 0a46: 2f c1     bra   $0a09             ; jump to arg2/3
 ; vcmd A4 - conditional do
@@ -641,6 +655,7 @@
 0a4d: fc        inc   y                 ; if (arg1 != curChannel)
 0a4e: fc        inc   y                 ;     skip next vcmd
 0a4f: 6f        ret
+
 ; vcmd 8D - loop begin
 0a50: 60        clrc
 0a51: 84 2b     adc   a,$2b
@@ -649,6 +664,7 @@
 0a55: f7 34     mov   a,($34)+y
 0a57: d5 00 03  mov   $0300+x,a         ; set loop counter ($0300+X+arg1) to arg2
 0a5a: 6f        ret
+
 ; vcmd 86
 0a5b: f5 f0 01  mov   a,$01f0+x
 0a5e: c4 00     mov   $00,a
@@ -663,17 +679,21 @@
 ; vcmd 83 - set vibrato
 0a6b: d5 40 03  mov   $0340+x,a
 0a6e: 6f        ret
+
 ; vcmd 88 - set software volume envelope
 0a6f: d5 30 03  mov   $0330+x,a
 0a72: 6f        ret
+
 ; vcmd 89 - transpose (relative)
 0a73: 60        clrc
 0a74: 95 50 03  adc   a,$0350+x
 0a77: d5 50 03  mov   $0350+x,a         ; add arg1 (semitones)
 0a7a: 6f        ret
+
 ; vcmd 90 - set $80+X
 0a7b: d4 80     mov   $80+x,a
 0a7d: 6f        ret
+
 ; vcmd 8A - increase/decrease volume
 0a7e: 60        clrc
 0a7f: 30 0d     bmi   $0a8e
@@ -683,12 +703,14 @@
 0a88: e8 1f     mov   a,#$1f
 0a8a: d5 20 03  mov   $0320+x,a
 0a8d: 6f        ret
+
 0a8e: 95 20 03  adc   a,$0320+x
 0a91: b0 f7     bcs   $0a8a
 0a93: e8 00     mov   a,#$00
 ; vcmd 87 - set volume
 0a95: d5 20 03  mov   $0320+x,a
 0a98: 6f        ret
+
 ; vcmd 84
 0a99: f0 0f     beq   $0aaa
 0a9b: d5 90 04  mov   $0490+x,a
@@ -698,10 +720,12 @@
 0aa5: 08 08     or    a,#$08
 0aa7: d4 a0     mov   $a0+x,a
 0aa9: 6f        ret
+
 0aaa: f4 a0     mov   a,$a0+x
 0aac: 28 f7     and   a,#$f7
 0aae: d4 a0     mov   $a0+x,a
 0ab0: 6f        ret
+
 ; vcmd 85
 0ab1: fc        inc   y
 0ab2: f8 eb     mov   x,$eb
@@ -716,12 +740,15 @@
 0ac3: 3d        inc   x
 0ac4: d8 eb     mov   $eb,x
 0ac6: 6f        ret
+
 0ac7: fc        inc   y
 0ac8: 6f        ret
+
 ; vcmd 91
 0ac9: 04 00     or    a,$00
 0acb: c4 00     mov   $00,a
 0acd: 6f        ret
+
 ; vcmd 92
 0ace: 28 03     and   a,#$03
 0ad0: c4 38     mov   $38,a
@@ -733,6 +760,7 @@
 0adc: 04 38     or    a,$38
 0ade: d4 b0     mov   $b0+x,a
 0ae0: 6f        ret
+
 ; vcmd 93
 0ae1: c4 36     mov   $36,a
 0ae3: 28 1f     and   a,#$1f
@@ -756,6 +784,7 @@
 0b09: 28 df     and   a,#$df
 0b0b: d4 90     mov   $90+x,a
 0b0d: 6f        ret
+
 ; vcmd 95
 0b0e: f4 90     mov   a,$90+x
 0b10: 28 02     and   a,#$02
@@ -764,12 +793,14 @@
 0b16: 5f 09 0a  jmp   $0a09
 0b19: fc        inc   y
 0b1a: 6f        ret
+
 ; vcmd 9E
 0b1b: f4 a0     mov   a,$a0+x
 0b1d: 28 20     and   a,#$20
 0b1f: d0 f3     bne   $0b14
 0b21: fc        inc   y
 0b22: 6f        ret
+
 ; vcmd 9C
 0b23: b5 00 03  sbc   a,$0300+x
 0b26: 2d        push  a
@@ -788,12 +819,15 @@
 0b38: 95 50 03  adc   a,$0350+x
 0b3b: d5 50 03  mov   $0350+x,a
 0b3e: 6f        ret
+
 ; vcmd 96 - set tempo
 0b3f: d5 60 03  mov   $0360+x,a
 0b42: 6f        ret
+
 ; vcmd 8E
 0b43: d5 50 01  mov   $0150+x,a
 0b46: 6f        ret
+
 ; vcmd 8F
 0b47: 60        clrc
 0b48: 95 60 01  adc   a,$0160+x
@@ -801,6 +835,7 @@
 ; vcmd AC
 0b4d: d5 60 01  mov   $0160+x,a
 0b50: 6f        ret
+
 ; vcmd 8B
 0b51: 30 03     bmi   $0b56
 0b53: d5 40 04  mov   $0440+x,a
@@ -808,6 +843,7 @@
 0b57: f7 34     mov   a,($34)+y
 0b59: d5 50 04  mov   $0450+x,a
 0b5c: 6f        ret
+
 ; vcmd 94
 0b5d: 30 0e     bmi   $0b6d
 0b5f: f0 18     beq   $0b79
@@ -817,16 +853,19 @@
 0b68: 08 80     or    a,#$80
 0b6a: d4 90     mov   $90+x,a
 0b6c: 6f        ret
+
 0b6d: 28 7f     and   a,#$7f
 0b6f: d5 b0 04  mov   $04b0+x,a
 0b72: f4 90     mov   a,$90+x
 0b74: 08 c0     or    a,#$c0
 0b76: d4 90     mov   $90+x,a
 0b78: 6f        ret
+
 0b79: f4 90     mov   a,$90+x
 0b7b: 28 7f     and   a,#$7f
 0b7d: d4 90     mov   $90+x,a
 0b7f: 6f        ret
+
 ; vcmd 99
 0b80: f4 80     mov   a,$80+x
 0b82: 48 10     eor   a,#$10
@@ -839,6 +878,7 @@
 ; vcmd 8C - nop
 0b90: dc        dec   y
 0b91: 6f        ret
+
 ; vcmd A1 - slur on
 0b92: f4 80     mov   a,$80+x
 0b94: 08 10     or    a,#$10
@@ -850,19 +890,23 @@
 0b9e: d4 80     mov   $80+x,a
 0ba0: dc        dec   y
 0ba1: 6f        ret
+
 ; vcmd 98
 0ba2: d5 70 03  mov   $0370+x,a
 0ba5: 6f        ret
+
 ; vcmd 9D
 0ba6: d5 c0 01  mov   $01c0+x,a
 0ba9: 6f        ret
+
 ; vcmd A0 - set sample
 0baa: 3f b4 0b  call  $0bb4
 0bad: e4 3a     mov   a,$3a
 0baf: 08 10     or    a,#$10
 0bb1: c4 3a     mov   $3a,a
 0bb3: 6f        ret
-; set voice X sample to A
+
+; change voice X sample to A
 0bb4: d5 a0 03  mov   $03a0+x,a
 ;
 0bb7: 1c        asl   a
@@ -877,6 +921,7 @@
 0bc6: d5 80 01  mov   $0180+x,a
 0bc9: ee        pop   y
 0bca: 6f        ret
+
 0bcb: 1c        asl   a
 0bcc: fd        mov   y,a
 0bcd: f7 66     mov   a,($66)+y
@@ -886,9 +931,11 @@
 0bd5: d5 80 01  mov   $0180+x,a
 0bd8: ee        pop   y
 0bd9: 6f        ret
-; vcmd 9F - set ADSR
+
+; vcmd 9F - set ADSR pattern
 0bda: d5 b0 03  mov   $03b0+x,a
 0bdd: 6f        ret
+
 ; vcmd 97 - tuning
 0bde: c4 36     mov   $36,a
 0be0: 60        clrc
@@ -902,10 +949,12 @@
 0bf0: d5 20 04  mov   $0420+x,a
 0bf3: d5 30 04  mov   $0430+x,a
 0bf6: 6f        ret
+
 0bf7: e8 00     mov   a,#$00
 0bf9: 95 30 04  adc   a,$0430+x
 0bfc: d5 30 04  mov   $0430+x,a
 0bff: 6f        ret
+
 ; vcmd 9A - subroutine jump
 0c00: dd        mov   a,y
 0c01: 80        setc
@@ -923,7 +972,8 @@
 0c1b: c4 35     mov   $35,a             ; restore position
 0c1d: 8d 00     mov   y,#$00            ; clear reading index
 0c1f: 6f        ret
-; vcmd A3
+
+; vcmd A3 - set panpot envelope pattern
 0c20: f0 30     beq   $0c52
 0c22: 1c        asl   a
 0c23: 6d        push  y
@@ -934,49 +984,55 @@
 0c2c: fc        inc   y
 0c2d: f7 64     mov   a,($64)+y
 0c2f: d5 70 04  mov   $0470+x,a
-0c32: c4 37     mov   $37,a
+0c32: c4 37     mov   $37,a             ; load panpot envelope address
 0c34: 8d 00     mov   y,#$00
 0c36: f7 36     mov   a,($36)+y
 0c38: ee        pop   y
-0c39: d5 c0 03  mov   $03c0+x,a
+0c39: d5 c0 03  mov   $03c0+x,a         ; set panpot
 0c3c: e4 01     mov   a,$01
 0c3e: 28 04     and   a,#$04
 0c40: d0 04     bne   $0c46
-0c42: d5 c0 03  mov   $03c0+x,a
+0c42: d5 c0 03  mov   $03c0+x,a         ; mono, force center
 0c45: 6f        ret
+
 0c46: f4 90     mov   a,$90+x
 0c48: 08 01     or    a,#$01
 0c4a: d4 90     mov   $90+x,a
 0c4c: e8 80     mov   a,#$80
 0c4e: d5 80 04  mov   $0480+x,a
 0c51: 6f        ret
+; 00 - direct
 0c52: f4 90     mov   a,$90+x
 0c54: 28 fe     and   a,#$fe
 0c56: d4 90     mov   $90+x,a
 0c58: fc        inc   y
-0c59: f7 34     mov   a,($34)+y
+0c59: f7 34     mov   a,($34)+y         ; arg2 - panpot
 ; vcmd AB - set panpot
-0c5b: d5 c0 03  mov   $03c0+x,a
+0c5b: d5 c0 03  mov   $03c0+x,a         ; signed 8bit pan
 0c5e: e4 01     mov   a,$01
 0c60: 28 04     and   a,#$04
 0c62: d0 03     bne   $0c67
-0c64: d5 c0 03  mov   $03c0+x,a
+0c64: d5 c0 03  mov   $03c0+x,a         ; mono, force center
 0c67: 6f        ret
+
 ; vcmds A6,A7 - nop (*)
 0c68: dc        dec   y
 0c69: 6f        ret
+
 ; vcmd AE, vcmds A8,A9,AA,B0 (*)
 0c6a: f4 b0     mov   a,$b0+x
 0c6c: 28 fb     and   a,#$fb
 0c6e: d4 b0     mov   $b0+x,a
 0c70: dc        dec   y
 0c71: 6f        ret
+
 ; vcmd AF
 0c72: f4 b0     mov   a,$b0+x
 0c74: 08 04     or    a,#$04
 0c76: d4 b0     mov   $b0+x,a
 0c78: dc        dec   y
 0c79: 6f        ret
+
 ; vcmd B1
 0c7a: f8 eb     mov   x,$eb
 0c7c: c8 08     cmp   x,#$08
@@ -1014,6 +1070,7 @@
 0cb9: fc        inc   y
 0cba: f7 34     mov   a,($34)+y
 0cbc: 6f        ret
+
 ; do vcmds
 0cbd: f5 80 03  mov   a,$0380+x
 0cc0: c4 34     mov   $34,a
@@ -1023,6 +1080,7 @@
 0cc9: f7 34     mov   a,($34)+y         ; read vcmd
 0ccb: 30 03     bmi   $0cd0             ; vcmds 80-FF
 0ccd: 5f 6b 0d  jmp   $0d6b             ; vcmds 00-7F
+;
 0cd0: 68 c0     cmp   a,#$c0
 0cd2: b0 08     bcs   $0cdc
 0cd4: 3f ad 0c  call  $0cad             ; dispatch vcmds 80-BF
@@ -1036,7 +1094,7 @@
 0ce3: a8 bf     sbc   a,#$bf
 0ce5: 1c        asl   a
 0ce6: 1c        asl   a
-0ce7: 1c        asl   a
+0ce7: 1c        asl   a                 ; percussion index * 8
 0ce8: 6d        push  y
 0ce9: fd        mov   y,a
 0cea: f7 54     mov   a,($54)+y
@@ -1106,6 +1164,7 @@
 0d63: f5 40 05  mov   a,$0540+x
 0d66: 0d        push  psw
 0d67: 5f 77 0d  jmp   $0d77
+;
 0d6a: ee        pop   y
 ; vcmds 00-7F - note
 0d6b: c4 39     mov   $39,a
@@ -1230,12 +1289,14 @@
 0e5d: 04 36     or    a,$36
 0e5f: d4 a0     mov   $a0+x,a
 0e61: 6f        ret
+
 ; calculate pitch value for note in A
 0e62: d4 c0     mov   $c0+x,a
 0e64: 28 ff     and   a,#$ff
 0e66: d0 03     bne   $0e6b             ; note (not rest)
 0e68: d4 d0     mov   $d0+x,a           ; zero $C0/D0+X
 0e6a: 6f        ret
+
 0e6b: f4 80     mov   a,$80+x
 0e6d: 28 08     and   a,#$08
 0e6f: f0 13     beq   $0e84
@@ -1249,6 +1310,7 @@
 0e7e: 28 1f     and   a,#$1f
 0e80: d5 60 01  mov   $0160+x,a
 0e83: 6f        ret
+
 0e84: f4 c0     mov   a,$c0+x
 0e86: 60        clrc
 0e87: 95 50 03  adc   a,$0350+x         ; add transpose
@@ -1279,13 +1341,15 @@
 0eb9: d4 d0     mov   $d0+x,a           ; set pitch value (hi)
 0ebb: ee        pop   y
 0ebc: 6f        ret
+
 0ebd: e8 00     mov   a,#$00
 0ebf: d4 c0     mov   $c0+x,a
 0ec1: d4 d0     mov   $d0+x,a           ; zero $C0/D0+X
 0ec3: ee        pop   y
 0ec4: 6f        ret
-; read ADSR from $5e[$03b0+x] to $3b/c
-0ec5: f5 b0 03  mov   a,$03b0+x
+
+; read actual ADSR value from table
+0ec5: f5 b0 03  mov   a,$03b0+x         ; ADSR pattern #
 0ec8: 1c        asl   a
 0ec9: b0 0b     bcs   $0ed6
 0ecb: fd        mov   y,a
@@ -1295,11 +1359,13 @@
 0ed1: f7 5e     mov   a,($5e)+y
 0ed3: c4 3c     mov   $3c,a
 0ed5: 6f        ret
+
 ; reset ADSR if the index >= 0x80
 0ed6: 8f 00 3b  mov   $3b,#$00
 0ed9: d0 04     bne   $0edf
 0edb: 8f 7f 3c  mov   $3c,#$7f
 0ede: 6f        ret
+
 ;
 0edf: fd        mov   y,a
 0ee0: f7 5c     mov   a,($5c)+y
@@ -1323,19 +1389,21 @@
 0f06: f7 36     mov   a,($36)+y
 0f08: c4 3c     mov   $3c,a
 0f0a: 6f        ret
-; read software envelope params
-0f0b: f5 30 03  mov   a,$0330+x
+
+; process software envelope
+0f0b: f5 30 03  mov   a,$0330+x         ; envelope #
 0f0e: d0 06     bne   $0f16
 0f10: f5 20 03  mov   a,$0320+x
-0f13: c4 2a     mov   $2a,a
+0f13: c4 2a     mov   $2a,a             ; constant volume
 0f15: 6f        ret
+
 0f16: 1c        asl   a
 0f17: fd        mov   y,a
 0f18: f7 56     mov   a,($56)+y
 0f1a: c4 36     mov   $36,a
 0f1c: fc        inc   y
 0f1d: f7 56     mov   a,($56)+y
-0f1f: c4 37     mov   $37,a
+0f1f: c4 37     mov   $37,a             ; load envelope table address
 0f21: f5 f0 04  mov   a,$04f0+x
 0f24: 9c        dec   a
 0f25: d5 f0 04  mov   $04f0+x,a
@@ -1343,6 +1411,7 @@
 0f2a: f5 e0 04  mov   a,$04e0+x
 0f2d: fd        mov   y,a
 0f2e: 5f 3f 0f  jmp   $0f3f
+
 0f31: f5 e0 04  mov   a,$04e0+x
 0f34: fd        mov   y,a
 0f35: 3f 12 11  call  $1112
@@ -1361,7 +1430,7 @@
 0f4b: 3c        rol   a
 0f4c: c4 2a     mov   $2a,a
 0f4e: 6f        ret
-;
+
 0f4f: e4 3a     mov   a,$3a
 0f51: 10 0d     bpl   $0f60
 0f53: f5 40 05  mov   a,$0540+x
@@ -1370,6 +1439,7 @@
 0f59: 95 50 03  adc   a,$0350+x
 0f5c: d5 a0 04  mov   $04a0+x,a
 0f5f: 6f        ret
+
 0f60: f4 90     mov   a,$90+x
 0f62: 28 40     and   a,#$40
 0f64: d0 13     bne   $0f79
@@ -1381,6 +1451,7 @@
 0f71: f0 1b     beq   $0f8e
 0f73: d5 a0 04  mov   $04a0+x,a
 0f76: 5f 8a 0e  jmp   $0e8a
+
 0f79: f5 a0 04  mov   a,$04a0+x
 0f7c: f0 e1     beq   $0f5f
 0f7e: 60        clrc
@@ -1390,12 +1461,13 @@
 0f86: b0 06     bcs   $0f8e
 0f88: d5 a0 04  mov   $04a0+x,a
 0f8b: 5f 8a 0e  jmp   $0e8a
+
 0f8e: e8 00     mov   a,#$00
 0f90: d5 a0 04  mov   $04a0+x,a
 0f93: d4 c0     mov   $c0+x,a
 0f95: d4 d0     mov   $d0+x,a
 0f97: 6f        ret
-;
+
 0f98: f5 40 05  mov   a,$0540+x
 0f9b: f0 10     beq   $0fad
 0f9d: f4 d0     mov   a,$d0+x
@@ -1406,6 +1478,7 @@
 0fa8: 75 a0 04  cmp   a,$04a0+x
 0fab: d0 01     bne   $0fae
 0fad: 6f        ret
+
 0fae: 0d        push  psw
 0faf: 4b 38     lsr   $38
 0fb1: 7c        ror   a
@@ -1475,7 +1548,7 @@
 102d: f5 b0 04  mov   a,$04b0+x
 1030: d4 d0     mov   $d0+x,a
 1032: 6f        ret
-;
+
 1033: f4 c0     mov   a,$c0+x
 1035: c4 28     mov   $28,a
 1037: f4 d0     mov   a,$d0+x
@@ -1485,6 +1558,7 @@
 103f: f5 40 03  mov   a,$0340+x
 1042: d0 01     bne   $1045
 1044: 6f        ret
+
 ; read vibrato params
 1045: 1c        asl   a
 1046: fd        mov   y,a
@@ -1500,6 +1574,7 @@
 1059: f5 00 05  mov   a,$0500+x
 105c: fd        mov   y,a
 105d: 5f 6e 10  jmp   $106e
+
 1060: f5 00 05  mov   a,$0500+x
 1063: fd        mov   y,a
 1064: 3f 12 11  call  $1112
@@ -1533,7 +1608,7 @@
 109e: e4 29     mov   a,$29
 10a0: d5 d0 00  mov   $00d0+x,a
 10a3: 6f        ret
-;
+
 10a4: f5 50 01  mov   a,$0150+x
 10a7: 30 30     bmi   $10d9
 10a9: 68 20     cmp   a,#$20
@@ -1542,7 +1617,7 @@
 10b0: 28 1f     and   a,#$1f
 10b2: d5 60 01  mov   $0160+x,a
 10b5: 6f        ret
-;
+
 10b6: 68 30     cmp   a,#$30
 10b8: b0 0b     bcs   $10c5
 10ba: 95 60 01  adc   a,$0160+x
@@ -1550,7 +1625,7 @@
 10bf: 08 10     or    a,#$10
 10c1: d5 60 01  mov   $0160+x,a
 10c4: 6f        ret
-;
+
 10c5: 60        clrc
 10c6: c4 38     mov   $38,a
 10c8: 95 60 01  adc   a,$0160+x
@@ -1561,14 +1636,14 @@
 10d3: 04 39     or    a,$39
 10d5: d5 60 01  mov   $0160+x,a
 10d8: 6f        ret
-;
+
 10d9: 1c        asl   a
 10da: d0 09     bne   $10e5
 10dc: f5 60 01  mov   a,$0160+x
 10df: 48 1f     eor   a,#$1f
 10e1: d5 60 01  mov   $0160+x,a
 10e4: 6f        ret
-;
+
 10e5: fd        mov   y,a
 10e6: f7 5a     mov   a,($5a)+y
 10e8: c4 36     mov   $36,a
@@ -1591,35 +1666,44 @@
 110c: f7 36     mov   a,($36)+y
 110e: d5 60 01  mov   $0160+x,a
 1111: 6f        ret
-;
-1112: fc        inc   y
-1113: f7 36     mov   a,($36)+y
+
+; read next envelope value
+1112: fc        inc   y                 ; step
+1113: f7 36     mov   a,($36)+y         ; read new value
 1115: 30 02     bmi   $1119
+; 00-7f
 1117: fc        inc   y
 1118: 6f        ret
+
 1119: 68 81     cmp   a,#$81
 111b: f0 06     beq   $1123
 111d: b0 0c     bcs   $112b
+; 80
 111f: e8 00     mov   a,#$00
 1121: dc        dec   y
 1122: 6f        ret
-;
+
+; 81
 1123: dd        mov   a,y
 1124: fc        inc   y
 1125: 80        setc
 1126: b7 36     sbc   a,($36)+y
 1128: fd        mov   y,a
 1129: 2f e8     bra   $1113
+;
 112b: ad 83     cmp   y,#$83
 112d: f0 06     beq   $1135
 112f: b0 0e     bcs   $113f
+; 82
 1131: 8d 00     mov   y,#$00
 1133: 2f de     bra   $1113
+; 83
 1135: f4 90     mov   a,$90+x
 1137: 28 04     and   a,#$04
 1139: f0 0a     beq   $1145
 113b: e8 01     mov   a,#$01
 113d: 2f e2     bra   $1121
+; 84-ff
 113f: f4 90     mov   a,$90+x
 1141: 28 04     and   a,#$04
 1143: d0 de     bne   $1123
@@ -1652,6 +1736,7 @@
 1178: 48 80     eor   a,#$80
 117a: d5 c0 03  mov   $03c0+x,a
 117d: 6f        ret
+
 117e: 84 39     adc   a,$39
 1180: 90 06     bcc   $1188
 1182: 64 38     cmp   a,$38
@@ -1672,6 +1757,7 @@
 119d: 88 00     adc   a,#$00
 119f: d5 70 04  mov   $0470+x,a
 11a2: 6f        ret
+
 11a3: fc        inc   y
 11a4: f7 36     mov   a,($36)+y
 11a6: c4 34     mov   $34,a
@@ -1693,7 +1779,7 @@
 11c7: 28 fe     and   a,#$fe
 11c9: d4 90     mov   $90+x,a
 11cb: 6f        ret
-;
+
 11cc: e8 00     mov   a,#$00
 11ce: c4 3e     mov   $3e,a             ;; DSP KOF
 11d0: c4 40     mov   $40,a             ;; DSP KON
@@ -1704,7 +1790,7 @@
 11da: 08 80     or    a,#$80
 11dc: c4 44     mov   $44,a             ;; DSP FLG
 11de: 6f        ret
-;
+
 11df: f4 a0     mov   a,$a0+x
 11e1: 28 40     and   a,#$40
 11e3: d0 f9     bne   $11de
@@ -1723,6 +1809,7 @@
 11fa: 08 40     or    a,#$40
 11fc: d4 a0     mov   $a0+x,a
 11fe: 6f        ret
+
 11ff: e4 28     mov   a,$28
 1201: 04 29     or    a,$29
 1203: f0 f3     beq   $11f8
@@ -1755,7 +1842,7 @@
 1232: e4 44     mov   a,$44
 1234: 30 01     bmi   $1237
 1236: 6f        ret
-;
+
 1237: e4 01     mov   a,$01
 1239: 28 40     and   a,#$40
 123b: 15 60 01  or    a,$0160+x
@@ -1794,13 +1881,13 @@
 1275: c4 38     mov   $38,a
 1277: ae        pop   a
 1278: c4 39     mov   $39,a
-127a: eb 2a     mov   y,$2a
-127c: f6 ea 12  mov   a,$12ea+y
+127a: eb 2a     mov   y,$2a             ; volume (00-1f)
+127c: f6 ea 12  mov   a,$12ea+y         ; get actual volume from table
 127f: c4 36     mov   $36,a
 1281: fd        mov   y,a
 1282: f5 c0 03  mov   a,$03c0+x
 1285: 48 80     eor   a,#$80
-1287: cf        mul   ya
+1287: cf        mul   ya                ; mul panpot
 1288: f4 b0     mov   a,$b0+x
 128a: 5c        lsr   a
 128b: c4 37     mov   $37,a
@@ -1813,7 +1900,7 @@
 1298: eb 36     mov   y,$36
 129a: f5 c0 03  mov   a,$03c0+x
 129d: 48 7f     eor   a,#$7f
-129f: cf        mul   ya
+129f: cf        mul   ya                ; mul panpot
 12a0: dd        mov   a,y
 12a1: eb 39     mov   y,$39
 12a3: 4b 37     lsr   $37
@@ -1826,12 +1913,12 @@
 12b2: e4 29     mov   a,$29
 12b4: d6 03 02  mov   $0203+y,a         ; set P(H)
 12b7: f5 a0 03  mov   a,$03a0+x
-12ba: d6 04 02  mov   $0204+y,a         ; set $03a0+x to SRCN
+12ba: d6 04 02  mov   $0204+y,a         ; set SRCN
 12bd: e4 3b     mov   a,$3b
-12bf: d6 05 02  mov   $0205+y,a         ; set $3b to ADSR(1)
+12bf: d6 05 02  mov   $0205+y,a         ; set ADSR(1)
 12c2: e4 3c     mov   a,$3c
-12c4: d6 06 02  mov   $0206+y,a         ; set $3c to ADSR(2)
-12c7: d6 07 02  mov   $0207+y,a         ; set $3c to GAIN
+12c4: d6 06 02  mov   $0206+y,a         ; set ADSR(2)
+12c7: d6 07 02  mov   $0207+y,a         ; set GAIN
 12ca: e4 3e     mov   a,$3e
 12cc: 04 38     or    a,$38
 12ce: c4 3e     mov   $3e,a
@@ -1842,6 +1929,7 @@
 12d8: 04 38     or    a,$38
 12da: c4 40     mov   $40,a
 12dc: 6f        ret
+
 12dd: e4 3a     mov   a,$3a
 12df: 28 04     and   a,#$04
 12e1: f0 06     beq   $12e9
@@ -1849,7 +1937,8 @@
 12e5: 04 38     or    a,$38
 12e7: c4 42     mov   $42,a
 12e9: 6f        ret
-;; ref:$2a
+
+; volume table
 12ea: db $00,$03,$04,$05,$06,$07,$09,$0a,$0c,$0d,$0f,$12,$14,$17,$1a,$1c
 12fa: db $1f,$24,$28,$2d,$31,$36,$3a,$3f,$47,$4f,$57,$5f,$67,$6f,$77,$7f
 ;; ref:$0370+x * #$10, $0440+x * #$10
@@ -1877,6 +1966,7 @@
 1333: fc        inc   y
 1334: 5f fd 13  jmp   $13fd
 1337: 6f        ret
+
 1338: f4 80     mov   a,$80+x
 133a: 28 40     and   a,#$40
 133c: d0 f9     bne   $1337
