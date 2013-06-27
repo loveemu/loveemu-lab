@@ -594,7 +594,7 @@
 0ac0: 4d        push  x
 0ac1: f7 01     mov   a,($01)+y
 0ac3: 5d        mov   x,a
-0ac4: f5 e0 04  mov   a,$04e0+x
+0ac4: f5 e0 04  mov   a,$04e0+x         ; read SRCN table
 0ac7: ce        pop   x
 0ac8: d5 44 02  mov   $0244+x,a
 0acb: 8f 02 01  mov   $01,#$02
@@ -608,14 +608,16 @@
 0adb: e8 01     mov   a,#$01
 0add: 6f        ret
 
-; vcmd 02 - set L/R vol
+; vcmd 02 - set L/R volume
 0ade: ce        pop   x
 0adf: 8d 01     mov   y,#$01
 0ae1: db 3c     mov   $3c+x,y
 0ae3: e8 00     mov   a,#$00
 0ae5: d4 2c     mov   $2c+x,a
+; set volume - stereo or mono?
 0ae7: e4 25     mov   a,$25
 0ae9: f0 13     beq   $0afe
+; mono
 0aeb: f7 01     mov   a,($01)+y
 0aed: fc        inc   y
 0aee: 60        clrc
@@ -625,7 +627,7 @@
 0af5: d5 64 02  mov   $0264+x,a
 0af8: 8f 03 01  mov   $01,#$03
 0afb: 5f ce 0a  jmp   $0ace
-
+; stereo
 0afe: f7 01     mov   a,($01)+y
 0b00: d5 54 02  mov   $0254+x,a
 0b03: fc        inc   y
@@ -827,7 +829,7 @@
 0c6e: c4 27     mov   $27,a
 0c70: 5f 58 0c  jmp   $0c58
 
-; vcmd 0d
+; vcmd 0d - vibrato (short)
 0c73: ce        pop   x
 0c74: f5 50 01  mov   a,$0150+x
 0c77: 08 02     or    a,#$02
@@ -1040,7 +1042,7 @@
 0e07: 8f 02 01  mov   $01,#$02
 0e0a: 5f ce 0a  jmp   $0ace
 
-; vcmd 1a
+; vcmd 1a - noise on
 0e0d: ce        pop   x
 0e0e: 8f 3d f2  mov   $f2,#$3d
 0e11: f5 ff 0f  mov   a,$0fff+x
@@ -1053,7 +1055,7 @@
 0e20: c4 01     mov   $01,a
 0e22: 5f ce 0a  jmp   $0ace
 
-; vcmd 1b
+; vcmd 1b - noise off
 0e25: ce        pop   x
 0e26: 8f 3d f2  mov   $f2,#$3d
 0e29: f5 ff 0f  mov   a,$0fff+x
@@ -1062,19 +1064,19 @@
 0e30: c4 f3     mov   $f3,a
 0e32: 5f 18 0e  jmp   $0e18
 
-; vcmd 1c
+; vcmd 1c - set volume and ADSR preset 1
 0e35: cd 00     mov   x,#$00
 0e37: 2f 0e     bra   $0e47
-; vcmd 1d
+; vcmd 1d - set volume and ADSR preset 2
 0e39: cd 01     mov   x,#$01
 0e3b: 2f 0a     bra   $0e47
-; vcmd 1e
+; vcmd 1e - set volume and ADSR preset 3
 0e3d: cd 02     mov   x,#$02
 0e3f: 2f 06     bra   $0e47
-; vcmd 1f
+; vcmd 1f - set volume and ADSR preset 4
 0e41: cd 03     mov   x,#$03
 0e43: 2f 02     bra   $0e47
-; vcmd 20
+; vcmd 20 - set volume and ADSR preset 5
 0e45: cd 04     mov   x,#$04
 0e47: 8d 01     mov   y,#$01
 0e49: f7 01     mov   a,($01)+y
@@ -1096,19 +1098,19 @@
 0e65: 8f 05 01  mov   $01,#$05
 0e68: 5f ce 0a  jmp   $0ace
 
-; vcmd 21
+; vcmd 21 - load volume and ADSR preset 1
 0e6b: cd 00     mov   x,#$00
 0e6d: 2f 0e     bra   $0e7d
-; vcmd 22
+; vcmd 22 - load volume and ADSR preset 2
 0e6f: cd 01     mov   x,#$01
 0e71: 2f 0a     bra   $0e7d
-; vcmd 23
+; vcmd 23 - load volume and ADSR preset 3
 0e73: cd 02     mov   x,#$02
 0e75: 2f 06     bra   $0e7d
-; vcmd 24
+; vcmd 24 - load volume and ADSR preset 4
 0e77: cd 03     mov   x,#$03
 0e79: 2f 02     bra   $0e7d
-; vcmd 25
+; vcmd 25 - load volume and ADSR preset 5
 0e7b: cd 04     mov   x,#$04
 0e7d: ae        pop   a
 0e7e: 2d        push  a
@@ -1116,22 +1118,22 @@
 0e80: c4 01     mov   $01,a
 0e82: c4 f2     mov   $f2,a
 0e84: f4 10     mov   a,$10+x
-0e86: c4 f3     mov   $f3,a
+0e86: c4 f3     mov   $f3,a             ; VOL(L)
 0e88: ab f2     inc   $f2
 0e8a: f4 15     mov   a,$15+x
-0e8c: c4 f3     mov   $f3,a
+0e8c: c4 f3     mov   $f3,a             ; VOL(R)
 0e8e: e4 01     mov   a,$01
 0e90: 08 05     or    a,#$05
 0e92: c4 f2     mov   $f2,a
 0e94: f4 1a     mov   a,$1a+x
-0e96: c4 f3     mov   $f3,a
+0e96: c4 f3     mov   $f3,a             ; ADSR(1)
 0e98: ab f2     inc   $f2
 0e9a: f4 1f     mov   a,$1f+x
-0e9c: c4 f3     mov   $f3,a
+0e9c: c4 f3     mov   $f3,a             ; ADSR(2)
 0e9e: ce        pop   x
 0e9f: 5f 18 0e  jmp   $0e18
 
-; vcmd 26
+; vcmd 26 - pitch slide down (simpler)
 0ea2: ce        pop   x
 0ea3: f5 50 01  mov   a,$0150+x
 0ea6: 08 01     or    a,#$01
@@ -1158,7 +1160,7 @@
 0ed1: 8f 05 01  mov   $01,#$05
 0ed4: 5f ce 0a  jmp   $0ace
 
-; vcmd 27
+; vcmd 27 - pitch slide up (simpler)
 0ed7: ce        pop   x
 0ed8: f5 50 01  mov   a,$0150+x
 0edb: 08 01     or    a,#$01
@@ -1183,7 +1185,7 @@
 0f03: 8f 05 01  mov   $01,#$05
 0f06: 5f ce 0a  jmp   $0ace
 
-; vcmd 28 - instrument and pan
+; vcmd 28 - instrument and volume
 0f09: ce        pop   x
 0f0a: 8d 01     mov   y,#$01
 0f0c: db 3c     mov   $3c+x,y
@@ -1199,6 +1201,7 @@
 0f1f: fc        inc   y
 0f20: e4 25     mov   a,$25
 0f22: f0 13     beq   $0f37
+; mono
 0f24: f7 01     mov   a,($01)+y
 0f26: fc        inc   y
 0f27: 60        clrc
@@ -1208,7 +1211,7 @@
 0f2e: d5 64 02  mov   $0264+x,a
 0f31: 8f 04 01  mov   $01,#$04
 0f34: 5f ce 0a  jmp   $0ace
-
+; stereo
 0f37: f7 01     mov   a,($01)+y
 0f39: d5 54 02  mov   $0254+x,a
 0f3c: fc        inc   y
@@ -1259,7 +1262,7 @@
 0f87: d5 90 01  mov   $0190+x,a
 0f8a: 5f ce 0a  jmp   $0ace
 
-; vcmd 2d
+; vcmd 2d - conditional jump
 0f8d: ce        pop   x
 0f8e: 8d 01     mov   y,#$01
 0f90: db 3c     mov   $3c+x,y
@@ -1273,22 +1276,22 @@
 0f9d: d4 4c     mov   $4c+x,a
 0f9f: fc        inc   y
 0fa0: f7 01     mov   a,($01)+y
-0fa2: d4 5c     mov   $5c+x,a
+0fa2: d4 5c     mov   $5c+x,a           ; goto (word) arg[$ed * 2]
 0fa4: e8 01     mov   a,#$01
 0fa6: 6f        ret
 
-; vcmd 2e
+; vcmd 2e - set jump condition
 0fa7: ce        pop   x
 0fa8: 8d 00     mov   y,#$00
 0faa: db 2c     mov   $2c+x,y
 0fac: fc        inc   y
 0fad: db 3c     mov   $3c+x,y
 0faf: f7 01     mov   a,($01)+y
-0fb1: c4 ed     mov   $ed,a
+0fb1: c4 ed     mov   $ed,a             ; $ed = arg1
 0fb3: 8f 02 01  mov   $01,#$02
 0fb6: 5f ce 0a  jmp   $0ace
 
-; vcmd 2f
+; vcmd 2f - tremolo
 0fb9: ce        pop   x
 0fba: f5 50 01  mov   a,$0150+x
 0fbd: 08 04     or    a,#$04
@@ -1315,7 +1318,7 @@
 0fed: 8f 05 01  mov   $01,#$05
 0ff0: 5f ce 0a  jmp   $0ace
 
-; vcmd 30
+; vcmd 30 - tremolo off
 0ff3: ce        pop   x
 0ff4: f5 50 01  mov   a,$0150+x
 0ff7: 28 fb     and   a,#$fb
@@ -1327,7 +1330,7 @@
 
 100f: dw $0a69  ; 00 - end of track
 1011: dw $0ab5  ; 01 - set instrument
-1013: dw $0ade  ; 02 - set L/R vol
+1013: dw $0ade  ; 02 - set L/R volume
 1015: dw $0b0f  ; 03 - goto
 1017: dw $0b24  ; 04 - call subroutine
 1019: dw $0b59  ; 05 - end subroutine
@@ -1338,7 +1341,7 @@
 1023: dw $0c3b  ; 0a - pitch slide off
 1025: dw $0c51  ; 0b - set tempo
 1027: dw $0c66  ; 0c - add tempo
-1029: dw $0c73  ; 0d
+1029: dw $0c73  ; 0d - vibrato (short)
 102b: dw $0ca0  ; 0e - vibrato off
 102d: dw $0cac  ; 0f - vibrato
 102f: dw $0cda  ; 10 - set ADSR envelope
@@ -1351,29 +1354,29 @@
 103d: dw $0db6  ; 17 - voice echo off
 103f: dw $0dd3  ; 18 - set echo filter
 1041: dw $0df3  ; 19 - set noise clock
-1043: dw $0e0d  ; 1a
-1045: dw $0e25  ; 1b
-1047: dw $0e35  ; 1c
-1049: dw $0e39  ; 1d
-104b: dw $0e3d  ; 1e
-104d: dw $0e41  ; 1f
-104f: dw $0e45  ; 20
-1051: dw $0e6b  ; 21
-1053: dw $0e6f  ; 22
-1055: dw $0e73  ; 23
-1057: dw $0e77  ; 24
-1059: dw $0e7b  ; 25
-105b: dw $0ea2  ; 26
-105d: dw $0ed7  ; 27
-105f: dw $0f09  ; 28 - instrument and pan
+1043: dw $0e0d  ; 1a - noise on
+1045: dw $0e25  ; 1b - noise off
+1047: dw $0e35  ; 1c - set volume and ADSR preset 1
+1049: dw $0e39  ; 1d - set volume and ADSR preset 2
+104b: dw $0e3d  ; 1e - set volume and ADSR preset 3
+104d: dw $0e41  ; 1f - set volume and ADSR preset 4
+104f: dw $0e45  ; 20 - set volume and ADSR preset 5
+1051: dw $0e6b  ; 21 - load volume and ADSR preset 1
+1053: dw $0e6f  ; 22 - load volume and ADSR preset 2
+1055: dw $0e73  ; 23 - load volume and ADSR preset 3
+1057: dw $0e77  ; 24 - load volume and ADSR preset 4
+1059: dw $0e7b  ; 25 - load volume and ADSR preset 5
+105b: dw $0ea2  ; 26 - pitch slide down (simpler)
+105d: dw $0ed7  ; 27 - pitch slide up (simpler)
+105f: dw $0f09  ; 28 - instrument and volume
 1061: dw $0f48  ; 29
 1063: dw $0f5b  ; 2a - set timer0 freq
 1065: dw $0f6d  ; 2b - long duration on
 1067: dw $0f7d  ; 2c - long duration off
-1069: dw $0f8d  ; 2d
-106b: dw $0fa7  ; 2e
-106d: dw $0fb9  ; 2f
-106f: dw $0ff3  ; 30
+1069: dw $0f8d  ; 2d - conditional jump
+106b: dw $0fa7  ; 2e - set jump condition
+106d: dw $0fb9  ; 2f - tremolo
+106f: dw $0ff3  ; 30 - tremolo off
 
 1071: e8 00     mov   a,#$00
 1073: 8f 6c f2  mov   $f2,#$6c
@@ -1540,416 +1543,65 @@
 11de: c4 f3     mov   $f3,a
 11e0: 6f        ret
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-11e1: 00        nop
-11e2: 00        nop
-11e3: 00        nop
-11e4: 02 1e     set0  $1e
-11e6: 02 3f     set0  $3f
-11e8: 02 61     set0  $61
-11ea: 02 85     set0  $85
-11ec: 02 ab     set0  $ab
-11ee: 02 d4     set0  $d4
-11f0: 02 ff     set0  $ff
-11f2: 02 2d     set0  $2d
-11f4: 03 5d 03  bbs0  $5d,$11fa
-11f7: 90 03     bcc   $11fc
-11f9: c7 03     mov   ($03+x),a
-11fb: 00        nop
-11fc: 04 3d     or    a,$3d
-11fe: 04 7d     or    a,$7d
-1200: 04 c2     or    a,$c2
-1202: 04 0a     or    a,$0a
-1204: 05 57 05  or    a,$0557
-1207: a8 05     sbc   a,#$05
-1209: fe 05     dbnz  y,$1210
-120b: 5a 06     cmpw  ya,$06
-120d: ba 06     movw  ya,$06
-120f: 21        tcall 2
-1210: 07 8d     or    a,($8d+x)
-1212: 07 00     or    a,($00+x)
-1214: 08 7a     or    a,#$7a
-1216: 08 fb     or    a,#$fb
-1218: 08 84     or    a,#$84
-121a: 09 14 0a  or    ($0a),($14)
-121d: ae        pop   a
-121e: 0a 50 0b  or1   c,$016a,0
-1221: fd        mov   y,a
-1222: 0b b3     asl   $b3
-1224: 0c 74 0d  asl   $0d74
-1227: 41        tcall 4
-1228: 0e 1a 0f  tset1 $0f1a
-122b: 00        nop
-122c: 10 f4     bpl   $1222
-122e: 10 f6     bpl   $1226
-1230: 11        tcall 1
-1231: 07 13     or    a,($13+x)
-1233: 29 14 5c  and   ($5c),($14)
-1236: 15 a1 16  or    a,$16a1+x
-1239: f9 17     mov   x,$17+y
-123b: 66        cmp   a,(x)
-123c: 19        or    (x),(y)
-123d: e9 1a 82  mov   x,$821a
-1240: 1c        asl   a
-1241: 34 1e     and   a,$1e+x
-1243: 00        nop
-1244: 20        clrp
-1245: e7 21     mov   a,($21+x)
-1247: eb 23     mov   y,$23
-1249: 0e 26 51  tset1 $5126
-124c: 28 b7     and   a,#$b7
-124e: 2a 41 2d  or1   c,!($05a8,1)
-1251: f2 2f     clr7  $2f
-1253: cc 32 d1  mov   $d132,y
-1256: 35 04 39  and   a,$3904+x
-1259: 68 3c     cmp   a,#$3c
-125b: ff        stop
-125c: 3f 00 ff  call  $ff00
-125f: ff        stop
-1260: ff        stop
-1261: ff        stop
-1262: ff        stop
-1263: ff        stop
-1264: ff        stop
-1265: ff        stop
-1266: ff        stop
-1267: ff        stop
-1268: ff        stop
-1269: ff        stop
-126a: ff        stop
-126b: ff        stop
-126c: ff        stop
-126d: ff        stop
-126e: ff        stop
-126f: ff        stop
-1270: ff        stop
-1271: ff        stop
-1272: ff        stop
-1273: ff        stop
-1274: ff        stop
-1275: ff        stop
-1276: ff        stop
-1277: ff        stop
-1278: ff        stop
-1279: ff        stop
-127a: ff        stop
-127b: ff        stop
-127c: ff        stop
-127d: ff        stop
-127e: ff        stop
-127f: ff        stop
-1280: ff        stop
-1281: ff        stop
-1282: ff        stop
-1283: ff        stop
-1284: ff        stop
-1285: ff        stop
-1286: ff        stop
-1287: ff        stop
-1288: ff        stop
-1289: ff        stop
-128a: ff        stop
-128b: ff        stop
-128c: ff        stop
-128d: ff        stop
-128e: ff        stop
-128f: ff        stop
-1290: ff        stop
-1291: ff        stop
-1292: ff        stop
-1293: ff        stop
-1294: ff        stop
-1295: ff        stop
-1296: ff        stop
-1297: ff        stop
-1298: ff        stop
-1299: ff        stop
-129a: ff        stop
-129b: ff        stop
-129c: ff        stop
-129d: ff        stop
-129e: ff        stop
-129f: ff        stop
-12a0: b3 12 f1  bbc5  $12,$1294
-12a3: 12 1f     clr0  $1f
-12a5: 13 6b 13  bbc0  $6b,$12bb
-12a8: ba 13     movw  ya,$13
-12aa: 05 14 b2  or    a,$b214
-12ad: 12 7b     clr0  $7b
-12af: 14 a0     or    a,$a0+x
-12b1: a0        ei
-12b2: 00        nop
-12b3: 2a 64 11  or1   c,!($022c,4)
-12b6: 3c        rol   a
-12b7: 3c        rol   a
-12b8: 18 00 01  or    $01,#$00
-12bb: 00        nop
-12bc: 00        nop
-12bd: 00        nop
-12be: 00        nop
-12bf: 00        nop
-12c0: 00        nop
-12c1: 04 01     or    a,$01
-12c3: a2 14     set5  $14
-12c5: 15 34 17  or    a,$1734+x
-12c8: 17 18     or    a,($18)+y
-12ca: 7f        reti
-12cb: 01        tcall 0
-12cc: 01        tcall 0
-12cd: 01        tcall 0
-12ce: 01        tcall 0
-12cf: 01        tcall 0
-12d0: 01        tcall 0
-12d1: 01        tcall 0
-12d2: 17 01     or    a,($01)+y
-12d4: 0b 13     asl   $13
-12d6: 00        nop
-12d7: 02 28     set0  $28
-12d9: 28 10     and   a,#$10
-12db: 8f c8 80  mov   $80,#$c8
-12de: 60        clrc
-12df: 86        adc   a,(x)
-12e0: 10 81     bpl   $1263
-12e2: 11        tcall 1
-12e3: 86        adc   a,(x)
-12e4: 12 81     clr0  $81
-12e6: 13 86 14  bbc0  $86,$12fd
-12e9: 81        tcall 8
-12ea: 15 10 8f  or    a,$8f10+x
-12ed: c5 86 40  mov   $4086,a
-12f0: 00        nop
-12f1: 04 01     or    a,$01
-12f3: a2 14     set5  $14
-12f5: 01        tcall 0
-12f6: 10 02     bpl   $12fa
-12f8: 48 1c     eor   a,#$1c
-12fa: 0f        brk
-12fb: 02 02     set0  $02
-12fd: 08 05     or    a,#$05
-12ff: 13 fc 12  bbc0  $fc,$1314
-1302: f6 14 f4  mov   a,$f414+y
-1305: 16 10 8f  or    a,$8f10+y
-1308: d5 9e 08  mov   $089e+x,a
-130b: a0        ei
-130c: 08 9e     or    a,#$9e
-130e: 08 9b     or    a,#$9b
-1310: 08 9c     or    a,#$9c
-1312: 08 a0     or    a,#$a0
-1314: 08 9e     or    a,#$9e
-1316: 08 99     or    a,#$99
-1318: 08 10     or    a,#$10
-131a: 8f c2 97  mov   $97,#$c2
-131d: c0        di
-131e: 00        nop
-131f: 04 01     or    a,$01
-1321: a2 14     set5  $14
-1323: 01        tcall 0
-1324: 10 02     bpl   $1328
-1326: 10 2a     bpl   $1352
-1328: 13 fc 12  bbc0  $fc,$133d
-132b: f6 14 f4  mov   a,$f414+y
-132e: 0f        brk
-132f: 02 03     set0  $03
-1331: 0b 05     asl   $05
-1333: 16 80 0a  or    a,$0a80+y
-1336: 10 8f     bpl   $12c7
-1338: d5 9e 08  mov   $089e+x,a
-133b: a0        ei
-133c: 08 9e     or    a,#$9e
-133e: 08 9b     or    a,#$9b
-1340: 08 9c     or    a,#$9c
-1342: 08 a0     or    a,#$a0
-1344: 08 9e     or    a,#$9e
-1346: 08 99     or    a,#$99
-1348: 08 10     or    a,#$10
-134a: 8f d1 97  mov   $97,#$d1
-134d: 08 02     or    a,#$02
-134f: 0f        brk
-1350: 1e 10 8c  cmp   x,$8c10
-1353: d4 a7     mov   $a7+x,a
-1355: 04 a8     or    a,$a8
-1357: 04 aa     or    a,$aa
-1359: 04 ac     or    a,$ac
-135b: 04 af     or    a,$af
-135d: 04 b1     or    a,$b1
-135f: 04 10     or    a,$10
-1361: 8f f2 b3  mov   $b3,#$f2
-1364: 20        clrp
-1365: 10 82     bpl   $12e9
-1367: e5 b3 76  mov   a,$76b3
-136a: 00        nop
-136b: 04 01     or    a,$01
-136d: a2 14     set5  $14
-136f: 01        tcall 0
-1370: 10 02     bpl   $1374
-1372: 26        and   a,(x)
-1373: 14 0f     or    a,$0f+x
-1375: 02 02     set0  $02
-1377: 08 05     or    a,#$05
-1379: 13 fc 12  bbc0  $fc,$138e
-137c: f6 14 f4  mov   a,$f414+y
-137f: 16 10 8f  or    a,$8f10+y
-1382: d5 9b 08  mov   $089b+x,a
-1385: 9c        dec   a
-1386: 08 9b     or    a,#$9b
-1388: 08 97     or    a,#$97
-138a: 08 99     or    a,#$99
-138c: 08 9c     or    a,#$9c
-138e: 08 9b     or    a,#$9b
-1390: 08 96     or    a,#$96
-1392: 08 10     or    a,#$10
-1394: 8f c5 9b  mov   $9b,#$c5
-1397: 08 02     or    a,#$02
-1399: 3a 18     incw  $18
-139b: 0f        brk
-139c: 03 03 0f  bbs0  $03,$13ae
-139f: 05 10 8c  or    a,$8c10
-13a2: d4 a7     mov   $a7+x,a
-13a4: 04 a8     or    a,$a8
-13a6: 04 aa     or    a,$aa
-13a8: 04 ac     or    a,$ac
-13aa: 04 af     or    a,$af
-13ac: 04 b1     or    a,$b1
-13ae: 04 10     or    a,$10
-13b0: 8f f2 b3  mov   $b3,#$f2
-13b3: 20        clrp
-13b4: 10 82     bpl   $1338
-13b6: e5 b3 80  mov   a,$80b3
-13b9: 00        nop
-13ba: 04 01     or    a,$01
-13bc: a2 14     set5  $14
-13be: 01        tcall 0
-13bf: 10 02     bpl   $13c3
-13c1: 1a 0e     decw  $0e
-13c3: 0f        brk
-13c4: 02 02     set0  $02
-13c6: 08 05     or    a,#$05
-13c8: 13 fc 12  bbc0  $fc,$13dd
-13cb: f6 14 f4  mov   a,$f414+y
-13ce: 16 10 8f  or    a,$8f10+y
-13d1: d5 80 0a  mov   $0a80+x,a
-13d4: 9b 08     dec   $08+x
-13d6: 9c        dec   a
-13d7: 08 9b     or    a,#$9b
-13d9: 08 97     or    a,#$97
-13db: 08 99     or    a,#$99
-13dd: 08 9c     or    a,#$9c
-13df: 08 9b     or    a,#$9b
-13e1: 08 96     or    a,#$96
-13e3: 06        or    a,(x)
-13e4: 01        tcall 0
-13e5: 01        tcall 0
-13e6: 02 22     set0  $22
-13e8: 1a 13     decw  $13
-13ea: 02 12     set0  $12
-13ec: f4 10     mov   a,$10+x
-13ee: 8c d3 9b  dec   $9bd3
-13f1: 04 9c     or    a,$9c
-13f3: 04 9e     or    a,$9e
-13f5: 04 a0     or    a,$a0
-13f7: 04 a3     or    a,$a3
-13f9: 04 a5     or    a,$a5
-13fb: 04 02     or    a,$02
-13fd: 1e 1e 10  cmp   x,$101e
-1400: 8a c1 9b  eor1  c,$1378,1
-1403: a0        ei
-1404: 00        nop
-1405: 04 01     or    a,$01
-1407: a2 14     set5  $14
-1409: 01        tcall 0
-140a: 10 02     bpl   $140e
-140c: 08 22     or    a,#$22
-140e: 0f        brk
-140f: 02 02     set0  $02
-1411: 08 05     or    a,#$05
-1413: 13 fc 12  bbc0  $fc,$1428
-1416: f6 14 f4  mov   a,$f414+y
-1419: 16 10 8f  or    a,$8f10+y
-141c: d5 a3 08  mov   $08a3+x,a
-141f: a5 08 a3  sbc   a,$a308
-1422: 08 9b     or    a,#$9b
-1424: 08 a0     or    a,#$a0
-1426: 08 a5     or    a,#$a5
-1428: 08 a3     or    a,#$a3
-142a: 08 9e     or    a,#$9e
-142c: 08 10     or    a,#$10
-142e: 8f c5 9e  mov   $9e,#$c5
-1431: 08 16     or    a,#$16
-1433: 01        tcall 0
-1434: 01        tcall 0
-1435: 02 14     set0  $14
-1437: 22 13     set1  $13
-1439: f6 12 f4  mov   a,$f412+y
-143c: 10 8a     bpl   $13c8
-143e: c1        tcall 12
-143f: 9e        div   ya,x
-1440: a0        ei
-1441: 00        nop
-1442: 04 01     or    a,$01
-1444: a2 14     set5  $14
-1446: 01        tcall 0
-1447: 10 02     bpl   $144b
-1449: 0a 05 0f  or1   c,$01e0,5
-144c: 02 02     set0  $02
-144e: 08 05     or    a,#$05
-1450: 13 fc 12  bbc0  $fc,$1465
-1453: f6 14 f4  mov   a,$f414+y
-1456: 16 80 0a  or    a,$0a80+y
-1459: 10 8f     bpl   $13ea
-145b: d5 a3 08  mov   $08a3+x,a
-145e: a5 08 a3  sbc   a,$a308
-1461: 08 9b     or    a,#$9b
-1463: 08 a0     or    a,#$a0
-1465: 08 a5     or    a,#$a5
-1467: 08 a3     or    a,#$a3
-1469: 08 9e     or    a,#$9e
-146b: 08 01     or    a,#$01
-146d: 01        tcall 0
-146e: 02 22     set0  $22
-1470: 14 13     or    a,$13+x
-1472: f6 12 f4  mov   a,$f412+y
-1475: 10 8a     bpl   $1401
-1477: c1        tcall 12
-1478: a3 a0 00  bbs5  $a0,$147b
-147b: 04 01     or    a,$01
-147d: a2 14     set5  $14
-147f: 01        tcall 0
-1480: 0e 02 36  tset1 $3602
-1483: 36 13 fc  and   a,$fc13+y
-1486: 12 a4     clr0  $a4
-1488: 10 8f     bpl   $1419
-148a: d3 80 60  bbc6  $80,$14ed
-148d: 8c 10 86  dec   $8610
-1490: 11        tcall 1
-1491: 8c 12 86  dec   $8612
-1494: 13 8c 14  bbc0  $8c,$14ab
-1497: 86        adc   a,(x)
-1498: 15 10 8f  or    a,$8f10+x
-149b: d1        tcall 13
-149c: 8c 40 00  dec   $0040
-149f: 80        setc
-14a0: 80        setc
-14a1: 05 01 01  or    a,$0101
-14a4: 80        setc
-14a5: 02 05     set0  $05
+11e1: dw $0000
+11e3: dw $0200
+11e5: dw $021e
+11e7: dw $023f
+11e9: dw $0261
+11eb: dw $0285
+11ed: dw $02ab
+11ef: dw $02d4
+11f1: dw $02ff
+11f3: dw $032d
+11f5: dw $035d
+11f7: dw $0390
+11f9: dw $03c7
+11fb: dw $0400
+11fd: dw $043d
+11ff: dw $047d
+1201: dw $04c2
+1203: dw $050a
+1205: dw $0557
+1207: dw $05a8
+1209: dw $05fe
+120b: dw $065a
+120d: dw $06ba
+120f: dw $0721
+1211: dw $078d
+1213: dw $0800
+1215: dw $087a
+1217: dw $08fb
+1219: dw $0984
+121b: dw $0a14
+121d: dw $0aae
+121f: dw $0b50
+1221: dw $0bfd
+1223: dw $0cb3
+1225: dw $0d74
+1227: dw $0e41
+1229: dw $0f1a
+122b: dw $1000
+122d: dw $10f4
+122f: dw $11f6
+1231: dw $1307
+1233: dw $1429
+1235: dw $155c
+1237: dw $16a1
+1239: dw $17f9
+123b: dw $1966
+123d: dw $1ae9
+123f: dw $1c82
+1241: dw $1e34
+1243: dw $2000
+1245: dw $21e7
+1247: dw $23eb
+1249: dw $260e
+124b: dw $2851
+124d: dw $2ab7
+124f: dw $2d41
+1251: dw $2ff2
+1253: dw $32cc
+1255: dw $35d1
+1257: dw $3904
+1259: dw $3c68
+125b: dw $3fff

@@ -64,39 +64,8 @@
 0557: cd 00     mov   x,#$00
 0559: 1f 38 05  jmp   ($0538+x)
 
-055c:             01 e6 e6 26
-0560: 10 11 12 13 14 15 a7 1f
-0568: 01 23 bd 27 b9 28 b9 28
-0570: 50 2c 50 0d 0f 2d 94 2d
-0578: 9d 34 9d 34 ac 37 ac 37
-0580: 39 39 39 39 cc 3d 09 04
-0588: 00 02 15 3e 68 42 68 42
-0590: 6e 45 6e 45 f3 03 06 07
-0598: 08 05 17 50 13 51 13 51
-05a0: 5f 0e 5f 59 6c 5f 6c 5f
-05a8: d2 63 d2 63 88 66 88 66
-05b0: d2 6a d2 6a 32 6e 32 6e
-05b8: 10 72 10 72 0d 75 0d 75
-05c0: 56 75 56 75 87 0a 0b 0c
-05c8: af 85 af 85 b8 85 b8 85
-05d0: 83 87 83 87 34 8b 34 8b
-05d8: 95 24 25 26 27 28 2a 95
-05e0: 05 99 1b 1c 1d 29 04 a0
-05e8: 1e 1f 20 21 7e b3 7e b3
-05f0: 87 b3 87 b3 30 b9 30 b9
-05f8: e7 bf e7 bf 9e c6 9e c6
-0600: 3a cd 3a cd 9f d1 9f d1
-0608: ae d4 ae d4 4a db 4a db
-0610: bf d8 bf d8 5b df 5b df
-0618: 1b 02 09 18 19 00 00 00
-0620: 00 00 00 00 00 00 00 00
-0628: 0d 00 00 16 22 1c 17 18
-0630: 00 22 2b 19 23 2a 00 00
-0638: 00 00 00 00 00 00 00 00
-0640: 00 00 00 00 00 00 00 00
-0648: 00 00 00 00 00 00 00 00
-0650: 00 00 00 00 00 00 00 00
-0658: 00 00 00 00 00 00 00 00
+; 055c: ?
+; 0560: SRCN table
 
 0660: e5 5c 05  mov   a,$055c
 0663: 1c        asl   a
@@ -280,6 +249,7 @@
 
 07cf: 68 80     cmp   a,#$80
 07d1: d0 20     bne   $07f3
+; vcmd 80 - rest
 07d3: f5 e0 01  mov   a,$01e0+x
 07d6: d0 18     bne   $07f0
 07d8: f5 2a 0d  mov   a,$0d2a+x
@@ -296,13 +266,14 @@
 07ee: c4 f3     mov   $f3,a
 07f0: 5f eb 08  jmp   $08eb
 
+; vcmd 81-ff - note
 07f3: 68 e0     cmp   a,#$e0
-07f5: 30 0a     bmi   $0801
+07f5: 30 0a     bmi   $0801             ; 81-df - normal note
 07f7: 68 e1     cmp   a,#$e1
 07f9: f0 04     beq   $07ff
-07fb: f4 0e     mov   a,$0e+x
+07fb: f4 0e     mov   a,$0e+x           ; e0,e2-ff - note by vcmd 1c (not available)
 07fd: 2f 02     bra   $0801
-07ff: f4 16     mov   a,$16+x
+07ff: f4 16     mov   a,$16+x           ; e1 - note by vcmd 1d (not available)
 0801: 60        clrc
 0802: 88 24     adc   a,#$24
 0804: 95 40 01  adc   a,$0140+x
@@ -436,7 +407,7 @@
 0916: 8f 00 01  mov   $01,#$00
 0919: f4 45     mov   a,$45+x
 091b: fb 55     mov   y,$55+x
-091d: 7a 00     addw  ya,$00
+091d: 7a 00     addw  ya,$00            ; advance voice ptr
 091f: db 55     mov   $55+x,y
 0921: d4 45     mov   $45+x,a
 0923: 6f        ret
@@ -621,7 +592,7 @@
 0a7c: 4d        push  x
 0a7d: f7 00     mov   a,($00)+y
 0a7f: 5d        mov   x,a
-0a80: f5 60 05  mov   a,$0560+x
+0a80: f5 60 05  mov   a,$0560+x         ; read SRCN table
 0a83: ce        pop   x
 0a84: d5 44 02  mov   $0244+x,a
 0a87: 6f        ret

@@ -16,11 +16,11 @@
 04f1: d0 f6     bne   $04e9
 04f3: cd ff     mov   x,#$ff
 04f5: 8f 6c f2  mov   $f2,#$6c
-04f8: d8 f3     mov   $f3,x
+04f8: d8 f3     mov   $f3,x             ; FLG
 04fa: 8f 7d f2  mov   $f2,#$7d
-04fd: 8f 00 f3  mov   $f3,#$00
+04fd: 8f 00 f3  mov   $f3,#$00          ; EDL
 0500: 8f 6d f2  mov   $f2,#$6d
-0503: d8 f3     mov   $f3,x
+0503: d8 f3     mov   $f3,x             ; ESA
 0505: c9 b7 04  mov   $04b7,x
 0508: f8 e9     mov   x,$e9
 050a: 3e f4     cmp   x,$f4
@@ -64,39 +64,8 @@
 0558: cd 00     mov   x,#$00
 055a: 1f 39 05  jmp   ($0539+x)
 
-055d:                00 04 d6
-0560: 08 00 01 02 03 07 04 06
-0568: 05 0b 0d 3c 0a 37 3b 44
-0570: 43 0c 86 78 15 14 2e 83
-0578: 16 83 5d 1a 7e 86 5e 8e
-0580: 2b 92 2b 92 59 92 07 99
-0588: 1f 99 22 99 59 99 17 9b
-0590: d9 9b 54 1b 18 1c 1c 2b
-0598: 38 2c 38 2d 54 2e 54 2f
-05a0: 70 30 70 0f 8c 31 8c 10
-05a8: 32 11 33 12 34 13 35 36
-05b0: 21 22 23 24 25 26 27 28
-05b8: 29 2a 18 ac 34 ac 34 ac
-05c0: 62 ac 62 ac 90 ac 90 ac
-05c8: be ac be ac ec ac ec ac
-05d0: 1a ad 1a ad 48 ad 48 ad
-05d8: 76 ad 76 ad a4 ad a4 ad
-05e0: d2 ad d2 ad 00 ae 00 ae
-05e8: 2e ae 2e 0e 5c ae 19 1e
-05f0: 5b b3 5b b3 dc b7 dc b7
-05f8: 32 b9 3d b9 1d 40 1d 42
-0600: 30 38 30 be 97 09 20 c6
-0608: ad ce ad ce e4 d0 e4 d0
-0610: 14 d5 14 1d de e6 43 eb
-0618: 68 ed 68 ed 39 f2 0c f2
-0620: ac f7 ac f7 3f 00 3a 00
-0628: 00 00 00 00 00 00 00 00
-0630: 00 00 00 3e 00 00 00 38
-0638: 41 00 00 00 00 00 00 00
-0640: 00 00 00 00 00 00 00 00
-0648: 00 00 00 00 00 00 00 00
-0650: 00 00 00 00 00 00 00 00
-0658: 00 00 00 00 00 00 00 00
+; 055d: ?
+; 0560: SRCN table
 
 0660: e5 5d 05  mov   a,$055d
 0663: 1c        asl   a
@@ -148,26 +117,27 @@
 06b9: e8 71     mov   a,#$71
 06bb: fd        mov   y,a
 06bc: cb f2     mov   $f2,y
-06be: 3f eb 06  call  $06eb
+06be: 3f eb 06  call  $06eb             ; VOL(L)
 06c1: dc        dec   y
 06c2: cb f2     mov   $f2,y
-06c4: 3f eb 06  call  $06eb
+06c4: 3f eb 06  call  $06eb             ; VOL(R)
 06c7: dd        mov   a,y
 06c8: 80        setc
 06c9: a8 0f     sbc   a,#$0f
 06cb: 10 ee     bpl   $06bb
 06cd: 8f 0c f2  mov   $f2,#$0c
-06d0: 3f eb 06  call  $06eb
+06d0: 3f eb 06  call  $06eb             ; MVOL(L)
 06d3: 8f 1c f2  mov   $f2,#$1c
-06d6: 3f eb 06  call  $06eb
+06d6: 3f eb 06  call  $06eb             ; MVOL(R)
 06d9: 8f 2c f2  mov   $f2,#$2c
-06dc: 3f eb 06  call  $06eb
+06dc: 3f eb 06  call  $06eb             ; EVOL(L)
 06df: 8f 3c f2  mov   $f2,#$3c
-06e2: 3f eb 06  call  $06eb
+06e2: 3f eb 06  call  $06eb             ; EVOL(R)
 06e5: 1d        dec   x
 06e6: d0 d1     bne   $06b9
 06e8: 5f 60 06  jmp   $0660
 
+; decrease DSP (volume) reg
 06eb: e4 f3     mov   a,$f3
 06ed: f0 08     beq   $06f7
 06ef: 30 04     bmi   $06f5
@@ -232,7 +202,7 @@
 0764: 7a ec     addw  ya,$ec
 0766: da ec     movw  $ec,ya
 0768: 8f 4d f2  mov   $f2,#$4d
-076b: e4 f3     mov   a,$f3
+076b: e4 f3     mov   a,$f3             ; EON
 076d: 28 df     and   a,#$df
 076f: c4 f3     mov   $f3,a
 0771: 2f 0e     bra   $0781
@@ -290,21 +260,21 @@
 07e0: 5f f3 04  jmp   $04f3
 
 07e3: 8f 5c f2  mov   $f2,#$5c
-07e6: 8f ff f3  mov   $f3,#$ff
+07e6: 8f ff f3  mov   $f3,#$ff          ; KOF
 07e9: 8f 00 f1  mov   $f1,#$00
 07ec: 8f c8 fb  mov   $fb,#$c8
 07ef: 8f 02 f1  mov   $f1,#$02
 07f2: e4 fe     mov   a,$fe
 07f4: f0 fc     beq   $07f2
 07f6: 8f 6c f2  mov   $f2,#$6c
-07f9: 8f a0 f3  mov   $f3,#$a0
+07f9: 8f a0 f3  mov   $f3,#$a0          ; FLG
 07fc: cd 00     mov   x,#$00
 07fe: 8f 4d f2  mov   $f2,#$4d
-0801: d8 f3     mov   $f3,x
+0801: d8 f3     mov   $f3,x             ; EON
 0803: 8f 2c f2  mov   $f2,#$2c
-0806: d8 f3     mov   $f3,x
+0806: d8 f3     mov   $f3,x             ; EVOL(L)
 0808: 8f 3c f2  mov   $f2,#$3c
-080b: d8 f3     mov   $f3,x
+080b: d8 f3     mov   $f3,x             ; EVOL(R)
 080d: 3f 0b 10  call  $100b
 0810: 5f f3 04  jmp   $04f3
 
@@ -334,7 +304,7 @@
 0840: d0 08     bne   $084a
 0842: f5 95 0f  mov   a,$0f95+x
 0845: 8f 5c f2  mov   $f2,#$5c
-0848: c4 f3     mov   $f3,a
+0848: c4 f3     mov   $f3,a             ; KOF
 084a: 3f bc 09  call  $09bc
 084d: e8 00     mov   a,#$00
 084f: 6f        ret
@@ -360,16 +330,16 @@
 086e: d0 18     bne   $0888
 0870: f5 95 0f  mov   a,$0f95+x
 0873: 8f 5c f2  mov   $f2,#$5c
-0876: c4 f3     mov   $f3,a
+0876: c4 f3     mov   $f3,a             ; KOF
 0878: 7d        mov   a,x
 0879: 28 07     and   a,#$07
 087b: 9f        xcn   a
 087c: 08 02     or    a,#$02
 087e: c4 f2     mov   $f2,a
 0880: e8 00     mov   a,#$00
-0882: c4 f3     mov   $f3,a
+0882: c4 f3     mov   $f3,a             ; P(L)
 0884: ab f2     inc   $f2
-0886: c4 f3     mov   $f3,a
+0886: c4 f3     mov   $f3,a             ; P(H)
 0888: 5f 83 09  jmp   $0983
 
 ; vcmd 81-ff - note
@@ -435,11 +405,11 @@
 
 08f9: f5 54 02  mov   a,$0254+x
 08fc: 3f 59 0c  call  $0c59
-08ff: c4 f3     mov   $f3,a
+08ff: c4 f3     mov   $f3,a             ; VOL(L)
 0901: ab f2     inc   $f2
 0903: f5 64 02  mov   a,$0264+x
 0906: 3f 59 0c  call  $0c59
-0909: c4 f3     mov   $f3,a
+0909: c4 f3     mov   $f3,a             ; VOL(R)
 090b: ab f2     inc   $f2
 090d: f5 50 01  mov   a,$0150+x
 0910: 28 01     and   a,#$01
@@ -469,27 +439,27 @@
 094b: d4 c4     mov   $c4+x,a
 094d: e4 02     mov   a,$02
 094f: d4 84     mov   $84+x,a
-0951: c4 f3     mov   $f3,a
+0951: c4 f3     mov   $f3,a             ; P(L)
 0953: ab f2     inc   $f2
 0955: e4 03     mov   a,$03
 0957: d4 74     mov   $74+x,a
-0959: c4 f3     mov   $f3,a
+0959: c4 f3     mov   $f3,a             ; P(H)
 095b: ab f2     inc   $f2
 095d: f5 44 02  mov   a,$0244+x
-0960: c4 f3     mov   $f3,a
+0960: c4 f3     mov   $f3,a             ; SRCN
 0962: ab f2     inc   $f2
 0964: f5 74 02  mov   a,$0274+x
-0967: c4 f3     mov   $f3,a
+0967: c4 f3     mov   $f3,a             ; ADSR(1)
 0969: ab f2     inc   $f2
 096b: f5 84 02  mov   a,$0284+x
-096e: c4 f3     mov   $f3,a
+096e: c4 f3     mov   $f3,a             ; ADSR(2)
 0970: ab f2     inc   $f2
-0972: 8f 7f f3  mov   $f3,#$7f
+0972: 8f 7f f3  mov   $f3,#$7f          ; GAIN
 0975: 8f 5c f2  mov   $f2,#$5c
-0978: 8f 00 f3  mov   $f3,#$00
+0978: 8f 00 f3  mov   $f3,#$00          ; KOF
 097b: 8f 4c f2  mov   $f2,#$4c
 097e: f5 95 0f  mov   a,$0f95+x
-0981: c4 f3     mov   $f3,a
+0981: c4 f3     mov   $f3,a             ; KOL
 0983: f5 20 01  mov   a,$0120+x
 0986: f0 0f     beq   $0997
 0988: 8f 01 00  mov   $00,#$01
@@ -513,7 +483,7 @@
 09ae: 8f 00 01  mov   $01,#$00
 09b1: f4 44     mov   a,$44+x
 09b3: fb 54     mov   y,$54+x
-09b5: 7a 00     addw  ya,$00
+09b5: 7a 00     addw  ya,$00            ; advance voice ptr
 09b7: db 54     mov   $54+x,y
 09b9: d4 44     mov   $44+x,a
 09bb: 6f        ret
@@ -570,9 +540,9 @@
 0a24: 08 02     or    a,#$02
 0a26: c4 f2     mov   $f2,a
 0a28: f4 84     mov   a,$84+x
-0a2a: c4 f3     mov   $f3,a
+0a2a: c4 f3     mov   $f3,a             ; P(L)
 0a2c: ab f2     inc   $f2
-0a2e: cb f3     mov   $f3,y
+0a2e: cb f3     mov   $f3,y             ; P(H)
 0a30: 9b 94     dec   $94+x
 0a32: d0 05     bne   $0a39
 0a34: e8 ff     mov   a,#$ff
@@ -628,9 +598,9 @@
 0a96: 08 02     or    a,#$02
 0a98: c4 f2     mov   $f2,a
 0a9a: f4 84     mov   a,$84+x
-0a9c: c4 f3     mov   $f3,a
+0a9c: c4 f3     mov   $f3,a             ; P(L)
 0a9e: ab f2     inc   $f2
-0aa0: cb f3     mov   $f3,y
+0aa0: cb f3     mov   $f3,y             ; P(H)
 0aa2: 9b a4     dec   $a4+x
 0aa4: d0 0e     bne   $0ab4
 0aa6: f5 00 02  mov   a,$0200+x
@@ -667,10 +637,10 @@
 0ae8: 08 00     or    a,#$00
 0aea: c4 f2     mov   $f2,a
 0aec: f5 54 02  mov   a,$0254+x
-0aef: c4 f3     mov   $f3,a
+0aef: c4 f3     mov   $f3,a             ; VOL(L)
 0af1: f5 64 02  mov   a,$0264+x
 0af4: ab f2     inc   $f2
-0af6: c4 f3     mov   $f3,a
+0af6: c4 f3     mov   $f3,a             ; VOL(R)
 0af8: f5 e4 02  mov   a,$02e4+x
 0afb: 9c        dec   a
 0afc: d5 e4 02  mov   $02e4+x,a
@@ -694,7 +664,7 @@
 0b21: d0 08     bne   $0b2b
 0b23: 8f 5c f2  mov   $f2,#$5c
 0b26: f5 95 0f  mov   a,$0f95+x
-0b29: c4 f3     mov   $f3,a
+0b29: c4 f3     mov   $f3,a             ; KOF
 0b2b: 7d        mov   a,x
 0b2c: 68 08     cmp   a,#$08
 0b2e: 90 31     bcc   $0b61
@@ -708,18 +678,18 @@
 0b3d: f5 95 0f  mov   a,$0f95+x
 0b40: 48 ff     eor   a,#$ff
 0b42: 24 f3     and   a,$f3
-0b44: c4 f3     mov   $f3,a
+0b44: c4 f3     mov   $f3,a             ; NON
 0b46: 8f 4d f2  mov   $f2,#$4d
 0b49: f5 94 02  mov   a,$0294+x
 0b4c: f0 09     beq   $0b57
 0b4e: f5 95 0f  mov   a,$0f95+x
 0b51: 04 f3     or    a,$f3
-0b53: c4 f3     mov   $f3,a
+0b53: c4 f3     mov   $f3,a             ; EON
 0b55: 2f 09     bra   $0b60
 0b57: f5 95 0f  mov   a,$0f95+x
 0b5a: 48 ff     eor   a,#$ff
 0b5c: 24 f3     and   a,$f3
-0b5e: c4 f3     mov   $f3,a
+0b5e: c4 f3     mov   $f3,a             ; EON
 0b60: ce        pop   x
 0b61: e8 00     mov   a,#$00
 0b63: 6f        ret
@@ -750,11 +720,11 @@
 0b8a: 6f        ret
 
 0b8b: 4d        push  x
-0b8c: f7 00     mov   a,($00)+y
+0b8c: f7 00     mov   a,($00)+y         ; arg1
 0b8e: 5d        mov   x,a
-0b8f: f5 60 05  mov   a,$0560+x
+0b8f: f5 60 05  mov   a,$0560+x         ; read SRCN table
 0b92: ce        pop   x
-0b93: d5 44 02  mov   $0244+x,a
+0b93: d5 44 02  mov   $0244+x,a         ; SRCN
 0b96: 6f        ret
 
 ; vcmd 22 - set voice params
@@ -918,7 +888,7 @@
 0cb7: e8 ff     mov   a,#$ff
 0cb9: 80        setc
 0cba: a4 00     sbc   a,$00
-0cbc: c4 f3     mov   $f3,a
+0cbc: c4 f3     mov   $f3,a             ; ESA
 0cbe: c5 b7 04  mov   $04b7,a
 0cc1: fd        mov   y,a
 0cc2: e8 00     mov   a,#$00
@@ -1106,7 +1076,7 @@
 0e0b: d5 50 01  mov   $0150+x,a
 0e0e: 5f df 0d  jmp   $0ddf
 
-; vcmd 0d
+; vcmd 0d - vibrato (short)
 0e11: ce        pop   x
 0e12: e8 00     mov   a,#$00
 0e14: 3f 25 0e  call  $0e25
@@ -1146,14 +1116,14 @@
 0e56: d5 84 02  mov   $0284+x,a
 0e59: 6f        ret
 
-; vcmd 1c
+; vcmd 1c - set note for e0
 0e5a: ce        pop   x
 0e5b: 8d 01     mov   y,#$01
 0e5d: f7 00     mov   a,($00)+y
 0e5f: d4 0c     mov   $0c+x,a
 0e61: 5f 6b 0e  jmp   $0e6b
 
-; vcmd 1d
+; vcmd 1d - set note for e1
 0e64: ce        pop   x
 0e65: 8d 01     mov   y,#$01
 0e67: f7 00     mov   a,($00)+y
@@ -1187,12 +1157,12 @@
 0e98: 8f 0d f2  mov   $f2,#$0d
 0e9b: 8d 01     mov   y,#$01
 0e9d: f7 00     mov   a,($00)+y
-0e9f: c4 f3     mov   $f3,a
+0e9f: c4 f3     mov   $f3,a             ; EDL
 0ea1: fc        inc   y
 0ea2: 8f 2c f2  mov   $f2,#$2c
 0ea5: f7 00     mov   a,($00)+y
 0ea7: c5 32 02  mov   $0232,a
-0eaa: c4 f3     mov   $f3,a
+0eaa: c4 f3     mov   $f3,a             ; EVOL(L)
 0eac: 8f 3c f2  mov   $f2,#$3c
 0eaf: fc        inc   y
 0eb0: f7 00     mov   a,($00)+y
@@ -1201,7 +1171,7 @@
 0eb7: e8 00     mov   a,#$00
 0eb9: c5 b5 04  mov   $04b5,a
 0ebc: 8f 6c f2  mov   $f2,#$6c
-0ebf: c4 f3     mov   $f3,a
+0ebf: c4 f3     mov   $f3,a             ; EVOL(R)
 0ec1: 5f 6a 0d  jmp   $0d6a
 
 ; vcmd 16 - voice echo on
@@ -1209,7 +1179,7 @@
 0ec7: 8f 4d f2  mov   $f2,#$4d
 0eca: f5 95 0f  mov   a,$0f95+x
 0ecd: 04 f3     or    a,$f3
-0ecf: c4 f3     mov   $f3,a
+0ecf: c4 f3     mov   $f3,a             ; EON
 0ed1: e8 01     mov   a,#$01
 0ed3: d5 94 02  mov   $0294+x,a
 0ed6: 8f 01 00  mov   $00,#$01
@@ -1242,7 +1212,7 @@
 0f0a: 8f 09 00  mov   $00,#$09
 0f0d: 5f 7b 0b  jmp   $0b7b
 
-; vcmd 19
+; vcmd 19 - set noise clock
 0f10: 3f 64 0b  call  $0b64
 0f13: f7 00     mov   a,($00)+y
 0f15: c5 b4 04  mov   $04b4,a
@@ -1251,21 +1221,21 @@
 0f1e: c4 f3     mov   $f3,a
 0f20: 5f 78 0b  jmp   $0b78
 
-; vcmd 1a
+; vcmd 1a - noise on
 0f23: ce        pop   x
 0f24: 8f 3d f2  mov   $f2,#$3d
 0f27: f5 95 0f  mov   a,$0f95+x
 0f2a: 04 f3     or    a,$f3
-0f2c: c4 f3     mov   $f3,a
+0f2c: c4 f3     mov   $f3,a             ; NON
 0f2e: 3f 69 0b  call  $0b69
 0f31: 5f d6 0e  jmp   $0ed6
 
-; vcmd 1b
+; vcmd 1b - noise off
 0f34: ce        pop   x
 0f35: 8f 3d f2  mov   $f2,#$3d
 0f38: f5 95 0f  mov   a,$0f95+x
 0f3b: 48 ff     eor   a,#$ff
-0f3d: 24 f3     and   a,$f3
+0f3d: 24 f3     and   a,$f3             ; NON
 0f3f: c4 f3     mov   $f3,a
 0f41: 5f 2e 0f  jmp   $0f2e
 
@@ -1328,7 +1298,7 @@
 0fb9: dw $0dd6  ; 0a - pitch slide off
 0fbb: dw $0deb  ; 0b - set tempo
 0fbd: dw $0df8  ; 0c - add tempo
-0fbf: dw $0e11  ; 0d
+0fbf: dw $0e11  ; 0d - vibrato (short)
 0fc1: dw $0e05  ; 0e - vibrato off
 0fc3: dw $0e1a  ; 0f - vibrato
 0fc5: dw $0e45  ; 10 - set ADSR envelope
@@ -1340,11 +1310,11 @@
 0fd1: dw $0ec4  ; 16 - voice echo on
 0fd3: dw $0edc  ; 17 - voice echo off
 0fd4: dw $0ef6  ; 18 - set echo filter
-0fd7: dw $0f10  ; 19
-0fd9: dw $0f23  ; 1a
-0fdb: dw $0f34  ; 1b
-0fdd: dw $0e5a  ; 1c
-0fdf: dw $0e64  ; 1d
+0fd7: dw $0f10  ; 19 - set noise clock
+0fd9: dw $0f23  ; 1a - noise on
+0fdb: dw $0f34  ; 1b - noise off
+0fdd: dw $0e5a  ; 1c - set note for e0
+0fdf: dw $0e64  ; 1d - set note for e1
 0fe1: dw $0c83  ; 1e - set volume preset
 0fe3: dw $0ca0  ; 1f - echo delay
 0fe5: dw $0c02  ; 20 - set volume from preset 1
@@ -1373,50 +1343,50 @@
 1011: c4 ee     mov   $ee,a
 1013: c4 ef     mov   $ef,a
 1015: 8f 6c f2  mov   $f2,#$6c
-1018: 8f e0 f3  mov   $f3,#$e0
+1018: 8f e0 f3  mov   $f3,#$e0          ; FLG reset
 101b: 8f 2c f2  mov   $f2,#$2c
 101e: c5 32 02  mov   $0232,a
-1021: c4 f3     mov   $f3,a
+1021: c4 f3     mov   $f3,a             ; EVOL(L)
 1023: 8f 3c f2  mov   $f2,#$3c
 1026: c5 33 02  mov   $0233,a
-1029: c4 f3     mov   $f3,a
+1029: c4 f3     mov   $f3,a             ; EVOL(R)
 102b: 8f 0d f2  mov   $f2,#$0d
-102e: c4 f3     mov   $f3,a
+102e: c4 f3     mov   $f3,a             ; EFB
 1030: 8f 4c f2  mov   $f2,#$4c
-1033: c4 f3     mov   $f3,a
+1033: c4 f3     mov   $f3,a             ; KOL
 1035: 8f 5c f2  mov   $f2,#$5c
-1038: 8f ff f3  mov   $f3,#$ff
+1038: 8f ff f3  mov   $f3,#$ff          ; KOF
 103b: 8f 2d f2  mov   $f2,#$2d
-103e: c4 f3     mov   $f3,a
+103e: c4 f3     mov   $f3,a             ; PMON
 1040: 8f 3d f2  mov   $f2,#$3d
-1043: c4 f3     mov   $f3,a
+1043: c4 f3     mov   $f3,a             ; NON
 1045: 8f 4d f2  mov   $f2,#$4d
-1048: c4 f3     mov   $f3,a
+1048: c4 f3     mov   $f3,a             ; EON
 104a: e8 3c     mov   a,#$3c
 104c: c5 30 02  mov   $0230,a
 104f: c5 31 02  mov   $0231,a
 1052: 8f 0c f2  mov   $f2,#$0c
-1055: c4 f3     mov   $f3,a
+1055: c4 f3     mov   $f3,a             ; MVOL(L)
 1057: 8f 1c f2  mov   $f2,#$1c
-105a: c4 f3     mov   $f3,a
+105a: c4 f3     mov   $f3,a             ; MVOL(R)
 105c: e8 64     mov   a,#$64
 105e: c5 b6 04  mov   $04b6,a
 1061: 8f 5d f2  mov   $f2,#$5d
-1064: 8f 31 f3  mov   $f3,#$31
+1064: 8f 31 f3  mov   $f3,#$31          ; DIR
 1067: 8d 08     mov   y,#$08
 1069: 8f 00 f2  mov   $f2,#$00
 106c: e8 7f     mov   a,#$7f
-106e: c4 f3     mov   $f3,a
+106e: c4 f3     mov   $f3,a             ; VOL(L)
 1070: ab f2     inc   $f2
-1072: c4 f3     mov   $f3,a
+1072: c4 f3     mov   $f3,a             ; VOL(R)
 1074: 60        clrc
 1075: 98 04 f2  adc   $f2,#$04
 1078: e8 00     mov   a,#$00
-107a: c4 f3     mov   $f3,a
+107a: c4 f3     mov   $f3,a             ; ADSR(1)
 107c: ab f2     inc   $f2
-107e: c4 f3     mov   $f3,a
+107e: c4 f3     mov   $f3,a             ; ADSR(2)
 1080: ab f2     inc   $f2
-1082: 8f ff f3  mov   $f3,#$ff
+1082: 8f ff f3  mov   $f3,#$ff          ; GAIN
 1085: 60        clrc
 1086: 98 09 f2  adc   $f2,#$09
 1089: dc        dec   y
@@ -1467,7 +1437,7 @@
 10ec: c4 1e     mov   $1e,a
 10ee: c4 21     mov   $21,a
 10f0: 8f 6c f2  mov   $f2,#$6c
-10f3: 8f 20 f3  mov   $f3,#$20
+10f3: 8f 20 f3  mov   $f3,#$20          ; FLG
 10f6: 6f        ret
 
 10f7: 2d        push  a
@@ -1494,7 +1464,7 @@
 111c: f5 95 0f  mov   a,$0f95+x
 111f: 48 ff     eor   a,#$ff
 1121: 24 f3     and   a,$f3
-1123: c4 f3     mov   $f3,a
+1123: c4 f3     mov   $f3,a             ; NON
 1125: 7d        mov   a,x
 1126: 60        clrc
 1127: 88 08     adc   a,#$08
@@ -1547,7 +1517,7 @@
 118c: 8f 4d f2  mov   $f2,#$4d
 118f: f5 95 0f  mov   a,$0f95+x
 1192: 48 ff     eor   a,#$ff
-1194: 24 f3     and   a,$f3
+1194: 24 f3     and   a,$f3             ; EON
 1196: c4 f3     mov   $f3,a
 1198: 6f        ret
 
