@@ -1,12 +1,12 @@
-# Makefile for chunspc
+# Makefile for suzuhspc
 
 CC	= cc
 CFLAGS	= -O
 LDFLAGS	=
 INCLUDES = -I.
 LIBS	= -lm
-TARGET	= chunspc
-OBJS	= cioutil.o libsmfc.o libsmfcx.o spcseq.o chunspc.o
+TARGET	= suzuhspc
+OBJS	= cioutil.o libsmfc.o libsmfcx.o spcseq.o hudspc.o
 
 all:	$(TARGET)
 
@@ -26,4 +26,4 @@ cioutil.o: cioutil.h
 libsmfc.o: libsmfc.h
 libsmfcx.o: libsmfcx.h
 spcseq.o: spcseq.h
-chunspc.o: chunspc.h
+suzuhspc.o: suzuhspc.h

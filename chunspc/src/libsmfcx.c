@@ -79,7 +79,7 @@ bool smfInsertNote(Smf* seq, int time, int channel, int track, int key, int velo
 {
   bool result = false;
 
-  if(velocity > 0 && duration > 0)
+  if(velocity > 0)
   {
     result = smfInsertNoteOn(seq, time, channel, track, key, velocity) 
       && smfInsertNoteOn(seq, time + duration, channel, track, key, 0);

@@ -1,5 +1,5 @@
 /**
- * chunsoft summer/winter spc2midi.
+ * Chunsoft spc2midi.
  * http://loveemu.yh.land.to/
  */
 
@@ -16,5 +16,8 @@ int chunSpcSetLoopCount(int count);
 Smf* chunSpcARAMToMidi(const byte *ARAM);
 Smf* chunSpcToMidi(const byte *data, size_t size);
 Smf* chunSpcToMidiFromFile(const char *filename);
+bool chunSpcImportPatchFixFile(const char *filename);
+
+void chunSpcInit(void);
 
 #endif /* !CHUNSPC_H */

@@ -21,6 +21,13 @@ static const double spcSRTable[0x20] = {
     0.0092, 0.0074, 0.0055, 0.0037, 0.0018
 };
 
+static const int spcNCKTable[0x20] = {
+        0,    16,    21,    25,    31,    42,    50,    63,
+       84,   100,   125,   167,   200,   250,   333,   400,
+      500,   667,   800,  1000,  1300,  1600,  2000,  2700,
+     3200,  4000,  5300,  6400,  8000, 10700, 16000, 32000,
+};
+
 typedef struct TagPatchFixInfo {
     int patchNo;        // patch number after fixed
     int bankSelL;       // bank number (LSB) after fixed
@@ -35,6 +42,7 @@ typedef struct TagSeqEventReport {
     int addr;           // address of the event
     int size;           // size of the event
     int code;           // event type (first byte)
+    int subcode;        // sub event type (usually not used)
     bool unidentified;  // unidentified event or not
     char note[256];     // note of the event
     char classStr[256]; // html classes

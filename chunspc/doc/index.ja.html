@@ -54,12 +54,19 @@
               <dd>バッチファイルなりシェルスクリプトなり書いてなんとかしてください。</dd>
               <dt>chunspc.cssってどこにあるんですか？わかりません＞＜</dt>
               <dd>docディレクトリにあります。適宜、base.cssとセットでコピーして使ってください。</dd>
-              <dt>全然違う曲に変換されちゃいます＞＜</dt>
-              <dd>曲検出テキトーなのでそういうこともあります。とても早い段階で吸い出したSPCファイルはうまく扱えない傾向にあります。曲の途中で吸い出してもchunspcは全然それを気にしないので、完全に曲再生に入ってから吸い出したSPCを使うとよいです。それと、弟切草の曲検出はさらに精度が低めです。そのかわり、弟切草は1つのSPCファイルにすべての曲が入っているので、chunspcのソースが読める人はちょっとした書き換えで変換対象を誘導することができます。テキトーでごめんなさい。だってゆるふわだもの。</dd>
+              <dt>Tool converts unexpected song, why?</dt>
+              <dd>ChunSPC will try searching current song location by some RAM conditions, however it is not always correct. Otogirisou is the most problematic because it can have multiple songs in RAM. Also, Otorigisou SPC collection in SNESmusic.org is dumped during loading a song, it really confuses the tool. You can "redump" those SPCs by using SNES SPC700 Player.</dd>
+              <dt>Can I redump Otogirisou SPC without changing the song start timing then? 既存の弟切草SPCの再生タイミングを変えることなく再ダンプすることは可能？</dt>
+              <dd>Yes, it can be done by the following steps.
+                <ol>
+                  <li>Open the target SPC by a hex editor, then edit offset $109c (6f → ff) and save it.</li>
+                  <li>Open the edited SPC by SNES SPC700 Player, I guess you will not hear any sound. (If the song plays correctly, probably redump will not help you. Use --song option to tell the expected song index to ChunSPC instead.)</li>
+                  <li>Save SPC snapshot and open it by a hex editor, then edit offset $109c (ff → 6f) and save it.</li>
+                  <li>Done. Try converting it by ChunSPC.</li>
+                </ol>
+              </dd>
               <dt>Why don't you write a English manual?</dt>
               <dd>Because it's a bit too difficult for me, also I'm extremely lazy. Anyway, I'm sure that you can use the program easily. It's not complicated at all.</dd>
-              <dt>「こんにちは三俣千代子と申します」「すぎやまこういちとｒｙ」「J∀$RACのｒｙ」</dt>
-              <dd>ぬわーっ！</dd>
             </dl>
           </div>
         </div>

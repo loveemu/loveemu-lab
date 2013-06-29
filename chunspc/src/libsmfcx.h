@@ -28,7 +28,6 @@
 #define SMF_CONTROL_VIBRATODEPTH    77
 #define SMF_CONTROL_VIBRATODELAY    78
 #define SMF_CONTROL_REVERB          91
-#define SMF_CONTROL_TREMOLODEPTH    92 /* ? */
 #define SMF_CONTROL_CHORUS          93
 #define SMF_CONTROL_NRPNL           98
 #define SMF_CONTROL_NRPNM           99

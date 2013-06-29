@@ -1,5 +1,5 @@
 /**
- * chunsoft summer/winter spc2midi.
+ * Chunsoft spc2midi.
  * http://loveemu.yh.land.to/
  */
 
@@ -11,13 +11,12 @@
 #include <math.h>
 #include <assert.h>
 
+#include "spcseq.h"
 #include "chunspc.h"
 
-#define VERSION "[2008-11-29]"
-
-// MIDI limitations
-#define SMF_PITCHBENDSENS_DEFAULT   2
-#define SMF_PITCHBENDSENS_MAX       24
+#define APPNAME "Chunsoft SPC2MIDI"
+#define APPSHORTNAME "chunspc"
+#define VERSION "[2013-06-29]"
 
 static int chunSpcLoopMax = 2;            // maximum loop count of parser
 static int chunSpcTextLoopMax = 1;        // maximum loop count of text output
@@ -25,39 +24,125 @@ static double chunSpcTimeLimit = 1200;    // time limit of conversion (for safet
 static bool chunSpcLessTextInSMF = false; // decreases amount of texts in SMF output
 
 static int chunSpcPitchBendSens = 0;      // amount of pitch bend sensitivity (0=auto; <=SMF_PITCHBENDSENS_MAX)
-static int chunSpcChannelVolOffset = 0;   // XXX: hack, should be 0 for serious conversion
-static bool chunSpcNoPatchChange = false; // XXX: hack, should be false for serious conversion
 static bool chunSpcVolIsLinear = false;   // assumes volume curve between SPC and MIDI is linear
+
+static int chunSpcTimeBase = 48;
+static int chunSpcForceSongIndex = -1;
+static int chunSpcForceSongListAddr = -1;
+
+static bool chunSpcPatchFixOverride = false;
+static PatchFixInfo chunSpcPatchFix[256];
+
+enum {
+    SMF_RESET_GM1 = 0,      // General MIDI Level 1
+    SMF_RESET_GS,           // Roland GS
+    SMF_RESET_XG,           // YAMAHA XG
+    SMF_RESET_GM2,          // General MIDI Level 2
+};
+static int chunSpcMidiResetType = SMF_RESET_GM1;
+
+static const char *mycssfile = APPSHORTNAME ".css";
 
 //----
 
-#define SPC_VER_UNKNOWN     0
-#define SPC_VER_OTOGIRISOU  1       // summer OTOGIRISOU version $Revision: 2.0.1.3
-#define SPC_VER_DQ5         2       // winter DQ5 version $Revision: 1.44
-#define SPC_VER_TORNECO     3       // winter F version $Revision: 2.3
-#define SPC_VER_KAMAITACHI  4       // winter SN2 version $Revision: 3.32
+enum {
+    SPC_VER_UNKNOWN = 0,
+    SPC_VER_OTOGIRISOU,
+    SPC_VER_DQ5,
+    SPC_VER_TORNECO,
+    SPC_VER_KAMAITACHI,
+};
+
+// MIDI/SMF limitations
+#define SMF_PITCHBENDSENS_DEFAULT   2
+#define SMF_PITCHBENDSENS_MAX       24
 
 // any changes are not needed normally
-#define SPC_TIMEBASE        48
-#define SPC_SONG_MAX        8
+#define SPC_TRACK_MAX       8
 #define SPC_NOTE_KEYSHIFT   23
-#define CMD_CALL_MAX        3
+#define SPC_ARAM_SIZE       0x10000
 
-static const double spcARTable[0x10] = {
-    4.1, 2.6, 1.5, 1.0, 0.640, 0.380, 0.260, 0.160,
-    0.096, 0.064, 0.040, 0.024, 0.016, 0.010, 0.006, 0
+typedef struct TagChunSpcTrackStat ChunSpcTrackStat;
+typedef struct TagChunSpcSeqStat ChunSpcSeqStat;
+typedef void (*ChunSpcEvent) (ChunSpcSeqStat *, SeqEventReport *);
+
+typedef struct TagChunSpcVerInfo {
+    int id;
+    int seqListAddr;
+    int songIndex;
+    int songIndexAddr;
+    int seqHeaderAddr;
+    int vcmdTableAddr;
+    int songTableItemLen;
+    int songTableMaxCount;
+    int songTableSeqAddrOfs;
+    int baseTempoVarAddr;
+    int cpuControledVarAddr;
+    ChunSpcEvent event[256];
+    PatchFixInfo patchFix[256];
+    bool seqDetected;
+} ChunSpcVerInfo;
+
+typedef struct TagChunSpcNoteParam {
+    bool active;        // if the following params are used or not
+    int tick;           // timing (tick)
+    int dur;            // total length (tick)
+    int vel;            // note volume
+    bool tied;          // if the note tied/slur
+    int key;            // key
+    int transpose;      // transpose
+    int patch;          // instrument
+} ChunSpcNoteParam;
+
+struct TagChunSpcTrackStat {
+    bool active;            // if the channel is still active
+    bool used;              // if the channel used once or not
+    int pos;                // current address on ARAM
+    int tick;               // timing (must be synchronized with seq)
+    int prevTick;           // previous timing (for pitch slide)
+    ChunSpcNoteParam note;     // current note param
+    ChunSpcNoteParam lastNote; // note params for last note
+    int looped;             // how many times looped (internal)
+    int patch;              // patch number (for pitch fix)
+    int noteLen;            // length of note (tick)
+    int durRate;            // duration rate (0-255)
+    int subRetnAddr[0x100]; // return address of subroutine vcmd
+    int subNestLevel;       // current nest level of subroutine vcmd
+    int subNestLevelMax;    // max nest level allowed of subroutine vcmd
+    int volume;             // current volume
+    int panpot;             // current panpot
+    int expression;         // current expression (subvolume)
+    int transpose;          // per-voice transpose
+    int loopCount;          // repeat count for loop command
+    int loopCountAlt;       // repeat count for alternative loop command
+    bool refNoteLen;        // refer note length from prior channel
+    int pitchBendSensMax;   // limit of pitch slide for MIDI output
+    bool pitchNeedsFinalize;// whether write bend=0 at note on
 };
-static const double spcDRTable[0x08] = {
-    1.2, 0.740, 0.440, 0.290, 0.180, 0.110, 0.074, 0.037
+
+struct TagChunSpcSeqStat {
+    const byte* aRAM;           // SPC ARAM (65536 bytes)
+    Smf* smf;                   // link for smf output
+    int timebase;               // SMF division
+    int tick;                   // timing (tick)
+    double time;                // timing (s)
+    int tempo;                  // tempo (bpm)
+    int baseTempo;              // base tempo
+    int numOfTracks;            // number of tracks
+    int transpose;              // global transpose
+    int looped;                 // how many times the song looped (internal)
+    bool active;                // if the seq is still active
+    byte cpuControledVar;       // cpu-controled jump interface
+    ChunSpcVerInfo ver;         // game version info
+    ChunSpcTrackStat track[SPC_TRACK_MAX]; // status of each tracks
 };
-static const double spcSRTable[0x20] = {
-    0, 38, 28, 24, 19, 14, 12, 9.4, 7.1, 5.9, 4.7, 3.5, 2.9, 2.4, 1.8, 1.5,
-    1.2, 0.880, 0.740, 0.590, 0.440, 0.370, 0.290, 0.220, 0.180, 0.150, 0.110,
-    0.0092, 0.0074, 0.0055, 0.0037, 0.0018
-};
+
+static void chunSpcSetEventList (ChunSpcSeqStat *seq);
+
+//----
 
 static FILE *mystdout = NULL;
-static int myprintf(const char *format, ...)
+static int myprintf (const char *format, ...)
 {
     va_list va;
     int result = 0;
@@ -69,160 +154,11 @@ static int myprintf(const char *format, ...)
     }
     return result;
 }
-static const char *mycssfile = "chunspc.css";
-
-typedef struct TagChunSpcTrackStat {
-    int pos;            // current address on ARAM
-    int tick;           // timing (must be synchronized with seq)
-    int duration;       // length of note (tick)
-    int durationRate;   // duration rate (0-255)
-    int lastNote;       // note number of the last note (used for tie)
-    int tieBeginTick;   // beginning of tied note (tick)
-    int tieDuration;    // duration for tie
-    int tieTranspose;   // key shift for tie
-    bool refDuration;   // refer duration info from other channel
-    int transpose;      // key shift (note number, signed)
-    int callSP;         // stack pointer for call/ret (<=CMD_CALL_MAX)
-    int retnAddr[CMD_CALL_MAX]; // return address of call
-    int loopCount;      // repeat count for loop command
-    int loopCountAlt;   // repeat count for alternative loop command
-    int patch;          // patch number (for pitch fix)
-    int masterVolume;   // master volume (volume)
-    int volume;         // volume (expression)
-    int pan;            // panpot
-    int pitchSlideStartTick; // start timing of pitch slide (tick)
-    int pitchSlideEndTick; // end timing of pitch slide (tick)
-    int pitchSlideTarget; // target pitch of slide (-8192-8192)
-    int lastPitch;      // last output value of pitch bend
-    int pitchSlideMax;  // limit of pitch slide for MIDI output
-    int looped;         // how many times 'the song' looped (internal)
-    bool hasEnd;        // has reached to EOT? (internal)
-} ChunSpcTrackStat;
-
-typedef struct TagChunSpcSeqStat {
-    byte* ARAM;                 // ARAM (65536 bytes)
-    int version;                // SPC_VER_*
-    int tick;                   // timing (tick)
-    double time;                // timing (s)
-    int tempo;                  // current tempo (bpm)
-    int masterTempo;            // tempo base (bpm), used for SN2
-    int addrOfHeader;           // sequence header address
-    int numOfTracks;            // number of tracks (<=8)
-    int cpuFlag;                // flag which is updated via CPU (I assume)
-    ChunSpcTrackStat track[8];  // status of each tracks
-} ChunSpcSeqStat;
-
-typedef struct TagSeqEventReport {
-    int track;          // track number
-    int tick;           // timing (tick)
-    int addr;           // address of the event
-    int size;           // size of the event
-    int code;           // event type (first byte)
-    bool unidentified;  // unidentified event or not
-    char note[256];     // note of the event
-    char classStr[256]; // html classes
-} SeqEventReport;
-
-void getNoteName(char *name, int note);
-bool isSpcSoundFile(const byte *data, size_t size);
-bool chunSpcDetectSeq(ChunSpcSeqStat *seq);
-
-static const char *chunSpcVerToStr(int version);
-static int chunSpcCheckVer(ChunSpcSeqStat *seq);
-static void printHtmlHeader(void);
-static void printHtmlFooter(void);
-
-static int chunSpcMulRate(int y, int a, int spcVer);
-static int chunSpcActualDurationOf(int duration, int durationRate, int spcVer);
-static bool chunSpcDequeueTiedNote(ChunSpcSeqStat *seq, int track, Smf* smf);
-static bool smfInsertChunSpcNote(Smf* seq, int time, int channel, int track, int key, int duration);
-static int chunSpcMidiVolOf(int value);
-static int chunSpcMidiVolExprOf(int value);
-static bool smfInsertChunSpcVolume(Smf* seq, int time, int channel, int track, int value);
-static bool smfInsertChunSpcExpression(Smf* seq, int time, int channel, int track, int value);
-static int chunSpcMidiPanOf(int value);
-static bool smfInsertChunSpcPanpot(Smf* seq, int time, int channel, int track, int value);
-static bool chunSpcEventCondJump(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf, int flag);
-static bool chunSpcEventCondJumpCnt(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf, int count, int *counter);
-typedef void (*ChunSpcEvent) (ChunSpcSeqStat *, SeqEventReport *, Smf *);
-static void chunSpcEventUnknownInline(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventUnidentified(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventUnknown0(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventUnknown1(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventUnknown2(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventUnknown3(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventNOP(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventReserved(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventNote(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventDurFromTable(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventDB(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventDC(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventDDInline(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventDD(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventDE(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventE0(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventE2(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventE6(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventE8(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventEA(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventEB(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventEC(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventED(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventEE(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventEFInline(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventEF(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventF0(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventF1(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventF2(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventF4(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventF5(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventF3(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventF6(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventF7(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventF8(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventF9(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventFA(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventFB(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcEventFF(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf);
-static void chunSpcInitEventList(ChunSpcSeqStat *seq, ChunSpcEvent *event);
-
-static bool handleCmdLineOpts(int *argc, char **argv[], const char *cmd);
-
-void man(const char *cmd);
-void about(const char *cmd);
-int main(int argc, char *argv[]);
-
-//----
-
-void getNoteName(char *name, int note)
-{
-    //char *nameTable[] = { "C ", "C#", "D ", "D#", "E ", "F ", "F#", "G ", "G#", "A ", "A#", "B " };
-    char *nameTable[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
-    int n = note % 12;
-    int oct = note / 12;
-
-    oct--;
-    sprintf(name, "%s%d", nameTable[n], oct);
-}
-
-/** check if input is SPC file. */
-bool isSpcSoundFile(const byte *data, size_t size)
-{
-    if (size < 0x10100) {
-        return false;
-    }
-
-    if (memcmp(data, "SNES-SPC700 Sound File Data", 27) != 0) {
-        return false;
-    }
-
-    return true;
-}
 
 //----
 
 /** sets html stream to new target. */
-FILE *chunSpcSetLogStreamHandle(FILE *stream)
+FILE *chunSpcSetLogStreamHandle (FILE *stream)
 {
     FILE *oldStream;
 
@@ -232,7 +168,7 @@ FILE *chunSpcSetLogStreamHandle(FILE *stream)
 }
 
 /** sets loop count of MIDI output. */
-int chunSpcSetLoopCount(int count)
+int chunSpcSetLoopCount (int count)
 {
     int oldLoopCount;
 
@@ -241,233 +177,688 @@ int chunSpcSetLoopCount(int count)
     return oldLoopCount;
 }
 
-/** returns version string of music engine. */
-static const char *chunSpcVerToStr(int version)
+/** read patch fix info file. */
+bool chunSpcImportPatchFixFile (const char *filename)
 {
-    if (version == SPC_VER_OTOGIRISOU)
-        return "summer OTOGIRISOU version $Revision: 2.0.1.3";
-    else if (version == SPC_VER_DQ5)
-        return "winter DQ5 version $Revision: 1.44";
-    else if (version == SPC_VER_TORNECO)
-        return "winter F version $Revision: 2.3";
-    else if (version == SPC_VER_KAMAITACHI)
-        return "winter SN2 version $Revision: 3.32";
-    else
-        return "unknown version";
-}
+    FILE *fp;
+    int src, patch, bankL, bankM, key, mmlKey;
+    char lineBuf[512];
 
-/** returns what version the sequence is. */
-static int chunSpcCheckVer(ChunSpcSeqStat *seq)
-{
-    int version = SPC_VER_UNKNOWN;
-
-    if (memcmp(&seq->ARAM[0x0760], "\x00ummer OTOGIRISOU version $Revision: 2.0.1.3 $l", 0x2f) == 0)
-        version = SPC_VER_OTOGIRISOU;
-    else if (memcmp(&seq->ARAM[0x0750], "winter DQ5 version $Revision: 1.44 $l", 0x25) == 0)
-        version = SPC_VER_DQ5;
-    else if (memcmp(&seq->ARAM[0x0780], "winter F version $Revision: 2.3 $l", 0x22) == 0)
-        version = SPC_VER_TORNECO;
-    else if (memcmp(&seq->ARAM[0x0880], "winter SN2 version $Revision: 3.32 $l", 0x25) == 0)
-        version = SPC_VER_KAMAITACHI;
-
-    seq->version = version;
-    return version;
-}
-
-/** detects now playing and find sequence header for it. */
-bool chunSpcDetectSeq(ChunSpcSeqStat *seq)
-{
-    const int sumConstTable[][3] = {
-        { 0x0525, 0x051D, 0x218F }, // OTOGIRISOU
-    };
-    const int winConstTable[][4] = {
-        { 0x03F9, 0x03AF, 0x04C7, 0x05D5 }, // DQ5
-        { 0x03F9, 0x03AF, 0x04C7, 0x0635 }, // F
-        { 0x040A, 0x03B7, 0x04D8, 0x06E6 }, // SN2
-    };
-    byte *ARAM = seq->ARAM;
-    int headerOfs;
-    int A, X, Y;
-    int tr;
-    int cpuFlagAddr;
-    int songIndex;
-
-    if (seq->version < SPC_VER_DQ5) {
-        // summer
-        const int *sumConst = sumConstTable[seq->version - SPC_VER_OTOGIRISOU];
-
-        for (X = SPC_SONG_MAX - 1; X >= 0; X--) {
-            if (ARAM[sumConst[0] + X]) { // tempo
-                break;
-            }
-        }
-        if (X < 0) {
-            fprintf(stderr, "Warning: Unable to guess now playing\n");
-            //assert(false);
-            X = 0;
-        }
-        songIndex = X;
-        A = ARAM[sumConst[1] + X];
-        Y = mget2l(&ARAM[sumConst[2]]);
-        headerOfs = mget2l(&ARAM[Y + A * 2]);
-    }
-    else {
-        // winner
-        const int *winConst = winConstTable[seq->version - SPC_VER_DQ5];
-
-        // FIXME: NYI
-        songIndex = 0;
-
-        X = ARAM[winConst[0]];
-        Y = ARAM[winConst[1] + X];
-        A = winConst[3] + (ARAM[winConst[2] + Y] * 6);
-        headerOfs = mget2l(&ARAM[A + 1]);
-    }
-    seq->addrOfHeader = headerOfs;
-
-    if (headerOfs == 0) {
+    if (!filename) {
+        chunSpcPatchFixOverride = false;
         return false;
     }
 
-    // initialize
-    seq->tick = 0;
-    seq->time = 0;
-    seq->tempo = seq->masterTempo = ARAM[headerOfs];
-    seq->numOfTracks = ARAM[headerOfs + 1];
-    seq->cpuFlag = 0;
-    for (tr = 0; tr < seq->numOfTracks; tr++) {
-        seq->track[tr].pos = mget2l(&ARAM[headerOfs + 2 + tr * 2]);
-        if (seq->version >= SPC_VER_DQ5)
-            seq->track[tr].pos += headerOfs;
-
-        seq->track[tr].tick = 0;
-        seq->track[tr].duration = 1;
-        seq->track[tr].durationRate = 0xcc;
-        seq->track[tr].lastNote = 0;
-        seq->track[tr].tieBeginTick = 0;
-        seq->track[tr].tieDuration = 0;
-        seq->track[tr].tieTranspose = 0;
-        seq->track[tr].refDuration = false;
-        seq->track[tr].transpose = 0;
-        seq->track[tr].callSP = 0;
-        seq->track[tr].loopCount = 0;
-        seq->track[tr].loopCountAlt = 0;
-        seq->track[tr].patch = 0;
-        seq->track[tr].masterVolume = 0x60;
-        seq->track[tr].volume = 0x80;
-        seq->track[tr].pan = 0;
-        seq->track[tr].pitchSlideStartTick = -1;
-        seq->track[tr].pitchSlideEndTick = -1;
-        seq->track[tr].pitchSlideTarget = 0;
-        seq->track[tr].lastPitch = 0;
-        seq->track[tr].pitchSlideMax = (chunSpcPitchBendSens == 0) ? SMF_PITCHBENDSENS_DEFAULT : chunSpcPitchBendSens;
-
-        seq->track[tr].looped = 0;
-        seq->track[tr].hasEnd = false;
+    fp = fopen(filename, "r");
+    if (!fp) {
+        chunSpcPatchFixOverride = false;
+        return false;
     }
 
-    // XXX: try to read a flag from ARAM
-    switch(seq->version) {
-    case SPC_VER_OTOGIRISOU:
-        cpuFlagAddr = 0x0555;
-        break;
-    case SPC_VER_DQ5:
-    case SPC_VER_TORNECO:
-        cpuFlagAddr = 0x03E7;
-        break;
-    case SPC_VER_KAMAITACHI:
-        cpuFlagAddr = 0x03F7;
-        break;
-    default:
-        assert(false);
+    // reset patch fix
+    for (patch = 0; patch < 256; patch++) {
+        chunSpcPatchFix[patch].bankSelM = 0;
+        chunSpcPatchFix[patch].bankSelL = patch >> 7;
+        chunSpcPatchFix[patch].patchNo = patch & 0x7f;
+        chunSpcPatchFix[patch].key = 0;
+        chunSpcPatchFix[patch].mmlKey = 0;
     }
-    seq->cpuFlag = ARAM[cpuFlagAddr + songIndex];
+    // import patch fix
+    while (fgets(lineBuf, countof(lineBuf), fp)) {
+      strtok(lineBuf, ";"); // for comment support
 
+      key = 0;
+      mmlKey = 0;
+      if (sscanf(lineBuf, "%d %d %d %d %d %d", &src, &bankM, &bankL, &patch, &key, &mmlKey) >= 4) {
+        chunSpcPatchFix[src].bankSelM = bankM & 0x7f;
+        chunSpcPatchFix[src].bankSelL = bankL & 0x7f;
+        chunSpcPatchFix[src].patchNo = (patch - 1) & 0x7f;
+        chunSpcPatchFix[src].key = key;
+        chunSpcPatchFix[src].mmlKey = mmlKey;
+      }
+    }
+    chunSpcPatchFixOverride = true;
+
+    fclose(fp);
     return true;
 }
 
-/** outputs html header. */
-static void printHtmlHeader()
+//----
+
+/** returns version string of music engine. */
+static const char *chunSpcVerToStrHtml (ChunSpcSeqStat *seq)
+{
+    switch (seq->ver.id) {
+    case SPC_VER_OTOGIRISOU:
+        return "summer OTOGIRISOU version $Revision: 2.0.1.3";
+    case SPC_VER_DQ5:
+        return "winter DQ5 version $Revision: 1.44";
+    case SPC_VER_TORNECO:
+        return "winter F version $Revision: 2.3";
+    case SPC_VER_KAMAITACHI:
+        return "winter SN2 version $Revision: 3.32";
+    default:
+        return "Unknown Version / Unsupported";
+    }
+}
+
+/* return if the engine version is summer */
+static bool chunSpcIsVersionSummer(ChunSpcSeqStat *seq)
+{
+    return (seq->ver.id == SPC_VER_OTOGIRISOU);
+}
+
+/** reset for each track. */
+static void chunSpcResetTrackParam (ChunSpcSeqStat *seq, int track)
+{
+    ChunSpcTrackStat *tr = &seq->track[track];
+
+    tr->used = false;
+    tr->prevTick = tr->tick;
+    tr->looped = 0;
+    tr->note.transpose = 0;
+    tr->lastNote.active = false;
+    tr->noteLen = 1;
+    tr->durRate = 0xcc;
+    tr->refNoteLen = false;
+    tr->patch = 0;
+    tr->volume = 0x60;
+    tr->panpot = 0;
+    tr->expression = 0x80;
+    tr->subNestLevel = 0;
+    tr->subNestLevelMax = 3;
+    tr->loopCount = 0;
+    tr->loopCountAlt = 0;
+    tr->pitchBendSensMax = (chunSpcPitchBendSens == 0) ? SMF_PITCHBENDSENS_DEFAULT : chunSpcPitchBendSens;
+    tr->pitchNeedsFinalize = false;
+}
+
+/** reset before play/convert song. */
+static void chunSpcResetParam (ChunSpcSeqStat *seq)
+{
+    int track;
+    int patch;
+
+    seq->tick = 0;
+    seq->time = 0;
+    seq->tempo = seq->baseTempo = 120; // dummy, just in case
+    seq->transpose = 0;
+    seq->looped = 0;
+    seq->active = true;
+    if (seq->ver.cpuControledVarAddr != 0)
+    {
+        seq->cpuControledVar = seq->aRAM[seq->ver.cpuControledVarAddr];
+    }
+    else
+    {
+        seq->cpuControledVar = 0;
+    }
+
+    // reset each track as well
+    for (track = 0; track < SPC_TRACK_MAX; track++) {
+        ChunSpcTrackStat *tr = &seq->track[track];
+
+        tr->tick = 0;
+        chunSpcResetTrackParam(seq, track);
+    }
+
+    // reset patch fix
+    for (patch = 0; patch < 256; patch++) {
+        seq->ver.patchFix[patch].bankSelM = 0;
+        seq->ver.patchFix[patch].bankSelL = patch >> 7;
+        seq->ver.patchFix[patch].patchNo = patch & 0x7f;
+        seq->ver.patchFix[patch].key = 0;
+        seq->ver.patchFix[patch].mmlKey = 0;
+    }
+    // copy patch fix if needed
+    if (chunSpcPatchFixOverride) {
+        for (patch = 0; patch < 256; patch++) {
+            memcpy(&seq->ver.patchFix[patch], &chunSpcPatchFix[patch], sizeof(PatchFixInfo));
+        }
+    }
+}
+
+/** returns what version the sequence is, and sets individual info. */
+static int chunSpcCheckVer (ChunSpcSeqStat *seq)
+{
+    int version = SPC_VER_UNKNOWN;
+    int songLdCodeAddr;
+    int cpuCondJumpCodeAddr;
+    int vcmdExecCodeAddr;
+    int songTableReadPtr;
+    int songFirstAddrDiffBest;
+    //int songTempoDiffBest;
+    int songIndex;
+
+    seq->timebase = chunSpcTimeBase;
+    seq->ver.seqListAddr = -1;
+    seq->ver.songIndex = -1;
+    seq->ver.songIndexAddr = -1;
+    seq->ver.songTableItemLen = 6;
+    seq->ver.songTableMaxCount = 32; // just a random choice
+    seq->ver.songTableSeqAddrOfs = 1;
+    seq->ver.seqHeaderAddr = -1;
+    seq->ver.vcmdTableAddr = -1;
+    seq->ver.baseTempoVarAddr = -1;
+    seq->ver.cpuControledVarAddr = -1;
+    seq->ver.seqDetected = false;
+
+    // (Kamaitachi no Yoru)
+    // mov   $0409,x
+    // mov   y,a               ; Y = A = $03B7+X
+    // mov   a,$04d8+y
+    // mov   $a0,#$e6
+    // mov   $a1,#$06
+    // mov   y,#$06
+    // mul   ya
+    // addw  ya,$a0
+    // movw  $a0,ya            ; $A0/1 = #$06E6 + ($04D8+Y * 6)
+    // mov   y,#$05
+    // mov   a,($a0)+y
+    // or    a,#$08
+    // mov   ($a0)+y,a
+    // mov   y,#$01
+    // mov   a,($a0)+y
+    // push  a
+    // inc   y
+    // mov   a,($a0)+y
+    // mov   $a1,a
+    // pop   a
+    // mov   $a0,a             ; $A0/1 = (WORD) [$A0]+1 (sequence header)
+    // mov   a,#$00
+    // mov   $03ef+x,a
+    // mov   $03d7+x,a
+    // mov   $03f7+x,a
+    // mov   a,#$02
+    // mov   $03e7+x,a
+    // ; read the sequence header
+    // mov   y,#$00
+    // mov   a,($a0)+y         ; header+0: initial tempo
+    // inc   y
+    // mov   $03bf+x,a
+    // mov   $03c7+x,a         ; base tempo
+    if ((songLdCodeAddr = indexOfHexPat(seq->aRAM, "\xc9..\xfd\xf6..\x8f..\x8f..\x8d\x06\xcf\x7a.\xda.\x8d\x05\xf7.\x08\x08\xd7.\x8d\x01\xf7.\x2d\xfc\xf7.\xc4.\xae\xc4.\xe8\\\x00\xd5..\xd5..\xd5..\xe8\x02\xd5..\x8d\\\x00\xf7.\xfc\xd5..\xd5..", SPC_ARAM_SIZE, NULL)) != -1 &&
+        seq->aRAM[songLdCodeAddr + 9] + 1 == seq->aRAM[songLdCodeAddr + 12] &&
+        seq->aRAM[songLdCodeAddr + 9] == seq->aRAM[songLdCodeAddr + 17] &&
+        seq->aRAM[songLdCodeAddr + 9] == seq->aRAM[songLdCodeAddr + 19] &&
+        seq->aRAM[songLdCodeAddr + 9] == seq->aRAM[songLdCodeAddr + 23] &&
+        seq->aRAM[songLdCodeAddr + 9] == seq->aRAM[songLdCodeAddr + 27] &&
+        seq->aRAM[songLdCodeAddr + 9] == seq->aRAM[songLdCodeAddr + 31] &&
+        seq->aRAM[songLdCodeAddr + 9] == seq->aRAM[songLdCodeAddr + 35] &&
+        seq->aRAM[songLdCodeAddr + 9] == seq->aRAM[songLdCodeAddr + 40] &&
+        seq->aRAM[songLdCodeAddr + 9] == seq->aRAM[songLdCodeAddr + 60] &&
+        seq->aRAM[songLdCodeAddr + 12] == seq->aRAM[songLdCodeAddr + 37])
+    {
+        seq->ver.seqListAddr = seq->aRAM[songLdCodeAddr + 8] | (seq->aRAM[songLdCodeAddr + 11] << 8);
+        seq->ver.baseTempoVarAddr = mget2l(&seq->aRAM[songLdCodeAddr + 66]);
+        version = SPC_VER_KAMAITACHI;
+    }
+    // (Dragon Quest 5)
+    // mov   $03f8,x
+    // mov   y,a               ; Y = A = $03AF+X
+    // mov   a,$04c7+y
+    // mov   $a0,#$d5
+    // mov   $a1,#$05
+    // mov   y,#$06
+    // mul   ya
+    // addw  ya,$a0
+    // movw  $a0,ya            ; $A0/1 = #$5D5 + ($04C7+Y * 6)
+    // mov   y,#$01
+    // mov   a,($a0)+y
+    // push  a
+    // inc   y
+    // mov   a,($a0)+y
+    // mov   $a1,a
+    // pop   a
+    // mov   $a0,a             ; $A0/1 = (WORD) [$A0]+1 (sequence header)
+    // mov   a,#$00
+    // mov   $03df+x,a
+    // mov   $03c7+x,a
+    // mov   $03e7+x,a
+    // mov   a,#$02
+    // mov   $03d7+x,a
+    // ; read the sequence header
+    // mov   y,#$00
+    // mov   a,($a0)+y         ; header+0: initial tempo
+    // inc   y
+    // mov   $03b7+x,a
+    else if ((songLdCodeAddr = indexOfHexPat(seq->aRAM, "\xc9..\xfd\xf6..\x8f..\x8f..\x8d\x06\xcf\x7a.\xda.\x8d\x01\xf7.\x2d\xfc\xf7.\xc4.\xae\xc4.\xe8\\\x00\xd5..\xd5..\xd5..\xe8\x02\xd5..\x8d\\\x00\xf7.\xfc\xd5..", SPC_ARAM_SIZE, NULL)) != -1 &&
+        seq->aRAM[songLdCodeAddr + 9] + 1 == seq->aRAM[songLdCodeAddr + 12] &&
+        seq->aRAM[songLdCodeAddr + 9] == seq->aRAM[songLdCodeAddr + 17] &&
+        seq->aRAM[songLdCodeAddr + 9] == seq->aRAM[songLdCodeAddr + 19] &&
+        seq->aRAM[songLdCodeAddr + 9] == seq->aRAM[songLdCodeAddr + 23] &&
+        seq->aRAM[songLdCodeAddr + 9] == seq->aRAM[songLdCodeAddr + 27] &&
+        seq->aRAM[songLdCodeAddr + 9] == seq->aRAM[songLdCodeAddr + 32] &&
+        seq->aRAM[songLdCodeAddr + 9] == seq->aRAM[songLdCodeAddr + 52] &&
+        seq->aRAM[songLdCodeAddr + 12] == seq->aRAM[songLdCodeAddr + 29])
+    {
+        seq->ver.seqListAddr = seq->aRAM[songLdCodeAddr + 8] | (seq->aRAM[songLdCodeAddr + 11] << 8);
+        seq->ver.baseTempoVarAddr = mget2l(&seq->aRAM[songLdCodeAddr + 55]);
+        version = SPC_VER_DQ5;
+    }
+    // (Otogirisou)
+    // mov   $051d+x,a         ; $051D+X = A
+    // mov   $0566,x
+    // push  a
+    // mov   a,$218f
+    // mov   $c0,a
+    // mov   a,$2190
+    // mov   $c1,a             ; $C0/1 = $218F/90
+    // pop   a
+    // asl   a
+    // bcc   $0ee1
+    // inc   $c1
+    // clrc
+    // adc   a,$c0
+    // mov   $c0,a             ; $C0/1 += ($051D+X * 2)
+    // bcc   $0eea
+    // inc   $c1
+    // mov   y,#$00
+    // mov   a,($c0)+y
+    // push  a
+    // inc   y
+    // mov   a,($c0)+y
+    // mov   $c1,a
+    // pop   a
+    // mov   $c0,a             ; $C0/1 = (WORD) [$C0] (sequence header)
+    // or    a,$c1
+    // beq   $0e95             ; no song
+    // mov   a,#$ff
+    // mov   $0515+x,a
+    // mov   a,#$00
+    // mov   $0545+x,a
+    // mov   $054d+x,a
+    // mov   $0535+x,a
+    // mov   $0555+x,a
+    // ; read the sequence header
+    // mov   y,#$00
+    // mov   a,($c0)+y         ; header+0: initial tempo
+    // inc   y
+    // mov   $0525+x,a
+    else if ((songLdCodeAddr = indexOfHexPat(seq->aRAM, "\xd5..\xc9..\x2d\xe5..\xc4.\xe5..\xc4.\xae\x1c\x90\x02\xab.\x60\x84.\xc4.\x90\x02\xab.\x8d\\\x00\xf7.\x2d\xfc\xf7.\xc4.\xae\xc4.\x04.\xf0.\xe8\xff\xd5..\xe8\\\x00\xd5..\xd5..\xd5..\xd5..\x8d\\\x00\xf7.\xfc\xd5..", SPC_ARAM_SIZE, NULL)) != -1 &&
+        seq->aRAM[songLdCodeAddr + 11] + 1 == seq->aRAM[songLdCodeAddr + 16] &&
+        seq->aRAM[songLdCodeAddr + 11] == seq->aRAM[songLdCodeAddr + 25] &&
+        seq->aRAM[songLdCodeAddr + 11] == seq->aRAM[songLdCodeAddr + 27] &&
+        seq->aRAM[songLdCodeAddr + 11] == seq->aRAM[songLdCodeAddr + 35] &&
+        seq->aRAM[songLdCodeAddr + 11] == seq->aRAM[songLdCodeAddr + 39] &&
+        seq->aRAM[songLdCodeAddr + 11] == seq->aRAM[songLdCodeAddr + 44] &&
+        seq->aRAM[songLdCodeAddr + 11] == seq->aRAM[songLdCodeAddr + 71] &&
+        seq->aRAM[songLdCodeAddr + 16] == seq->aRAM[songLdCodeAddr + 22] &&
+        seq->aRAM[songLdCodeAddr + 16] == seq->aRAM[songLdCodeAddr + 31] &&
+        seq->aRAM[songLdCodeAddr + 16] == seq->aRAM[songLdCodeAddr + 41] &&
+        seq->aRAM[songLdCodeAddr + 16] == seq->aRAM[songLdCodeAddr + 46] &&
+        mget2l(&seq->aRAM[songLdCodeAddr + 8]) + 1 == mget2l(&seq->aRAM[songLdCodeAddr + 13]))
+    {
+        int seqListAddrPtr = mget2l(&seq->aRAM[songLdCodeAddr + 8]);
+        seq->ver.seqListAddr = mget2l(&seq->aRAM[seqListAddrPtr]);
+        seq->ver.baseTempoVarAddr = mget2l(&seq->aRAM[songLdCodeAddr + 74]);
+        version = SPC_VER_OTOGIRISOU;
+    }
+
+    // ; vcmd e0 - cpu-controled jump
+    // call  $1c83
+    // mov   $a0,a
+    // call  $1c83
+    // mov   $a1,a             ; set arg1/2 to $A0/1
+    // mov   a,$02a3+x
+    // mov   y,a
+    // mov   a,$03f7+y
+    // and   a,#$7f
+    // mov   $a2,a
+    // call  $1c83
+    // cmp   a,$a2
+    // bne   $1986
+    // mov   a,$00+x
+    // mov   y,$01+x
+    // clrc
+    // addw  ya,$a0            ; relative jump
+    // mov   $00+x,a
+    // mov   $01+x,y
+    if ((cpuCondJumpCodeAddr = indexOfHexPat(seq->aRAM, "\x3f..\xc4.\x3f..\xc4.\xf5..\xfd\xf6..\x28\x7f\xc4.\x3f..\x64.\xd0.\xf4.\xfb.\x60\x7a.\xd4.\xdb.", SPC_ARAM_SIZE, NULL)) != -1 &&
+        seq->aRAM[cpuCondJumpCodeAddr + 4] + 1 == seq->aRAM[cpuCondJumpCodeAddr + 9] &&
+        seq->aRAM[cpuCondJumpCodeAddr + 29] + 1 == seq->aRAM[cpuCondJumpCodeAddr + 31] &&
+        seq->aRAM[cpuCondJumpCodeAddr + 4] == seq->aRAM[cpuCondJumpCodeAddr + 34] &&
+        seq->aRAM[cpuCondJumpCodeAddr + 29] == seq->aRAM[cpuCondJumpCodeAddr + 36] &&
+        seq->aRAM[cpuCondJumpCodeAddr + 31] == seq->aRAM[cpuCondJumpCodeAddr + 38])
+    {
+        seq->ver.cpuControledVarAddr = mget2l(&seq->aRAM[cpuCondJumpCodeAddr + 15]);
+    }
+
+    // push  x
+    // asl   a
+    // mov   x,a
+    // mov   a,$07af+x
+    // mov   $122e+1,a
+    // mov   a,$07b0+x
+    // mov   $122e+2,a         ; overwrite call addr
+    // pop   x
+    // call  $xxxx             ; do vcmd
+    if ((vcmdExecCodeAddr = indexOfHexPat(seq->aRAM, "\x4d\x1c\\\x5d\xf5..\xc5..\xf5..\xc5..\xce\x3f..", SPC_ARAM_SIZE, NULL)) != -1 &&
+        mget2l(&seq->aRAM[vcmdExecCodeAddr + 4]) + 1 == mget2l(&seq->aRAM[vcmdExecCodeAddr + 10]) &&
+        mget2l(&seq->aRAM[vcmdExecCodeAddr + 7]) + 1 == mget2l(&seq->aRAM[vcmdExecCodeAddr + 13]) &&
+        mget2l(&seq->aRAM[vcmdExecCodeAddr + 7]) == (vcmdExecCodeAddr + 17))
+    {
+        seq->ver.vcmdTableAddr = mget2l(&seq->aRAM[vcmdExecCodeAddr + 4]);
+    }
+
+    // version detection by RCS string
+    if (indexOfHexPat(seq->aRAM, "\\\x00ummer OTOGIRISOU version $Revision: 2.0.1.3 $l", SPC_ARAM_SIZE, NULL) != -1)
+    {
+        version = SPC_VER_OTOGIRISOU;
+        seq->ver.songIndexAddr = 0x051d;
+    }
+    else if (indexOfHexPat(seq->aRAM, "winter DQ5 version $Revision: 1.44 $l", SPC_ARAM_SIZE, NULL) != -1)
+    {
+        version = SPC_VER_DQ5;
+    }
+    else if (indexOfHexPat(seq->aRAM, "winter F version $Revision: 2.3 $l", SPC_ARAM_SIZE, NULL) != -1)
+    {
+        version = SPC_VER_TORNECO;
+    }
+    else if (indexOfHexPat(seq->aRAM, "winter SN2 version $Revision: 3.32 $l", SPC_ARAM_SIZE, NULL) != -1)
+    {
+        version = SPC_VER_KAMAITACHI;
+    }
+
+    // summer has somewhat different table design from winter
+    if (version == SPC_VER_OTOGIRISOU)
+    {
+        seq->ver.songTableItemLen = 2;
+        seq->ver.songTableSeqAddrOfs = 0;
+    }
+
+    // overwrite song table address if needed
+    if (chunSpcForceSongListAddr != -1)
+    {
+        seq->ver.seqListAddr = chunSpcForceSongListAddr;
+    }
+
+    // set song index
+    if (chunSpcForceSongIndex != -1)
+    {
+        seq->ver.songIndex = chunSpcForceSongIndex;
+    }
+    else if (seq->ver.songIndexAddr != -1 && seq->aRAM[seq->ver.songIndexAddr] < seq->ver.songTableMaxCount)
+    {
+        seq->ver.songIndex = seq->aRAM[seq->ver.songIndexAddr];
+    }
+    else
+    {
+        seq->ver.songIndex = 0; // default
+
+        if (seq->ver.seqListAddr != -1
+#if 1
+            && !(seq->ver.songIndexAddr != -1 && seq->aRAM[seq->ver.songIndexAddr] >= seq->ver.songTableMaxCount)
+#endif
+            )
+        {
+            int aramFirstAddr = mget2l(&seq->aRAM[0x0000]);
+
+            // auto-detect current song
+            if (aramFirstAddr != 0)
+            {
+                songTableReadPtr = seq->ver.seqListAddr;
+                songFirstAddrDiffBest = INT_MAX;
+                for (songIndex = 0; songIndex < seq->ver.songTableMaxCount; songIndex++)
+                {
+                    int seqHeaderAddr = mget2l(&seq->aRAM[songTableReadPtr + seq->ver.songTableSeqAddrOfs]);
+                    int firstAddr = mget2l(&seq->aRAM[seqHeaderAddr + 2]) + (chunSpcIsVersionSummer(seq) ? 0 : seqHeaderAddr);
+                    int firstAddrDiff = aramFirstAddr - firstAddr;
+                    int numOfTracks = seq->aRAM[seqHeaderAddr + 1];
+
+                    if (seqHeaderAddr != 0 && numOfTracks > 0 && numOfTracks <= SPC_TRACK_MAX)
+                    {
+                        if (firstAddrDiff >= 0 && firstAddrDiff <= songFirstAddrDiffBest)
+                        {
+                            songFirstAddrDiffBest = firstAddrDiff;
+                            seq->ver.songIndex = songIndex;
+                        }
+                    }
+
+                    songTableReadPtr += seq->ver.songTableItemLen;
+                    if (songTableReadPtr + seq->ver.songTableItemLen > SPC_ARAM_SIZE)
+                    {
+                        break;
+                    }
+                }
+            }
+//            else
+//            {
+//                // search by tempo, for certain Otogirisou SPCs...
+//                songTableReadPtr = seq->ver.seqListAddr;
+//                songTempoDiffBest = INT_MAX;
+//                for (songIndex = 0; songIndex < seq->ver.songTableMaxCount; songIndex++)
+//                {
+//                    int seqHeaderAddr = mget2l(&seq->aRAM[songTableReadPtr + seq->ver.songTableSeqAddrOfs]);
+//                    int numOfTracks = seq->aRAM[seqHeaderAddr + 1];
+//
+//                    if (seqHeaderAddr != 0 && numOfTracks > 0 && numOfTracks <= SPC_TRACK_MAX)
+//                    {
+//                        if (seq->ver.baseTempoVarAddr != -1 && seq->aRAM[seq->ver.baseTempoVarAddr] != 0)
+//                        {
+//                            int tempoDiff = abs(seq->aRAM[seq->ver.baseTempoVarAddr] - seq->aRAM[seqHeaderAddr]);
+//                            if (tempoDiff <= songTempoDiffBest)
+//                            {
+//                                songTempoDiffBest = tempoDiff;
+//                                seq->ver.songIndex = songIndex;
+//                            }
+//                        }
+//                        else
+//                        {
+//                            if (seq->aRAM[seqHeaderAddr] != 0 && mget2l(&seq->aRAM[seqHeaderAddr + 2]) != 0)
+//                            {
+//                                seq->ver.songIndex = songIndex;
+//                                break;
+//                            }
+//                        }
+//                    }
+//
+//                    songTableReadPtr += seq->ver.songTableItemLen;
+//                    if (songTableReadPtr + seq->ver.songTableItemLen > SPC_ARAM_SIZE)
+//                    {
+//                        break;
+//                    }
+//                }
+//            }
+        }
+    }
+
+    // finally, determine the song header address
+    if (seq->ver.seqListAddr != -1 && seq->ver.songIndex != -1)
+    {
+        seq->ver.seqHeaderAddr = mget2l(&seq->aRAM[seq->ver.seqListAddr + seq->ver.songIndex * seq->ver.songTableItemLen + seq->ver.songTableSeqAddrOfs]);
+    }
+
+    seq->ver.id = version;
+    chunSpcSetEventList(seq);
+    return version;
+}
+
+/** detect now playing and prepare for analyze. */
+static bool chunSpcDetectSeq (ChunSpcSeqStat *seq)
+{
+    bool result = true;
+    int seqHeaderReadOfs;
+    int tr;
+
+    if (seq->ver.id == SPC_VER_UNKNOWN || seq->ver.seqHeaderAddr == -1)
+        return false;
+
+    chunSpcResetParam(seq);
+
+    seqHeaderReadOfs = seq->ver.seqHeaderAddr;
+    seq->tempo = seq->baseTempo = seq->aRAM[seqHeaderReadOfs];
+    seqHeaderReadOfs++;
+    seq->numOfTracks = seq->aRAM[seqHeaderReadOfs];
+    seqHeaderReadOfs++;
+    if (seq->numOfTracks == 0)
+    {
+        fprintf(stderr, "Error: No tracks available\n");
+        return false;
+    }
+    else if (seq->numOfTracks > SPC_TRACK_MAX)
+    {
+        fprintf(stderr, "Error: Too many tracks [%d]\n", seq->numOfTracks);
+        return false;
+    }
+
+    for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
+        seq->track[tr].active = false;
+    }
+
+    // track list
+    result = true;
+    for (tr = 0; tr < seq->numOfTracks; tr++) {
+        int trackAddr = mget2l(&seq->aRAM[seqHeaderReadOfs]);
+        if (seq->ver.id >= SPC_VER_DQ5)
+        {
+            // offset -> absolute address
+            trackAddr += seq->ver.seqHeaderAddr;
+        }
+        seqHeaderReadOfs += 2;
+
+        seq->track[tr].pos = trackAddr;
+        seq->track[tr].active = true;
+    }
+
+    return result;
+}
+
+/** create new spc2mid object. */
+static ChunSpcSeqStat *newChunSpcSeq (const byte *aRAM)
+{
+    ChunSpcSeqStat *newSeq = (ChunSpcSeqStat *) calloc(1, sizeof(ChunSpcSeqStat));
+
+    if (newSeq) {
+        newSeq->aRAM = aRAM;
+        chunSpcCheckVer(newSeq);
+        newSeq->ver.seqDetected = chunSpcDetectSeq(newSeq);
+    }
+    return newSeq;
+}
+
+/** delete spc2mid object. */
+static void delChunSpcSeq (ChunSpcSeqStat **seq)
+{
+    if (*seq) {
+        // do not kill smf here
+
+        free(*seq);
+        *seq = NULL;
+    }
+}
+
+//----
+
+/** output html header. */
+static void printHtmlHeader (void)
 {
     myprintf("<?xml version=\"1.0\" ?>\n");
     myprintf("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.1//EN\" \"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd\">\n");
     myprintf("<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\">\n");
     myprintf("  <head>\n");
     myprintf("    <link rel=\"stylesheet\" type=\"text/css\" media=\"screen,tv,projection\" href=\"%s\" />\n", mycssfile);
-    myprintf("    <title>Data View - Chunsoft summer/winter SPC2MIDI %s</title>\n", VERSION);
+    myprintf("    <title>Data View - %s %s</title>\n", APPNAME, VERSION);
     myprintf("  </head>\n");
     myprintf("  <body>\n");
 }
 
-/** outputs html footer. */
-static void printHtmlFooter()
+/** output html footer. */
+static void printHtmlFooter (void)
 {
     myprintf("  </body>\n");
     myprintf("</html>\n");
 }
 
+/** output seq info list. */
+static void printHtmlInfoList (ChunSpcSeqStat *seq)
+{
+    if (seq == NULL)
+        return;
+
+    myprintf("          <li>Version: %s</li>\n", chunSpcVerToStrHtml(seq));
+    myprintf("          <li>Song List: $%04X</li>\n", seq->ver.seqListAddr);
+    myprintf("          <li>Song Entry: $%04X", seq->ver.seqHeaderAddr);
+    myprintf(" (from ($%02x*%d+%d))", seq->ver.songIndex, seq->ver.songTableItemLen, seq->ver.songTableSeqAddrOfs);
+    myprintf("</li>\n");
+    myprintf("          <li>Voice Command Dispatch Table: $%04X</li>\n", seq->ver.vcmdTableAddr);
+    if (seq->ver.songIndexAddr != -1)
+    {
+        myprintf("          <li>Current Song Index Variable: $%04X</li>\n", seq->ver.songIndexAddr);
+    }
+    myprintf("          <li>CPU-controled Jump Variable: $%04X</li>\n", seq->ver.cpuControledVarAddr);
+}
+
+/** output seq info list detail for valid seq. */
+static void printHtmlInfoListMore (ChunSpcSeqStat *seq)
+{
+    if (seq == NULL)
+        return;
+}
+
+/** output event dump. */
+static void printHtmlEventDump (ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int i;
+
+    if (seq == NULL || ev == NULL)
+        return;
+
+    myprintf("            <tr class=\"track%d %s\">", ev->track + 1, ev->classStr);
+    myprintf("<td class=\"track\">%d</td>", ev->track + 1);
+    myprintf("<td class=\"tick\">%d</td>", ev->tick);
+    myprintf("<td class=\"address\">$%04X</td>", ev->addr);
+    myprintf("<td class=\"hex\">");
+
+    // hex dump
+    for (i = 0; i < ev->size; i++) {
+        if (i > 0)
+            myprintf(" ");
+        myprintf("%02X", seq->aRAM[ev->addr + i]);
+    }
+    myprintf("</td>");
+    myprintf("<td class=\"note\">%s</td>", ev->note);
+    myprintf("</tr>\n");
+}
+
+/** output event table header. */
+static void printEventTableHeader (ChunSpcSeqStat *seq, Smf* smf)
+{
+    if (seq == NULL)
+        return;
+
+    myprintf("        <h3>Sequence</h3>\n");
+    myprintf("        <div class=\"section\">\n");
+    myprintf("          <table class=\"dump\">\n");
+    myprintf("            <tr><th class=\"track\">#</th><th class=\"tick\">Tick</th><th class=\"address\">Address</th><th class=\"hex\">Hex Dump</th><th class=\"note\">Note</th></tr>\n");
+}
+
 //----
 
-static char argDumpStr[256];
-
-/** near Y*A/256, $1D0F of Kamaitachi no Yoru. */
-static int chunSpcMulRate(int y, int a, int spcVer)
+/** output event table footer. */
+static void printEventTableFooter (ChunSpcSeqStat *seq, Smf* smf)
 {
-    int ret = y;
-    if (a != 0xff) {
-        ret *= (a >= 0x80) ? (a + 1) : a;
-        if (spcVer < SPC_VER_DQ5) {
-            ret += 0xff; // roundup
-        }
-        ret >>= 8;
-    }
-    return ret;
+    if (seq == NULL)
+        return;
+
+    myprintf("          </table>\n");
+    myprintf("        </div>\n");
 }
 
-/** calc actual duration for note. */
-static int chunSpcActualDurationOf(int duration, int durationRate, int spcVer)
+/** convert SPC tempo into bpm. */
+static double chunSpcTempoOf (ChunSpcSeqStat *seq, int tempoValue)
 {
-    if (durationRate == 0xfe) {
-        durationRate--;
-    }
-    return (durationRate == 0) ? duration : chunSpcMulRate(duration, durationRate, spcVer);
+    return (double) seq->tempo;
 }
 
-/** finalize tied note. */
-static bool chunSpcDequeueTiedNote(ChunSpcSeqStat *seq, int track, Smf* smf)
+/** convert SPC tempo into bpm. */
+static double chunSpcTempo (ChunSpcSeqStat *seq)
 {
-    bool tied = (seq->track[track].tieDuration > 0);
-    if (tied) {
-        smfInsertChunSpcNote(smf, seq->track[track].tieBeginTick,
-            track, track, seq->track[track].lastNote + seq->track[track].tieTranspose,
-            seq->track[track].tieDuration);
-        seq->track[track].tieDuration = 0;
-    }
-    return tied;
+    return chunSpcTempoOf(seq, seq->tempo);
 }
 
-/** insert note. */
-static bool smfInsertChunSpcNote(Smf* seq, int time, int channel, int track, int key, int duration)
-{
-    return smfInsertNote(seq, time, channel, track, key + SPC_NOTE_KEYSHIFT, 127, duration);
-}
-
-/** convert SPC channel master volume into MIDI one. */
-static int chunSpcMidiVolOf(int value)
-{
-    int vol;
-
-    if (chunSpcVolIsLinear)
-        vol = value/2; // linear
-    else
-        vol = (int) floor(sqrt((double) value/255) * 127 + 0.5); // more similar with MIDI?
-    vol += chunSpcChannelVolOffset;
-    vol = clip(0, vol, 127);
-    return vol;
-}
-
-/** convert SPC volume into MIDI one. */
-static int chunSpcMidiVolExprOf(int value)
+/** convert SPC velocity into MIDI one. */
+static int chunSpcMidiVelOf (int value)
 {
     if (chunSpcVolIsLinear)
         return value/2; // linear
@@ -475,1005 +866,1354 @@ static int chunSpcMidiVolExprOf(int value)
         return (int) floor(sqrt((double) value/255) * 127 + 0.5); // more similar with MIDI?
 }
 
-/** insert channel master volume. */
-static bool smfInsertChunSpcVolume(Smf* seq, int time, int channel, int track, int value)
+/** convert SPC channel volume into MIDI one. */
+static int chunSpcMidiVolOf (int value)
 {
-    return smfInsertControl(seq, time, channel, track, SMF_CONTROL_VOLUME, chunSpcMidiVolOf(value));
+    if (chunSpcVolIsLinear)
+        return value/2; // linear
+    else
+        return (int) floor(sqrt((double) value/255) * 127 + 0.5); // more similar with MIDI?
 }
 
-/** insert volume expression. */
-static bool smfInsertChunSpcExpression(Smf* seq, int time, int channel, int track, int value)
+/** convert SPC channel panpot into MIDI one. */
+static int chunSpcMidiPanOf (int value)
 {
-    return smfInsertControl(seq, time, channel, track, SMF_CONTROL_EXPRESSION, chunSpcMidiVolExprOf(value));
+    return (value+0x80)/2; // linear (TODO: sine curve)
 }
 
-/** convert SPC panpot into MIDI once. */
-static int chunSpcMidiPanOf(int value)
+/** create new smf object and link to spc seq. */
+static Smf *chunSpcCreateSmf (ChunSpcSeqStat *seq)
 {
-    return (value/2) + 64; // linear
-}
+    static char songTitle[512];
+    Smf* smf;
+    int tr;
 
-/** insert a pan command. */
-static bool smfInsertChunSpcPanpot(Smf* seq, int time, int channel, int track, int value)
-{
-    return smfInsertControl(seq, time, channel, track, SMF_CONTROL_PANPOT, chunSpcMidiPanOf(value));
-}
+    smf = smfCreate(seq->timebase);
+    if (!smf)
+        return NULL;
+    seq->smf = smf;
 
-/** conditional jump with a flag. */
-static bool chunSpcEventCondJump(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf, int flag)
-{
-    int arg1;
-    int *p = &seq->track[ev->track].pos;
-    bool jump;
-    int dest;
+    sprintf(songTitle, "%s %s", APPNAME, VERSION);
+    smfInsertMetaText(smf, 0, 0, SMF_META_SEQUENCENAME, songTitle);
 
-    ev->size += 2;
-    arg1 = utos2(mget2l(&seq->ARAM[*p]));
-    (*p) += 2;
+    switch (chunSpcMidiResetType) {
+      case SMF_RESET_GS:
+        smfInsertGM1SystemOn(smf, 0, 0, 0);
+        smfInsertSysex(smf, 0, 0, 0, (const byte *) "\xf0\x41\x10\x42\x12\x40\x00\x7f\x00\x41\xf7", 11);
+        break;
+      case SMF_RESET_XG:
+        smfInsertGM1SystemOn(smf, 0, 0, 0);
+        smfInsertSysex(smf, 0, 0, 0, (const byte *) "\xf0\x43\x10\x4c\x00\x00\x7e\x00\xf7", 9);
+        break;
+      case SMF_RESET_GM2:
+        smfInsertSysex(smf, 0, 0, 0, (const byte *) "\xf0\x7e\x7f\x09\x03\xf7", 6);
+        break;
+      default:
+        smfInsertGM1SystemOn(smf, 0, 0, 0);
+    }
+    smfInsertTempoBPM(smf, 0, 0, chunSpcTempo(seq));
 
-    jump = (flag != 0);
-    dest = *p + arg1;
-    if (jump) {
-        *p = dest;
+    // put track name first
+    for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
+        if (!seq->track[tr].active)
+            continue;
+
+        sprintf(songTitle, "Track %d - $%04X", tr + 1, seq->track[tr].pos);
+        smfInsertMetaText(seq->smf, 0, tr, SMF_META_TRACKNAME, songTitle);
     }
 
-    sprintf(argDumpStr, ", addr = $%04X%s", dest, jump ? "" : "*");
-    strcat(ev->note, argDumpStr);
-    return jump;
-}
+    // put initial info for each track
+    for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
+        if (!seq->track[tr].active)
+            continue;
 
-/** conditional jump with a counter. */
-static bool chunSpcEventCondJumpCnt(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf, int count, int *counter)
-{
-    bool result;
-    int orgCounter;
-
-    if (*counter == 0) {
-        *counter = count;
-    }
-    orgCounter = *counter;
-    (*counter)--;
-
-    result = chunSpcEventCondJump(seq, ev, smf, *counter);
-    sprintf(argDumpStr, ", counter = %d", orgCounter);
-    strcat(ev->note, argDumpStr);
-    return result;
-}
-
-/** vcmds: unknown event (without status change). */
-static void chunSpcEventUnknownInline(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    sprintf(ev->note, "Unknown Event %02X", ev->code);
-    strcat(ev->classStr, " unknown");
-    if (!chunSpcLessTextInSMF)
-        smfInsertMetaText(smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
-    fprintf(stderr, "Warning: Skipped unknown event %02X\n", ev->code);
-}
-
-/** vcmds: unidentified event. */
-static void chunSpcEventUnidentified(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    ev->unidentified = true;
-    chunSpcEventUnknownInline(seq, ev, smf);
-}
-
-/** vcmds: unknown event (no args). */
-static void chunSpcEventUnknown0(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    chunSpcEventUnknownInline(seq, ev, smf);
-}
-
-/** vcmds: unknown event (1 byte arg). */
-static void chunSpcEventUnknown1(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    int arg1;
-    int *p = &seq->track[ev->track].pos;
-
-    ev->size++;
-    arg1 = seq->ARAM[*p];
-    (*p)++;
-
-    chunSpcEventUnknownInline(seq, ev, smf);
-    sprintf(argDumpStr, ", arg1 = %d", arg1);
-    strcat(ev->note, argDumpStr);
-}
-
-/** vcmds: unknown event (2 byte args). */
-static void chunSpcEventUnknown2(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    int arg1, arg2;
-    int *p = &seq->track[ev->track].pos;
-
-    ev->size += 2;
-    arg1 = seq->ARAM[*p];
-    (*p)++;
-    arg2 = seq->ARAM[*p];
-    (*p)++;
-
-    chunSpcEventUnknownInline(seq, ev, smf);
-    sprintf(argDumpStr, ", arg1 = %d, arg2 = %d, arg1/2 = %d", arg1, arg2, arg2 * 256 + arg1);
-    strcat(ev->note, argDumpStr);
-}
-
-/** vcmd: unknown event (3 byte args). */
-static void chunSpcEventUnknown3(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    int arg1, arg2, arg3;
-    int *p = &seq->track[ev->track].pos;
-
-    ev->size += 3;
-    arg1 = seq->ARAM[*p];
-    (*p)++;
-    arg2 = seq->ARAM[*p];
-    (*p)++;
-    arg3 = seq->ARAM[*p];
-    (*p)++;
-
-    chunSpcEventUnknownInline(seq, ev, smf);
-    sprintf(argDumpStr, ", arg1 = %d, arg2 = %d, arg3 = %d", arg1, arg2, arg3);
-    strcat(ev->note, argDumpStr);
-}
-
-/** vcmd F7: no operation. */
-static void chunSpcEventNOP(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    sprintf(ev->note, "NOP");
-}
-
-/** vcmds: reserved. */
-static void chunSpcEventReserved(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    sprintf(ev->note, "Reserved (Event %02X)", ev->code);
-    if (!chunSpcLessTextInSMF)
-        smfInsertMetaText(smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
-}
-
-/** vcmds 00-9F: note, rest, tie. */
-static void chunSpcEventNote(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    int arg1;
-    int *p = &seq->track[ev->track].pos;
-    int note = ev->code;
-    bool hasDuration = (note >= 0x50);
-    int actualDuration;
-
-    if (hasDuration) {
-        note -= 0x50;
-
-        ev->size++;
-        arg1 = seq->ARAM[*p];
-        (*p)++;
-
-        seq->track[ev->track].duration = arg1;
-    }
-    // before new note (not tied)
-    if (note != 0x4f) {
-        // put tied note before handling the new note
-        chunSpcDequeueTiedNote(seq, ev->track, smf);
-        // finish pitch slide
-        if (seq->track[ev->track].pitchSlideEndTick >= 0 && ev->tick >= seq->track[ev->track].pitchSlideEndTick) {
-            smfInsertPitchBend(smf, seq->track[ev->track].tick, ev->track, ev->track, 0);
-            seq->track[ev->track].pitchSlideEndTick = -1;
-            seq->track[ev->track].lastPitch = 0;
-        }
-        // remember the key of new note
-        if (note != 0x00) {
-            seq->track[ev->track].lastNote = note;
+        smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_VOLUME, chunSpcMidiVolOf(seq->track[tr].volume));
+        smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_EXPRESSION, chunSpcMidiVolOf(seq->track[tr].expression));
+        //smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_REVERB, 0);
+        //smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_RELEASETIME, 64 + 6);
+        //smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_MONO, 127);
+        if (chunSpcPitchBendSens != 0) {
+            smfInsertPitchBendSensitivity(smf, 0, tr, tr, seq->track[tr].pitchBendSensMax);
         }
     }
-    actualDuration = chunSpcActualDurationOf(seq->track[ev->track].duration, seq->track[ev->track].durationRate, seq->version);
-    // note (not a rest)
-    if (note != 0x00) {
-        // tied note
-        if (seq->track[ev->track].durationRate == 0 || note == 0x4f) {
-            // beginning of tie
-            if (seq->track[ev->track].tieDuration == 0) {
-                seq->track[ev->track].tieBeginTick = ev->tick;
-                seq->track[ev->track].tieTranspose = seq->track[ev->track].transpose;
-            }
-            seq->track[ev->track].tieDuration += actualDuration;
-        }
-        else {
-            smfInsertChunSpcNote(smf, seq->track[ev->track].tick,
-                ev->track, ev->track, note + seq->track[ev->track].transpose, actualDuration);
-        }
-    }
-    // step
-    seq->track[ev->track].tick += seq->track[ev->track].duration;
-    smfSetEndTimingOfTrack(smf, ev->track, seq->track[ev->track].tick);
-
-    if (note == 0x00)
-        sprintf(ev->note, "Rest");
-    else {
-        if (note == 0x4f)
-            sprintf(ev->note, "Tie ");
-        else
-            sprintf(ev->note, "Note ");
-        getNoteName(argDumpStr, seq->track[ev->track].lastNote + SPC_NOTE_KEYSHIFT + seq->track[ev->track].transpose);
-        strcat(ev->note, argDumpStr);
-    }
-    sprintf(argDumpStr, ", duration = %d%s", seq->track[ev->track].duration, seq->track[ev->track].refDuration ? " *" : "");
-    strcat(ev->note, argDumpStr);
-    strcat(ev->classStr, " note");
-}
-
-/** vcmds A0-B5: set duration rate from table. */
-static void chunSpcEventDurFromTable(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    const int durRateTable[] = {
-        0x0D, 0x1A, 0x26, 0x33, 0x40, 0x4D, 0x5A, 0x66,
-        0x73, 0x80, 0x8C, 0x99, 0xA6, 0xB3, 0xBF, 0xCC,
-        0xD9, 0xE6, 0xF2, 0xFE, 0xFF, 0x00
-    };
-    int rate = durRateTable[ev->code - 0xa0];
-
-    seq->track[ev->track].durationRate = rate;
-    sprintf(ev->note, "Duration Rate, rate = %d/255", rate);
-}
-
-/** vcmd DB: flag repeat (alternative). */
-static void chunSpcEventDB(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    sprintf(ev->note, "Flag Repeat (alternative)");
-    chunSpcEventCondJump(seq, ev, smf, seq->track[ev->track].loopCountAlt);
-}
-
-/** vcmd DC: repeat once more (alternative). */
-static void chunSpcEventDC(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    sprintf(ev->note, "Repeat Once More (alternative)");
-    chunSpcEventCondJumpCnt(seq, ev, smf, 2, &seq->track[ev->track].loopCountAlt);
-}
-
-/** vcmd DD: set release rate (instance). */
-static void chunSpcEventDDInline(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    int arg1;
-    int *p = &seq->track[ev->track].pos;
-
-    ev->size++;
-    arg1 = seq->ARAM[*p] & 0x1f;
-    (*p)++;
-
-    sprintf(argDumpStr, ", release rate = %d (", arg1);
-    strcat(ev->note, argDumpStr);
-    sprintf(argDumpStr, "%.1f%s", (spcSRTable[arg1] >= 1) ? spcSRTable[arg1] : spcSRTable[arg1] * 1000,
-        (spcSRTable[arg1] >= 1) ? "s" : "ms");
-    strcat(ev->note, (arg1 == 0) ? "INF" : argDumpStr);
-    strcat(ev->note, ")");
-}
-
-/** vcmd DD: set release rate. */
-static void chunSpcEventDD(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    strcpy(ev->note, "Release Rate");
-    chunSpcEventDDInline(seq, ev, smf);
-    if (!chunSpcLessTextInSMF)
-        smfInsertMetaText(smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
-}
-
-/** vcmd DE: set ADSR. */
-static void chunSpcEventDE(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    int *p = &seq->track[ev->track].pos;
-
-    strcpy(ev->note, "ADSR");
-    chunSpcEventEFInline(seq, ev, smf);
-    chunSpcEventDDInline(seq, ev, smf);
-    if (!chunSpcLessTextInSMF)
-        smfInsertMetaText(smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
-}
-
-/** vcmd E0: CPU related conditional jump. */
-static void chunSpcEventE0(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    int arg1, arg2;
-    int *p = &seq->track[ev->track].pos;
-    int dest;
-    bool jump;
-
-    ev->size += 3;
-    arg1 = utos2(mget2l(&seq->ARAM[*p]));
-    (*p) += 2;
-    arg2 = seq->ARAM[*p];
-    (*p)++;
-
-    dest = *p + arg1;
-    jump = ((seq->cpuFlag & 0x7f) == arg2);
-    if (jump) {
-        *p = dest;
-    }
-    seq->cpuFlag |= 0x80;
-
-    fprintf(stderr, "Warning: Conditional jump E0 is unstable at present. Be careful.\n");
-    sprintf(ev->note, "Conditional Jump (CPU Related?), addr = $%04X%s", dest, jump ? "" : "*");
-}
-
-/** vcmd E2: set vibrato/tune parameters. */
-static void chunSpcEventE2(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    int arg1;
-    int *p = &seq->track[ev->track].pos;
-
-    ev->size++;
-    arg1 = seq->ARAM[*p];
-    (*p)++;
-
-    sprintf(ev->note, "Vibrato/Tune, index = %d%s", arg1, (arg1 == 0xff) ? "OFF" : "");
-}
-
-/** vcmd E6: volume fade. */
-static void chunSpcEventE6(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    int arg1, arg2;
-    int *p = &seq->track[ev->track].pos;
-    int tick;
-    int vol;
-    int initVol;
-    int lastVol;
-    int targetVol;
-
-    ev->size += 2;
-    arg1 = seq->ARAM[*p];
-    (*p)++;
-    arg2 = seq->ARAM[*p];
-    (*p)++;
-
-    // FIXME: do realtime fade if needed
-    tick = 0;
-    targetVol = arg1;
-    if (arg2 > 0) {
-        initVol = seq->track[ev->track].volume;
-        lastVol = chunSpcMidiVolExprOf(initVol);
-        for(tick = 0; tick < arg2; tick++) {
-            vol = (int) floor((targetVol - initVol) * ((double) tick / arg2) + initVol + 0.5);
-            if (chunSpcMidiVolExprOf(vol) != lastVol) {
-                smfInsertChunSpcExpression(smf, seq->track[ev->track].tick + tick, ev->track, ev->track, vol);
-                lastVol = chunSpcMidiVolExprOf(vol);
-            }
-        }
-    }
-    vol = targetVol;
-    smfInsertChunSpcExpression(smf, seq->track[ev->track].tick + tick, ev->track, ev->track, vol);
-    seq->track[ev->track].volume = vol;
-
-    sprintf(ev->note, "Volume Fade, target = %d, step = %d", arg1, arg2);
-}
-
-/** vcmd E8: pan fade. */
-static void chunSpcEventE8(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    int arg1, arg2;
-    int *p = &seq->track[ev->track].pos;
-    int tick;
-    int pan;
-    int initPan;
-    int lastPan;
-    int targetPan;
-
-    ev->size += 2;
-    arg1 = utos1(seq->ARAM[*p]);
-    (*p)++;
-    arg2 = seq->ARAM[*p];
-    (*p)++;
-
-    // FIXME: do realtime fade if needed
-    tick = 0;
-    targetPan = arg1;
-    if (arg2 > 0) {
-        initPan = seq->track[ev->track].pan;
-        lastPan = chunSpcMidiPanOf(initPan);
-        for(tick = 0; tick < arg2; tick++) {
-            pan = (int) floor((targetPan - initPan) * ((double) tick / arg2) + initPan + 0.5);
-            if (chunSpcMidiPanOf(pan) != lastPan) {
-                smfInsertChunSpcPanpot(smf, seq->track[ev->track].tick + tick, ev->track, ev->track, pan);
-                lastPan = chunSpcMidiPanOf(pan);
-            }
-        }
-    }
-    pan = targetPan;
-    smfInsertChunSpcPanpot(smf, seq->track[ev->track].tick + tick, ev->track, ev->track, pan);
-    seq->track[ev->track].pan = pan;
-
-    sprintf(ev->note, "Pan Fade, target = %d, step = %d", arg1, arg2);
-}
-
-/** vcmd EA: jump. */
-static void chunSpcEventEA(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    int arg1;
-    int *p = &seq->track[ev->track].pos;
-    int dest;
-
-    ev->size += 2;
-    arg1 = utos2(mget2l(&seq->ARAM[*p]));
-    (*p) += 2;
-
-    // assumes backjump = loop
-    // FIXME: not always true!
-    // see Boss Battle of Dragon Quest 5
-    if (arg1 <= 0) {
-        seq->track[ev->track].looped++;
-    }
-    dest = *p + arg1;
-    *p = dest;
-
-    sprintf(ev->note, "Jump, addr = $%04X", dest);
-}
-
-/** vcmd EB: tempo. */
-static void chunSpcEventEB(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    int arg1;
-    int *p = &seq->track[ev->track].pos;
-
-    ev->size++;
-    arg1 = seq->ARAM[*p];
-    (*p)++;
-
-    sprintf(ev->note, "Tempo");
-    if (seq->version < SPC_VER_KAMAITACHI) {
-        seq->tempo = arg1;
-        sprintf(argDumpStr, ", bpm = %d", arg1);
-    }
-    else {
-        seq->tempo = seq->masterTempo * arg1 / 64;
-        sprintf(argDumpStr, ", rate = %d/64 (%f%%)", arg1,
-            (double) seq->tempo / seq->masterTempo);
-    }
-    strcat(ev->note, argDumpStr);
-
-    smfInsertTempoBPM(smf, seq->track[ev->track].tick, ev->track, seq->tempo);
-}
-
-/** vcmd EC: set duration rate. */
-static void chunSpcEventEC(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    int arg1;
-    int *p = &seq->track[ev->track].pos;
-
-    ev->size++;
-    arg1 = seq->ARAM[*p];
-    (*p)++;
-
-    seq->track[ev->track].durationRate = arg1;
-    sprintf(ev->note, "Duration Rate, rate = %d/255", arg1);
-}
-
-/** vcmd ED: channel master volume. */
-static void chunSpcEventED(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    int arg1;
-    int *p = &seq->track[ev->track].pos;
-
-    ev->size++;
-    arg1 = seq->ARAM[*p];
-    (*p)++;
-
-    seq->track[ev->track].masterVolume = arg1;
-    smfInsertChunSpcVolume(smf, seq->track[ev->track].tick, ev->track, ev->track, arg1);
-    sprintf(ev->note, "Channel Volume, val = %d", arg1);
-}
-
-/** vcmd EE: panpot. */
-static void chunSpcEventEE(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    int arg1;
-    int *p = &seq->track[ev->track].pos;
-
-    ev->size++;
-    arg1 = utos1(seq->ARAM[*p]);
-    (*p)++;
-
-    seq->track[ev->track].pan = arg1;
-    smfInsertChunSpcPanpot(smf, seq->track[ev->track].tick, ev->track, ev->track, arg1);
-    sprintf(ev->note, "Pan, val = %d", arg1);
-}
-
-/** vcmd EF: set ADSR (instance). */
-static void chunSpcEventEFInline(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    int arg1;
-    int *p = &seq->track[ev->track].pos;
-    bool adsr;
-    int ar, dr, sl, sr;
-
-    ev->size += 2;
-    arg1 = mget2b(&seq->ARAM[*p]);
-    (*p) += 2;
-
-    adsr = (arg1 & 0x8000);
-    ar = (arg1 & 0x0800) >> 8;
-    dr = (arg1 & 0x7000) >> 12;
-    sl = (arg1 & 0x00e0) >> 5;
-    sr = (arg1 & 0x001f);
-
-    sprintf(argDumpStr, ", mode = %s", adsr ? "ADSR" : "GAIN");
-    strcat(ev->note, argDumpStr);
-    if (adsr) {
-        sprintf(argDumpStr, ", attack = %d (%.1f%s), decay = ", ar, (spcARTable[ar] >= 1) ? spcARTable[ar] : 
-            spcARTable[ar] * 1000, (spcARTable[ar] >= 1) ? "s" : "ms");
-        strcat(ev->note, argDumpStr);
-        sprintf(argDumpStr, "%d (%.1f%s), sustain level = ", dr, (spcDRTable[dr] >= 1) ? spcDRTable[dr] : 
-            spcDRTable[dr] * 1000, (spcDRTable[dr] >= 1) ? "s" : "ms");
-        strcat(ev->note, argDumpStr);
-        sprintf(argDumpStr, "%d/8, sustain rate = ", sl);
-        strcat(ev->note, argDumpStr);
-        sprintf(argDumpStr, "%d (%.1f%s)", sr, (spcSRTable[sr] >= 1) ? spcSRTable[sr] : 
-            spcSRTable[sr] * 1000, (spcSRTable[sr] >= 1) ? "s" : "ms");
-        strcat(ev->note, (sr == 0) ? "INF" : argDumpStr);
-    }
-}
-
-/** vcmd EF: set ADSR. */
-static void chunSpcEventEF(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    strcpy(ev->note, "Set ADSR");
-    chunSpcEventEFInline(seq, ev, smf);
-    if (!chunSpcLessTextInSMF)
-        smfInsertMetaText(smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
-}
-
-/** vcmd F0: set patch. */
-static void chunSpcEventF0(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    int arg1;
-    int *p = &seq->track[ev->track].pos;
-
-    ev->size++;
-    arg1 = seq->ARAM[*p];
-    (*p)++;
-
-    if (!chunSpcNoPatchChange) {
-        smfInsertProgram(smf, seq->track[ev->track].tick, ev->track, ev->track, arg1);
-    }
-    seq->track[ev->track].patch = arg1;
-    sprintf(ev->note, "Set Patch, patch = %d", arg1);
-}
-
-/** vcmd F1: duration copy on, or... */
-static void chunSpcEventF1(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    if (seq->version >= SPC_VER_DQ5) {
-        chunSpcEventF2(seq, ev, smf);
-        return;
-    }
-    chunSpcEventUnknown0(seq, ev, smf);
-}
-
-/** vcmd F2: duration copy on. */
-static void chunSpcEventF2(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    seq->track[ev->track].refDuration = true;
-
-    // refresh duration info promptly
-    if (ev->track > 0) {
-        seq->track[ev->track].duration = seq->track[ev->track-1].duration;
-        seq->track[ev->track].durationRate = seq->track[ev->track-1].durationRate;
-    }
-
-    sprintf(ev->note, "Duration Copy On");
-}
-
-/** vcmd F3: duration copy off. */
-static void chunSpcEventF3(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    seq->track[ev->track].refDuration = false;
-    sprintf(ev->note, "Duration Copy Off");
-}
-
-/** vcmd F4: repeat once more. */
-static void chunSpcEventF4(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    sprintf(ev->note, "Repeat Once More");
-    chunSpcEventCondJumpCnt(seq, ev, smf, 2, &seq->track[ev->track].loopCount);
-}
-
-/** vcmd F5: repeat n times. */
-static void chunSpcEventF5(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    int arg1;
-    int *p = &seq->track[ev->track].pos;
-
-    ev->size++;
-    arg1 = seq->ARAM[*p];
-    (*p)++;
-
-    sprintf(ev->note, "Repeat N Times");
-    sprintf(argDumpStr, ", count = %d", arg1);
-    strcat(ev->note, argDumpStr);
-    chunSpcEventCondJumpCnt(seq, ev, smf, arg1, &seq->track[ev->track].loopCount);
-}
-
-/** vcmd F6: volume. */
-static void chunSpcEventF6(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    int arg1;
-    int *p = &seq->track[ev->track].pos;
-
-    ev->size++;
-    arg1 = seq->ARAM[*p];
-    (*p)++;
-
-    seq->track[ev->track].volume = arg1;
-    smfInsertChunSpcExpression(smf, seq->track[ev->track].tick, ev->track, ev->track, arg1);
-    sprintf(ev->note, "Volume, val = %d", arg1);
-}
-
-/** vcmd F7: nop, or... */
-static void chunSpcEventF7(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    if (seq->version >= SPC_VER_DQ5) {
-        chunSpcEventNOP(seq, ev, smf);
-        return;
-    }
-    chunSpcEventUnknown1(seq, ev, smf);
-}
-
-/** vcmd F8: call subroutine. */
-static void chunSpcEventF8(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    int arg1;
-    int *p = &seq->track[ev->track].pos;
-    int dest;
-
-    ev->size += 2;
-    arg1 = utos2(mget2l(&seq->ARAM[*p]));
-    (*p) += 2;
-    dest = *p + arg1;
-
-    if (seq->track[ev->track].callSP < CMD_CALL_MAX) {
-        seq->track[ev->track].retnAddr[seq->track[ev->track].callSP] = *p;
-        seq->track[ev->track].callSP++;
-        *p = dest;
-    }
-
-    sprintf(ev->note, "Call, addr = $%04X", dest);
-}
-
-/** vcmd F9: return from subroutine. */
-static void chunSpcEventF9(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    int *p = &seq->track[ev->track].pos;
-    bool jump = false;
-
-    if (seq->track[ev->track].callSP > 0) {
-        seq->track[ev->track].callSP--;
-        *p = seq->track[ev->track].retnAddr[seq->track[ev->track].callSP];
-        jump = true;
-    }
-
-    sprintf(ev->note, "Return");
-    if (jump) {
-        sprintf(argDumpStr, ", addr = $%04X", *p);
-        strcat(ev->note, argDumpStr);
-    }
-}
-
-/** vcmd FA: key shift (transpose). */
-static void chunSpcEventFA(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    int arg1;
-    int *p = &seq->track[ev->track].pos;
-
-    ev->size++;
-    arg1 = utos1(seq->ARAM[*p]);
-    (*p)++;
-
-    seq->track[ev->track].transpose = arg1;
-    sprintf(ev->note, "Transpose, val = %d", arg1);
-}
-
-/** vcmd FB: pitch slide. */
-static void chunSpcEventFB(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    int arg1, arg2;
-    int *p = &seq->track[ev->track].pos;
-    int pitch;
-    int prevSlideMax;
-
-    ev->size += 2;
-    arg1 = utos1(seq->ARAM[*p]);
-    (*p)++;
-    arg2 = seq->ARAM[*p];
-    (*p)++;
-
-    if (chunSpcPitchBendSens == 0) {
-        prevSlideMax = seq->track[ev->track].pitchSlideMax;
-        seq->track[ev->track].pitchSlideMax = min(abs(arg1), SMF_PITCHBENDSENS_MAX);
-        if (seq->track[ev->track].pitchSlideMax != prevSlideMax) {
-            smfInsertPitchBendSensitivity(smf, ev->tick, ev->track, ev->track, seq->track[ev->track].pitchSlideMax);
-        }
-    }
-    if (seq->track[ev->track].pitchSlideMax > SMF_PITCHBENDSENS_MAX) {
-        fprintf(stderr, "Warning: Pitch range over (%d), in tick %d at track %d\n", arg1, ev->tick, ev->track);
-    }
-
-    seq->track[ev->track].pitchSlideStartTick = ev->tick;
-    seq->track[ev->track].pitchSlideEndTick = ev->tick + arg2;
-    seq->track[ev->track].pitchSlideTarget = arg1 * 8192 / seq->track[ev->track].pitchSlideMax;
-    sprintf(ev->note, "Pitch slide, key = %d, step = %d", arg1, arg2);
-
-    pitch = (arg2 == 0) ? seq->track[ev->track].pitchSlideTarget : 0;
-    if (pitch == 8192)
-        pitch--;
-    smfInsertPitchBend(smf, seq->track[ev->track].tick, ev->track, ev->track, pitch);
-    seq->track[ev->track].lastPitch = pitch;
-}
-
-/** vcmd FF: end of track. */
-static void chunSpcEventFF(ChunSpcSeqStat *seq, SeqEventReport *ev, Smf* smf)
-{
-    seq->track[ev->track].hasEnd = true;
-    sprintf(ev->note, "End of Track");
-}
-
-/** set pointers of each event. */
-static void chunSpcInitEventList(ChunSpcSeqStat *seq, ChunSpcEvent *event)
-{
-    int code;
-
-    // fill all with unidentified event
-    for(code = 0x00; code <= 0xff; code++) {
-        event[code] = (ChunSpcEvent) chunSpcEventUnidentified;
-    }
-
-    // note
-    for(code = 0x00; code <= 0x9f; code++) {
-        event[code] = (ChunSpcEvent) chunSpcEventNote;
-    }
-    // reserved
-    for(code = 0xa0; code <= 0xdd; code++) {
-        event[code] = (ChunSpcEvent) chunSpcEventReserved;
-    }
-    // duration rate
-    if (seq->version >= SPC_VER_DQ5) {
-        for(code = 0xa0; code <= 0xb5; code++) {
-            event[code] = (ChunSpcEvent) chunSpcEventDurFromTable;
-        }
-    }
-    // vcmd list
-    if (seq->version >= SPC_VER_DQ5) {
-        event[0xDB] = (ChunSpcEvent) chunSpcEventDB;
-        event[0xDC] = (ChunSpcEvent) chunSpcEventDC;
-    }
-    event[0xDD] = (ChunSpcEvent) chunSpcEventDD;
-    event[0xDE] = (ChunSpcEvent) chunSpcEventDE;
-    event[0xDF] = (ChunSpcEvent) chunSpcEventUnknown1;
-    event[0xE0] = (ChunSpcEvent) chunSpcEventE0;
-    event[0xE1] = (ChunSpcEvent) chunSpcEventUnknown0;
-    event[0xE2] = (ChunSpcEvent) chunSpcEventE2;
-    event[0xE3] = (ChunSpcEvent) chunSpcEventUnknown1; // ?
-    event[0xE4] = (ChunSpcEvent) chunSpcEventUnknown1; // ?
-    event[0xE5] = (ChunSpcEvent) chunSpcEventUnknown2;
-    event[0xE6] = (ChunSpcEvent) chunSpcEventE6;
-    event[0xE7] = (ChunSpcEvent) chunSpcEventUnknown1;
-    event[0xE8] = (ChunSpcEvent) chunSpcEventE8;
-    event[0xE9] = (ChunSpcEvent) chunSpcEventUnknown1;
-    event[0xEA] = (ChunSpcEvent) chunSpcEventEA;
-    event[0xEB] = (ChunSpcEvent) chunSpcEventEB;
-    event[0xEC] = (ChunSpcEvent) chunSpcEventEC;
-    event[0xED] = (ChunSpcEvent) chunSpcEventED;
-    event[0xEE] = (ChunSpcEvent) chunSpcEventEE;
-    event[0xEF] = (ChunSpcEvent) chunSpcEventEF;
-    event[0xF0] = (ChunSpcEvent) chunSpcEventF0;
-    event[0xF1] = (ChunSpcEvent) chunSpcEventF1;
-    event[0xF2] = (ChunSpcEvent) chunSpcEventF2;
-    event[0xF3] = (ChunSpcEvent) chunSpcEventF3;
-    event[0xF4] = (ChunSpcEvent) chunSpcEventF4;
-    event[0xF5] = (ChunSpcEvent) chunSpcEventF5;
-    event[0xF6] = (ChunSpcEvent) chunSpcEventF6;
-    event[0xF7] = (ChunSpcEvent) chunSpcEventF7;
-    event[0xF8] = (ChunSpcEvent) chunSpcEventF8;
-    event[0xF9] = (ChunSpcEvent) chunSpcEventF9;
-    event[0xFA] = (ChunSpcEvent) chunSpcEventFA;
-    event[0xFB] = (ChunSpcEvent) chunSpcEventFB;
-    event[0xFC] = (ChunSpcEvent) chunSpcEventUnknown0;
-    event[0xFD] = (ChunSpcEvent) chunSpcEventUnknown0;
-    event[0xFE] = (ChunSpcEvent) chunSpcEventUnknown1;
-    event[0xFF] = (ChunSpcEvent) chunSpcEventFF;
+    return smf;
 }
 
 //----
 
-/** convert summer/winter spc to midi data from ARAM (65536 bytes). */
-Smf* chunSpcARAMToMidi(const byte *ARAM)
+static char argDumpStr[512];
+
+/** truncate note. */
+static void chunSpcTruncateNote (ChunSpcSeqStat *seq, int track)
 {
-    Smf* smf = NULL;
-    ChunSpcSeqStat seq;
-    ChunSpcEvent event[256];
-    bool trackHasEnd[8];
-    bool seqHasEnd = false;
-    bool inSub;
-    int seqLooped = 0;
-    int minTickStep;
-    int tick;
+    ChunSpcTrackStat *tr = &seq->track[track];
+
+    if (tr->lastNote.active && tr->lastNote.dur > 0) {
+        int lastTick = tr->lastNote.tick + tr->lastNote.dur;
+        int diffTick = lastTick - seq->tick;
+
+        if (diffTick > 0) {
+            tr->lastNote.dur -= diffTick;
+            if (tr->lastNote.dur == 0)
+                tr->lastNote.active = false;
+        }
+    }
+}
+
+/** truncate note for each track. */
+static void chunSpcTruncateNoteAll (ChunSpcSeqStat *seq)
+{
     int tr;
-    int i;
+
+    for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
+        chunSpcTruncateNote(seq, tr);
+    }
+}
+
+/** finalize note. */
+static bool chunSpcDequeueNote (ChunSpcSeqStat *seq, int track)
+{
+    ChunSpcTrackStat *tr = &seq->track[track];
+    ChunSpcNoteParam *lastNote = &tr->lastNote;
+    bool result = false;
+
+    if (lastNote->active) {
+        int dur;
+        int key;
+        int vel;
+
+        dur = lastNote->dur;
+        if (dur == 0)
+            dur++;
+
+        key = lastNote->key + lastNote->transpose
+            + seq->ver.patchFix[tr->lastNote.patch].key
+            + SPC_NOTE_KEYSHIFT;
+        vel = lastNote->vel;
+        if (vel == 0)
+            vel++;
+
+        result = smfInsertNote(seq->smf, lastNote->tick, track, track, key, vel, dur);
+        lastNote->active = false;
+    }
+    return result;
+}
+
+/** finalize note for each track. */
+static void chunSpcDequeueNoteAll (ChunSpcSeqStat *seq)
+{
+    int tr;
+
+    for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
+        chunSpcDequeueNote(seq, tr);
+    }
+}
+
+/** inactivate track. */
+static void chunSpcInactiveTrack(ChunSpcSeqStat *seq, int track)
+{
+    int tr;
+
+    seq->track[track].active = false;
+    for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
+        if (seq->track[tr].active)
+            return;
+    }
+    seq->active = false;
+}
+
+/** increment loop count. */
+static void chunSpcAddTrackLoopCount(ChunSpcSeqStat *seq, int track, int count)
+{
+    int tr;
+
+    seq->track[track].looped += count;
+    seq->looped = (chunSpcLoopMax > 0) ? chunSpcLoopMax : 0xffff;
+    for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
+        if (seq->track[tr].active)
+            seq->looped = min(seq->looped, seq->track[tr].looped);
+    }
+
+    if (seq->looped >= chunSpcLoopMax) {
+        seq->active = false;
+    }
+}
+
+/** advance seq tick. */
+static void chunSpcSeqAdvTick(ChunSpcSeqStat *seq)
+{
+    int minTickStep = 0;
+    int tr;
+
+    for (tr = SPC_TRACK_MAX - 1; tr >= 0; tr--) {
+        if (seq->track[tr].active) {
+            if (minTickStep == 0)
+                minTickStep = seq->track[tr].tick - seq->tick;
+            else
+                minTickStep = min(minTickStep, seq->track[tr].tick - seq->tick);
+        }
+    }
+    seq->tick += minTickStep;
+    seq->time += (double) 60 / chunSpcTempo(seq) * minTickStep / seq->timebase;
+}
+
+/** vcmds: unknown event (without status change). */
+static void chunSpcEventUnknownInline (ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    sprintf(ev->note, "Unknown Event %02X", ev->code);
+    strcat(ev->classStr, " unknown");
+
+    if (ev->unidentified)
+        fprintf(stderr, "Error: Encountered unidentified event %02X at $%04X [Track %d]\n", ev->code, ev->addr, ev->track + 1);
+    else
+        fprintf(stderr, "Warning: Skipped unknown event %02X at $%04X [Track %d]\n", ev->code, ev->addr, ev->track + 1);
+}
+
+/** vcmds: unidentified event. */
+static void chunSpcEventUnidentified (ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    ev->unidentified = true;
+    chunSpcEventUnknownInline(seq, ev);
+    if (!chunSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmds: unknown event (no args). */
+static void chunSpcEventUnknown0 (ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    chunSpcEventUnknownInline(seq, ev);
+    if (!chunSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmds: unknown event (1 byte arg). */
+static void chunSpcEventUnknown1 (ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    chunSpcEventUnknownInline(seq, ev);
+    sprintf(argDumpStr, ", arg1 = %d", arg1);
+    strcat(ev->note, argDumpStr);
+    if (!chunSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmds: unknown event (2 byte args). */
+static void chunSpcEventUnknown2 (ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    chunSpcEventUnknownInline(seq, ev);
+    sprintf(argDumpStr, ", arg1 = %d, arg2 = %d, arg1/2 = %d", arg1, arg2, arg2 * 256 + arg1);
+    strcat(ev->note, argDumpStr);
+    if (!chunSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd: unknown event (3 byte args). */
+static void chunSpcEventUnknown3 (ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2, arg3;
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    ev->size += 3;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+    arg3 = seq->aRAM[*p];
+    (*p)++;
+
+    chunSpcEventUnknownInline(seq, ev);
+    sprintf(argDumpStr, ", arg1 = %d, arg2 = %d, arg3 = %d", arg1, arg2, arg3);
+    strcat(ev->note, argDumpStr);
+    if (!chunSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd: unknown event (4 byte args). */
+static void chunSpcEventUnknown4 (ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2, arg3, arg4;
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    ev->size += 4;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+    arg3 = seq->aRAM[*p];
+    (*p)++;
+    arg4 = seq->aRAM[*p];
+    (*p)++;
+
+    chunSpcEventUnknownInline(seq, ev);
+    sprintf(argDumpStr, ", arg1 = %d, arg2 = %d, arg3 = %d, arg4 = %d", arg1, arg2, arg3, arg4);
+    strcat(ev->note, argDumpStr);
+    if (!chunSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd: unknown event (5 byte args). */
+static void chunSpcEventUnknown5 (ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2, arg3, arg4, arg5;
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    ev->size += 5;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+    arg3 = seq->aRAM[*p];
+    (*p)++;
+    arg4 = seq->aRAM[*p];
+    (*p)++;
+    arg5 = seq->aRAM[*p];
+    (*p)++;
+
+    chunSpcEventUnknownInline(seq, ev);
+    sprintf(argDumpStr, ", arg1 = %d, arg2 = %d, arg3 = %d, arg4 = %d, arg5 = %d", arg1, arg2, arg3, arg4, arg5);
+    strcat(ev->note, argDumpStr);
+    if (!chunSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmds: no operation. */
+static void chunSpcEventNOP (ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    sprintf(ev->note, "NOP");
+}
+
+/** vcmd 00-9f: note, rest, tie. */
+static void chunSpcEventNote(ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+    byte noteByte = ev->code;
+    bool rest;
+    bool tie;
+    int key;
+    int len;
+    int dur;
+
+    if (noteByte >= 0x50) {
+        noteByte -= 0x50;
+
+        ev->size++;
+        tr->noteLen = seq->aRAM[*p];
+        (*p)++;
+    }
+
+    rest = (noteByte == 0x00);
+    tie = (noteByte == 0x4f);
+    key = noteByte;
+    len = tr->noteLen;
+
+    // formula for duration is:
+    //   dur = len * (durRate + 1) / 256
+    // but there are a few of exceptions.
+    //   durRate = 0   : full length (tie uses it)
+    //   durRate = 254 : full length - 1 (tick)
+    dur = len;
+    if (tr->durRate == 254)
+    {
+        dur--;
+    }
+    else if (tr->durRate != 0)
+    {
+        dur = len * (tr->durRate + 1) / 256;
+    }
+
+    if (rest) {
+        sprintf(ev->note, "Rest, len = %d", len);
+        strcat(ev->classStr, " ev-rest");
+    }
+    else if (tie) {
+        sprintf(ev->note, "Tie, len = %d", len);
+        strcat(ev->classStr, " ev-tie");
+    }
+    else {
+        getNoteName(ev->note, key + seq->transpose + tr->note.transpose
+            + seq->ver.patchFix[tr->note.patch].key
+            + SPC_NOTE_KEYSHIFT);
+        sprintf(argDumpStr, ", len = %d, dur = %d", len, dur);
+        strcat(ev->note, argDumpStr);
+        strcat(ev->classStr, " ev-note");
+    }
+
+    // output old note first
+    if (!tie)
+    {
+        chunSpcDequeueNote(seq, ev->track);
+    }
+
+    // set new note
+    if (!rest) {
+        if (tie) {
+            tr->lastNote.dur += dur;
+        }
+        else {
+            if (tr->pitchNeedsFinalize)
+            {
+                smfInsertPitchBend(seq->smf, tr->tick, ev->track, ev->track, 0);
+            }
+
+            tr->lastNote.tick = ev->tick;
+            tr->lastNote.dur = dur;
+            tr->lastNote.key = key;
+            tr->lastNote.vel = 100;
+            tr->lastNote.transpose = seq->transpose + tr->note.transpose;
+            tr->lastNote.patch = tr->note.patch;
+            tr->lastNote.active = true;
+        }
+        tr->lastNote.tied = tie;
+    }
+    tr->tick += len;
+}
+
+/** vcmd a0-b5: set duration rate from table. */
+static void chunSpcEventDurFromTable(ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+    int durIndex;
+
+    const int durRateTable[] = {
+        0x0d, 0x1a, 0x26, 0x33, 0x40, 0x4d, 0x5a, 0x66,
+        0x73, 0x80, 0x8c, 0x99, 0xa6, 0xb3, 0xbf, 0xcc,
+        0xd9, 0xe6, 0xf2, 0xfe, 0xff, 0x00
+    };
+
+    durIndex = ev->code - 0xa0;
+    tr->durRate = durRateTable[durIndex];
+    sprintf(ev->note, "Duration Rate From Table, index = %d, rate = %d/255%s", durIndex, tr->durRate,
+        (tr->durRate == 0) ? " (tie)" : ((tr->durRate == 254) ? " (full -1 tick)" : ""));
+    strcat(ev->classStr, " ev-durrate");
+
+    //if (!chunSpcLessTextInSMF)
+    //   smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd e0: cpu-controled jump. */
+static void chunSpcEventCPUControledJump(ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+    int arg1;
+    int arg2;
+    int dest;
+    bool doJump;
+
+    ev->size += 3;
+    arg1 = utos2(mget2l(&seq->aRAM[*p]));
+    (*p) += 2;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    doJump = false;
+    if ((seq->cpuControledVar & 0x7f) == arg2)
+    {
+        doJump = true;
+    }
+    seq->cpuControledVar |= 0x80;
+
+    // relative
+    dest = *p + arg1;
+
+    if (doJump)
+    {
+        // assumes backjump = loop
+        if (dest < *p) {
+            chunSpcAddTrackLoopCount(seq, ev->track, 1);
+        }
+        *p = dest;
+    }
+
+    sprintf(ev->note, "CPU-Controled Jump, dest = $%04X, jump = %s", dest, doJump ? "true" : "false");
+    strcat(ev->classStr, " ev-cpujump");
+
+    if (!chunSpcLessTextInSMF)
+       smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd e6: set expression fade. */
+static void chunSpcEventExpressionFade (ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    int *p = &seq->track[ev->track].pos;
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+    int valueFrom, valueTo;
+    int faderStep, faderValue;
+    double faderPos;
+
+    ev->size += 2;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Expression Fade, vol = %d, step = %d", arg1, arg2);
+    strcat(ev->classStr, " ev-vol");
+
+    if (!chunSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    // lazy fader, hope it won't be canceled by other vcmds
+    if (arg2 == 0)
+    {
+        tr->expression = arg1;
+        smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_EXPRESSION, chunSpcMidiVolOf(tr->expression));
+    }
+    else
+    {
+        valueFrom = tr->expression;
+        valueTo = arg1;
+        for (faderStep = 1; faderStep <= arg2; faderStep++)
+        {
+            faderPos = (double)faderStep / arg2;
+            faderValue = (int)(valueTo * faderPos + valueFrom * (1.0 - faderPos)); // alphablend
+            if (tr->expression != faderValue)
+            {
+                tr->expression = faderValue;
+                smfInsertControl(seq->smf, ev->tick + faderStep, ev->track, ev->track, SMF_CONTROL_EXPRESSION, chunSpcMidiVolOf(tr->expression));
+            }
+        }
+    }
+}
+
+/** vcmd e8: set panpot fade. */
+static void chunSpcEventPanpotFade (ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    int *p = &seq->track[ev->track].pos;
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+    int valueFrom, valueTo;
+    int faderStep, faderValue;
+    double faderPos;
+
+    ev->size += 2;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Panpot Fade, pan = %d, step = %d", arg1, arg2);
+    strcat(ev->classStr, " ev-pan");
+
+    if (!chunSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    // lazy fader, hope it won't be canceled by other vcmds
+    if (arg2 == 0)
+    {
+        tr->panpot = arg1;
+        smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_PANPOT, chunSpcMidiPanOf(tr->panpot));
+    }
+    else
+    {
+        valueFrom = tr->panpot;
+        valueTo = arg1;
+        for (faderStep = 1; faderStep <= arg2; faderStep++)
+        {
+            faderPos = (double)faderStep / arg2;
+            faderValue = (int)(valueTo * faderPos + valueFrom * (1.0 - faderPos)); // alphablend
+            if (tr->panpot != faderValue)
+            {
+                tr->panpot = faderValue;
+                smfInsertControl(seq->smf, ev->tick + faderStep, ev->track, ev->track, SMF_CONTROL_PANPOT, chunSpcMidiPanOf(tr->panpot));
+            }
+        }
+    }
+}
+
+/** vcmd ea: jump. */
+static void chunSpcEventJump(ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+    int arg1;
+    int dest;
+
+    ev->size += 2;
+    arg1 = utos2(mget2l(&seq->aRAM[*p]));
+    (*p) += 2;
+
+    // relative
+    dest = *p + arg1;
+
+    // assumes backjump = loop
+    // FIXME: not always true!
+    // see Boss Battle of Dragon Quest 5
+    if (dest < *p) {
+        chunSpcAddTrackLoopCount(seq, ev->track, 1);
+    }
+    *p = dest;
+
+    sprintf(ev->note, "Jump, dest = $%04X", dest);
+    strcat(ev->classStr, " ev-jump");
+
+    if (!chunSpcLessTextInSMF)
+       smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd eb: set tempo. */
+static void chunSpcEventTempo (ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    if (seq->ver.id == SPC_VER_KAMAITACHI)
+    {
+        seq->tempo = seq->baseTempo * arg1 / 64;
+        sprintf(ev->note, "Set Tempo, rate = %d/64, bpm = %.1f", arg1, chunSpcTempo(seq));
+    }
+    else
+    {
+        seq->tempo = arg1;
+        sprintf(ev->note, "Set Tempo, bpm = %.1f", chunSpcTempo(seq));
+    }
+    strcat(ev->classStr, " ev-tempo");
+
+    smfInsertTempoBPM(seq->smf, ev->tick, 0, chunSpcTempo(seq));
+}
+
+/** vcmd ec: set duration rate. */
+static void chunSpcEventDurRate(ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+    int arg1;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    tr->durRate = arg1;
+
+    sprintf(ev->note, "Duration Rate, rate = %d/255%s", arg1,
+        (tr->durRate == 0) ? " (tie)" : ((tr->durRate == 254) ? " (full -1 tick)" : ""));
+    strcat(ev->classStr, " ev-durrate");
+
+    //if (!chunSpcLessTextInSMF)
+    //   smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd f0: set instrument. */
+static void chunSpcEventInstrument (ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    tr->note.patch = arg1;
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_BANKSELM, seq->ver.patchFix[arg1].bankSelM);
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_BANKSELL, seq->ver.patchFix[arg1].bankSelL);
+    smfInsertProgram(seq->smf, ev->tick, ev->track, ev->track, seq->ver.patchFix[arg1].patchNo);
+
+    sprintf(ev->note, "Set Instrument, patch = %d", arg1);
+    strcat(ev->classStr, " ev-patch");
+}
+
+/** vcmd f2: duration copy on. */
+static void chunSpcEventCopyNoteLenOn(ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+
+    tr->refNoteLen = true;
+
+    // refresh duration info promptly
+    if (ev->track > 0) {
+        tr->noteLen = seq->track[ev->track-1].noteLen;
+        tr->durRate = seq->track[ev->track-1].durRate;
+    }
+
+    sprintf(ev->note, "Copy Note Length On");
+    strcat(ev->classStr, " ev-copylenon");
+
+    //if (!chunSpcLessTextInSMF)
+    //   smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd f3: duration copy off. */
+static void chunSpcEventCopyNoteLenOff(ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+
+    tr->refNoteLen = false;
+
+    sprintf(ev->note, "Copy Note Length Off");
+    strcat(ev->classStr, " ev-copylenoff");
+
+    //if (!chunSpcLessTextInSMF)
+    //   smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd db: repeat break (alternative). */
+static void chunSpcEventRepeatBreakAlt(ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+    int arg1;
+    int dest;
+    bool doJump;
+
+    ev->size += 2;
+    arg1 = utos2(mget2l(&seq->aRAM[*p]));
+    (*p) += 2;
+
+    dest = *p + arg1;
+
+    doJump = (tr->loopCountAlt != 0);
+    if (doJump)
+    {
+        *p = dest;
+    }
+
+    sprintf(ev->note, "Repeat Break (Alt), dest = $%04X, jump = %s", dest, doJump ? "true" : "false");
+    strcat(ev->classStr, " ev-loop");
+
+    //if (!chunSpcLessTextInSMF)
+    //   smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd dc: repeat again (alternative). */
+static void chunSpcEventRepeatAgainAlt(ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+    int times;
+    int dest;
+    bool doJump;
+
+    ev->size += 2;
+    times = 2;
+    dest = utos2(mget2l(&seq->aRAM[*p]));
+    (*p) += 2;
+    dest += *p;
+
+    if (tr->loopCountAlt == 0)
+    {
+        tr->loopCountAlt = times;
+    }
+
+    tr->loopCountAlt = (tr->loopCountAlt - 1) & 0xff;
+    doJump = (tr->loopCountAlt != 0);
+
+    if (doJump)
+    {
+        *p = dest;
+    }
+
+    sprintf(ev->note, "Repeat Again (Alt), dest = $%04X, jump = %s", dest, doJump ? "true" : "false");
+    strcat(ev->classStr, " ev-loop");
+
+    //if (!chunSpcLessTextInSMF)
+    //   smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd dd: set release rate. */
+static void chunSpcEventSetRR (ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+    int rr;
+
+    ev->size++;
+    rr = seq->aRAM[*p] & 0x1f;
+    (*p)++;
+
+    sprintf(ev->note, "Set Release Rate, RR = %d (%.1f%s)",
+        rr, (spcSRTable[rr] >= 1) ? spcSRTable[rr] : spcSRTable[rr] * 1000, (spcSRTable[rr] >= 1) ? "s" : "ms");
+    strcat(ev->classStr, " ev-adsr");
+
+    if (!chunSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd de: set ADSR and release rate. */
+static void chunSpcEventSetADSR_RR (ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+    int adsr, ar, dr, sl, sr, rr;
+
+    ev->size += 3;
+    adsr = mget2b(&seq->aRAM[*p]);
+    (*p) += 2;
+    rr = seq->aRAM[*p] & 0x1f;
+    (*p)++;
+
+    ar = (adsr & 0x0f00) >> 8;
+    dr = (adsr & 0x7000) >> 12;
+    sl = (adsr & 0x00e0) >> 5;
+    sr = (adsr & 0x001f);
+
+    sprintf(ev->note, "Set ADSR + Release, ADSR1/2 = $%04X, AR = %d (%.1f%s), DR = %d (%.1f%s), SL = %d (%d/8), SR = %d (%.1f%s), RR = %d (%.1f%s)", adsr,
+        ar, (spcARTable[ar] >= 1) ? spcARTable[ar] : spcARTable[ar] * 1000, (spcARTable[ar] >= 1) ? "s" : "ms",
+        dr, (spcARTable[dr] >= 1) ? spcDRTable[dr] : spcDRTable[dr] * 1000, (spcDRTable[dr] >= 1) ? "s" : "ms",
+        sl, sl + 1,
+        sr, (spcSRTable[sr] >= 1) ? spcSRTable[sr] : spcSRTable[sr] * 1000, (spcSRTable[sr] >= 1) ? "s" : "ms",
+        rr, (spcSRTable[rr] >= 1) ? spcSRTable[rr] : spcSRTable[rr] * 1000, (spcSRTable[rr] >= 1) ? "s" : "ms");
+    strcat(ev->classStr, " ev-adsr");
+
+    if (!chunSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd ef: set ADSR. */
+static void chunSpcEventSetADSR (ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+    int adsr, ar, dr, sl, sr;
+
+    ev->size += 2;
+    adsr = mget2b(&seq->aRAM[*p]);
+    (*p) += 2;
+
+    ar = (adsr & 0x0f00) >> 8;
+    dr = (adsr & 0x7000) >> 12;
+    sl = (adsr & 0x00e0) >> 5;
+    sr = (adsr & 0x001f);
+
+    sprintf(ev->note, "Set ADSR, ADSR1/2 = $%04X, AR = %d (%.1f%s), DR = %d (%.1f%s), SL = %d (%d/8), SR = %d (%.1f%s)", adsr,
+        ar, (spcARTable[ar] >= 1) ? spcARTable[ar] : spcARTable[ar] * 1000, (spcARTable[ar] >= 1) ? "s" : "ms",
+        dr, (spcARTable[dr] >= 1) ? spcDRTable[dr] : spcDRTable[dr] * 1000, (spcDRTable[dr] >= 1) ? "s" : "ms",
+        sl, sl + 1,
+        sr, (spcSRTable[sr] >= 1) ? spcSRTable[sr] : spcSRTable[sr] * 1000, (spcSRTable[sr] >= 1) ? "s" : "ms");
+    strcat(ev->classStr, " ev-adsr");
+
+    if (!chunSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd ed: set volume. */
+static void chunSpcEventVolume (ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Volume, vol = %d", arg1);
+    strcat(ev->classStr, " ev-vol");
+
+    //if (!chunSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    tr->volume = arg1;
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_VOLUME, chunSpcMidiVolOf(tr->volume));
+}
+
+/** vcmd ee: set panpot. */
+static void chunSpcEventPanpot (ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    sprintf(ev->note, "Panpot, balance = %d", arg1);
+    strcat(ev->classStr, " ev-pan");
+
+    //if (!chunSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    tr->panpot = arg1;
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_PANPOT, chunSpcMidiPanOf(tr->panpot));
+}
+
+/** vcmd f4: repeat again. */
+static void chunSpcEventRepeatAgain(ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+    int times;
+    int dest;
+    bool doJump;
+
+    ev->size += 2;
+    times = 2;
+    dest = utos2(mget2l(&seq->aRAM[*p]));
+    (*p) += 2;
+    dest += *p;
+
+    if (tr->loopCount == 0)
+    {
+        tr->loopCount = times;
+    }
+
+    tr->loopCount = (tr->loopCount - 1) & 0xff;
+    doJump = (tr->loopCount != 0);
+
+    if (doJump)
+    {
+        *p = dest;
+    }
+
+    sprintf(ev->note, "Repeat Again, dest = $%04X, jump = %s", dest, doJump ? "true" : "false");
+    strcat(ev->classStr, " ev-loop");
+
+    //if (!chunSpcLessTextInSMF)
+    //   smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd f5: repeat until. */
+static void chunSpcEventRepeatUntil(ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+    int times;
+    int dest;
+    bool doJump;
+
+    ev->size += 3;
+    times = seq->aRAM[*p];
+    (*p)++;
+    dest = utos2(mget2l(&seq->aRAM[*p]));
+    (*p) += 2;
+    dest += *p;
+
+    if (tr->loopCount == 0)
+    {
+        tr->loopCount = times;
+    }
+
+    tr->loopCount = (tr->loopCount - 1) & 0xff;
+    doJump = (tr->loopCount != 0);
+
+    if (doJump)
+    {
+        *p = dest;
+    }
+
+    sprintf(ev->note, "Repeat Until, times = %d, dest = $%04X, jump = %s", times, dest, doJump ? "true" : "false");
+    strcat(ev->classStr, " ev-loop");
+
+    //if (!chunSpcLessTextInSMF)
+    //   smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd f6: set expression. */
+static void chunSpcEventExpression (ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Expression, vol = %d", arg1);
+    strcat(ev->classStr, " ev-vol");
+
+    //if (!chunSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    tr->expression = arg1;
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_EXPRESSION, chunSpcMidiVolOf(tr->expression));
+}
+
+/** vcmd f8: call subroutine. */
+static void chunSpcEventCallSubroutine(ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+    int arg1;
+    int dest;
+
+    ev->size += 2;
+    arg1 = utos2(mget2l(&seq->aRAM[*p]));
+    (*p) += 2;
+
+    dest = *p + arg1;
+
+    if (tr->subNestLevel < tr->subNestLevelMax) {
+        tr->subRetnAddr[tr->subNestLevel] = *p;
+        tr->subNestLevel++;
+        *p = dest;
+    }
+
+    sprintf(ev->note, "Call, dest = $%04X", dest);
+    strcat(ev->classStr, " ev-call");
+
+    //if (!chunSpcLessTextInSMF)
+    //   smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd f9: end subroutine. */
+static void chunSpcEventEndSubroutine(ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+    bool doJump = false;
+
+    if (tr->subNestLevel > 0) {
+        tr->subNestLevel--;
+        *p = tr->subRetnAddr[tr->subNestLevel];
+        doJump = true;
+    }
+
+    sprintf(ev->note, "Return");
+    if (doJump) {
+        sprintf(argDumpStr, ", dest = $%04X", *p);
+        strcat(ev->note, argDumpStr);
+    }
+    else
+    {
+        //strcat(ev->note, " (ignored)");
+    }
+    strcat(ev->classStr, " ev-ret");
+
+    //if (!chunSpcLessTextInSMF)
+    //   smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd fa: transpose (absolute). */
+static void chunSpcEventTransposeAbs (ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    tr->note.transpose = arg1;
+
+    sprintf(ev->note, "Transpose, key = %d", arg1);
+    strcat(ev->classStr, " ev-transpose");
+
+    //if (!chunSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd fb: pitch slide. */
+static void chunSpcEventPitchSlide (ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1, arg2;
+    int *p = &seq->track[ev->track].pos;
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+    int lastPitchBendSens;
+    double valueFrom, valueTo;
+    int faderStep, faderIntValue;
+    int faderLastIntValue;
+    double faderValue;
+    double faderPos;
+
+    ev->size += 2;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+
+    if (chunSpcPitchBendSens == 0) {
+        // try updating pitch bend range
+        lastPitchBendSens = tr->pitchBendSensMax;
+        tr->pitchBendSensMax = min(abs(arg1), SMF_PITCHBENDSENS_MAX);
+        if (tr->pitchBendSensMax != lastPitchBendSens) {
+            smfInsertPitchBendSensitivity(seq->smf, ev->tick, ev->track, ev->track, tr->pitchBendSensMax);
+        }
+    }
+    // MIDI bend range check
+    if (abs(arg1) > tr->pitchBendSensMax) {
+        fprintf(stderr, "Warning: Pitch Slide out of range (%d) at $%04X, track %d, tick %d\n", arg1, ev->addr, ev->track, ev->tick);
+    }
+
+    sprintf(ev->note, "Pitch Slide, key += %d, step = %d", arg1, arg2);
+    strcat(ev->classStr, " ev-pitchslide");
+
+    //if (!chunSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    // lazy fader, hope it won't be canceled by other vcmds
+    if (arg2 == 0)
+    {
+        faderIntValue = (int)((double)arg1 / tr->pitchBendSensMax * 8192);
+        if (faderIntValue >= -8192 && faderIntValue <= 8191)
+        {
+            smfInsertPitchBend(seq->smf, tr->tick, ev->track, ev->track, faderIntValue);
+        }
+    }
+    else
+    {
+        valueFrom = 0.0;
+        valueTo = arg1;
+        faderLastIntValue = 0;
+        for (faderStep = 1; faderStep <= arg2; faderStep++)
+        {
+            faderPos = (double)faderStep / arg2;
+            faderValue = valueTo * faderPos + valueFrom * (1.0 - faderPos); // alphablend
+            faderIntValue = (int)(faderValue / tr->pitchBendSensMax * 8192);
+            if (faderIntValue == 8192)
+            {
+                faderIntValue--;
+            }
+            if (faderIntValue != faderLastIntValue)
+            {
+                faderLastIntValue = faderIntValue;
+                if (faderIntValue >= -8192 && faderIntValue <= 8191)
+                {
+                    smfInsertPitchBend(seq->smf, tr->tick + faderStep, ev->track, ev->track, faderIntValue);
+                }
+            }
+        }
+    }
+    tr->pitchNeedsFinalize = (arg1 != 0);
+}
+
+/** vcmd ff: end of track. */
+static void chunSpcEventEndOfTrack (ChunSpcSeqStat *seq, SeqEventReport *ev)
+{
+    ChunSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    sprintf(ev->note, "End of Track");
+    strcat(ev->classStr, " ev-end");
+
+    chunSpcInactiveTrack(seq, ev->track);
+
+    //if (!chunSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** set pointers of each event. */
+static void chunSpcSetEventList (ChunSpcSeqStat *seq)
+{
+    int code;
+    ChunSpcEvent *event = seq->ver.event;
+
+    // disable them all first
+    for(code = 0x00; code <= 0xff; code++) {
+        event[code] = (ChunSpcEvent) chunSpcEventUnidentified;
+    }
+
+    if (seq->ver.id == SPC_VER_UNKNOWN)
+        return;
+
+    for(code = 0x00; code <= 0x9f; code++) {
+        event[code] = (ChunSpcEvent) chunSpcEventNote;
+    }
+    for(code = 0xa0; code <= 0xdc; code++) {
+        event[code] = (ChunSpcEvent) chunSpcEventNOP; // DQ5 Bridal March uses it
+    }
+    event[0xdd] = (ChunSpcEvent) chunSpcEventSetRR;
+    event[0xde] = (ChunSpcEvent) chunSpcEventSetADSR_RR;
+    event[0xdf] = (ChunSpcEvent) chunSpcEventUnknown1;
+    event[0xe0] = (ChunSpcEvent) chunSpcEventCPUControledJump;
+    event[0xe1] = (ChunSpcEvent) chunSpcEventUnknown0;
+    event[0xe2] = (ChunSpcEvent) chunSpcEventUnknown1;
+    event[0xe3] = (ChunSpcEvent) chunSpcEventUnknown1;
+    event[0xe4] = (ChunSpcEvent) chunSpcEventUnknown1;
+    event[0xe5] = (ChunSpcEvent) chunSpcEventUnknown2;
+    event[0xe6] = (ChunSpcEvent) chunSpcEventExpressionFade;
+    event[0xe7] = (ChunSpcEvent) chunSpcEventUnknown1;
+    event[0xe8] = (ChunSpcEvent) chunSpcEventPanpotFade;
+    event[0xe9] = (ChunSpcEvent) chunSpcEventUnknown1;
+    event[0xea] = (ChunSpcEvent) chunSpcEventJump;
+    event[0xeb] = (ChunSpcEvent) chunSpcEventTempo;
+    event[0xec] = (ChunSpcEvent) chunSpcEventDurRate;
+    event[0xed] = (ChunSpcEvent) chunSpcEventVolume;
+    event[0xee] = (ChunSpcEvent) chunSpcEventPanpot;
+    event[0xef] = (ChunSpcEvent) chunSpcEventSetADSR;
+    event[0xf0] = (ChunSpcEvent) chunSpcEventInstrument;
+    event[0xf1] = (ChunSpcEvent) chunSpcEventUnknown0;
+    event[0xf2] = (ChunSpcEvent) chunSpcEventCopyNoteLenOn;
+    event[0xf3] = (ChunSpcEvent) chunSpcEventCopyNoteLenOff;
+    event[0xf4] = (ChunSpcEvent) chunSpcEventRepeatAgain;
+    event[0xf5] = (ChunSpcEvent) chunSpcEventRepeatUntil;
+    event[0xf6] = (ChunSpcEvent) chunSpcEventExpression;
+    event[0xf7] = (ChunSpcEvent) chunSpcEventUnknown1;
+    event[0xf8] = (ChunSpcEvent) chunSpcEventCallSubroutine;
+    event[0xf9] = (ChunSpcEvent) chunSpcEventEndSubroutine;
+    event[0xfa] = (ChunSpcEvent) chunSpcEventTransposeAbs;
+    event[0xfb] = (ChunSpcEvent) chunSpcEventPitchSlide;
+    event[0xfc] = (ChunSpcEvent) chunSpcEventUnknown0;
+    event[0xfd] = (ChunSpcEvent) chunSpcEventUnknown0;
+    event[0xfe] = (ChunSpcEvent) chunSpcEventUnknown1;
+    event[0xff] = (ChunSpcEvent) chunSpcEventEndOfTrack;
+
+    if (!chunSpcIsVersionSummer(seq))
+    {
+        for(code = 0xa0; code <= 0xb5; code++) {
+            event[code] = (ChunSpcEvent) chunSpcEventDurFromTable;
+        }
+        // b5-da - not used
+        event[0xdb] = (ChunSpcEvent) chunSpcEventRepeatBreakAlt;
+        event[0xdc] = (ChunSpcEvent) chunSpcEventRepeatAgainAlt;
+        event[0xf1] = (ChunSpcEvent) chunSpcEventCopyNoteLenOn;
+        event[0xf7] = (ChunSpcEvent) chunSpcEventNOP;
+    }
+}
+
+//----
+
+/** convert spc to midi data from ARAM (65536 bytes). */
+Smf* chunSpcARAMToMidi (const byte *aRAM)
+{
+    bool abortFlag = false;
+    ChunSpcSeqStat *seq = NULL;
+    Smf* smf = NULL;
+    int tr;
 
     printHtmlHeader();
-    myprintf("    <h1>Chunsoft summer/winter SPC2MIDI %s</h1>\n", VERSION);
+    myprintf("    <h1>%s %s</h1>\n", APPNAME, VERSION);
     myprintf("    <div class=\"section\">\n");
-    myprintf("      <p>This document is generated automatically by chunspc. For details, visit <a href=\"http://loveemu.yh.land.to/\">loveemu labo</a>.</p>\n\n", mycssfile);
-
-    seq.ARAM = (byte *) ARAM;
-    chunSpcCheckVer(&seq);
-    if (seq.version == SPC_VER_UNKNOWN) {
-        fprintf(stderr, "Error: Unsupported version.\n");
-        goto abort;
-    }
-    if (!chunSpcDetectSeq(&seq)) {
-        fprintf(stderr, "Error: Unable to find sequence data.\n");
-        goto abort;
-    }
-
-    smf = smfCreate(SPC_TIMEBASE);
-    smfInsertMetaText(smf, 0, 0, SMF_META_SEQUENCENAME, "Chunsoft summer/winter SPC2MIDI");
-    smfInsertTempoBPM(smf, 0, 0, seq.tempo);
-    smfInsertGM1SystemOn(smf, 0, 0, 0);
-    for (tr = 0; tr < seq.numOfTracks; tr++) {
-        static char trackName[256];
-
-        trackHasEnd[tr] = false;
-
-        if (chunSpcNoPatchChange) {
-            smfInsertProgram(smf, 0, tr, tr, 48);
-        }
-        smfInsertChunSpcVolume(smf, 0, tr, tr, seq.track[tr].masterVolume);
-        smfInsertChunSpcExpression(smf, 0, tr, tr, seq.track[tr].volume);
-
-        smfInsertPitchBend(smf, 0, tr, tr, 0);
-        if (chunSpcPitchBendSens != 0) {
-            smfInsertPitchBendSensitivity(smf, 0, tr, tr, seq.track[tr].pitchSlideMax);
-        }
-
-        sprintf(trackName, "Track %d : $%04X", tr + 1, seq.track[tr].pos);
-        smfInsertMetaText(smf, 0, tr, SMF_META_TRACKNAME, trackName);
-    }
+    myprintf("      <p>This document is generated automatically by %s. For details, visit <a href=\"http://loveemu.yh.land.to/\">loveemu labo</a>.</p>\n\n", APPSHORTNAME);
 
     myprintf("      <h2>Informations</h2>\n");
-    myprintf("      <div class=\"section\">\n");
-    myprintf("        <ul>\n");
-    myprintf("          <li>Version: %s</li>\n", chunSpcVerToStr(seq.version));
-    myprintf("          <li>Sequence header: $%04X</li>\n", seq.addrOfHeader);
-    myprintf("          <li>Initial tempo: %d</li>\n", seq.tempo);
-    myprintf("          <li>Number of tracks: %d</li>\n", seq.numOfTracks);
+    myprintf("      <div class=\"section\" id=\"informations\">\n");
+    myprintf("        <ul class=\"info-tree\">\n");
+
+    seq = newChunSpcSeq(aRAM);
+    printHtmlInfoList(seq);
+
+    if (seq->ver.id == SPC_VER_UNKNOWN || !seq->ver.seqDetected) {
+        fprintf(stderr, "Error: Invalid or unsupported data.\n");
+        myprintf("        </ul>\n");
+        myprintf("      </div>\n");
+        goto abort;
+    }
+    smf = chunSpcCreateSmf(seq);
+
+    printHtmlInfoListMore(seq);
+
+    myprintf("          </ul></li>\n");
     myprintf("        </ul>\n");
     myprintf("      </div>\n\n");
 
     myprintf("      <h2>Data Dump</h2>\n");
-    myprintf("      <div class=\"section\">\n");
+    myprintf("      <div class=\"section\" id=\"data-dump\">\n");
     myprintf("        <p>You can filter output by using stylesheet. Write %s as you like!</p>\n", mycssfile);
 
-    myprintf("        <table class=\"dump\">\n");
-    myprintf("          <tr><th class=\"track\">#</th><th class=\"tick\">Tick</th><th class=\"address\">Address</th><th class=\"hex\">Hex Dump</th><th class=\"note\">Note</th></tr>\n");
+    printEventTableHeader(seq, smf);
 
-    chunSpcInitEventList(&seq, event);
-
-    while(!seqHasEnd) {
+    while (seq->active && !abortFlag) {
 
         SeqEventReport ev;
 
-        for (ev.track = 0; ev.track < seq.numOfTracks; ev.track++) {
+        // [driver-specific]
+        if ((seq->cpuControledVar & 0x80) != 0)
+        {
+            seq->cpuControledVar = 0;
+        }
 
-            if (seq.track[ev.track].refDuration && ev.track > 0) {
-                seq.track[ev.track].duration = seq.track[ev.track-1].duration;
-                seq.track[ev.track].durationRate = seq.track[ev.track-1].durationRate;
+        for (ev.track = 0; ev.track < SPC_TRACK_MAX; ev.track++) {
+
+            ChunSpcTrackStat *evtr = &seq->track[ev.track];
+
+            // [driver-specific] copy note length from prior channel
+            if (evtr->active && evtr->refNoteLen && ev.track > 0) {
+                evtr->noteLen = seq->track[ev.track-1].noteLen;
+                evtr->durRate = seq->track[ev.track-1].durRate;
             }
 
-            while (!seqHasEnd && !seq.track[ev.track].hasEnd && seq.track[ev.track].tick <= seq.tick) {
+            while (seq->active && evtr->active && evtr->tick <= seq->tick) {
 
-                ev.tick = seq.tick;
-                ev.addr = seq.track[ev.track].pos;
+                bool inSub;
+
+                // init event report
+                ev.tick = seq->tick;
+                ev.addr = evtr->pos;
                 ev.size = 0;
                 ev.unidentified = false;
                 strcpy(ev.note, "");
 
-                inSub = (seq.track[ev.track].callSP > 0) || (seq.track[ev.track].loopCount > 0);
-
                 // read first byte
                 ev.size++;
-                ev.code = ARAM[ev.addr];
+                ev.code = aRAM[ev.addr];
                 sprintf(ev.classStr, "ev%02X", ev.code);
-                seq.track[ev.track].pos++;
+                evtr->pos++;
                 // in subroutine?
+                inSub = false; // TODO NYI
                 strcat(ev.classStr, inSub ? " sub" : "");
 
+                //if (ev.code != seq->ver.pitchSlideByte)
+                //    evtr->prevTick = evtr->tick;
+                evtr->used = true;
                 // dispatch event
-                event[ev.code](&seq, &ev, smf);
+                seq->ver.event[ev.code](seq, &ev);
 
-                if (chunSpcTextLoopMax == 0 || seqLooped < chunSpcTextLoopMax) {
-                    myprintf("          <tr class=\"track%d %s\">", ev.track + 1, ev.classStr);
-                    myprintf("<td class=\"track\">%d</td>", ev.track + 1);
-                    myprintf("<td class=\"tick\">%d</td>", ev.tick);
-                    myprintf("<td class=\"address\">$%04X</td>", ev.addr);
-                    myprintf("<td class=\"hex\">");
-                    for (i = 0; i < ev.size; i++) {
-                        if (i > 0)
-                            myprintf(" ");
-                        myprintf("%02X", ARAM[ev.addr + i]);
-                    }
-                    myprintf("</td>");
-                    myprintf("<td class=\"note\">%s</td>", ev.note);
-                    myprintf("</tr>\n");
-                }
+                // dump event report
+                if (chunSpcTextLoopMax == 0 || seq->looped < chunSpcTextLoopMax)
+                    printHtmlEventDump(seq, &ev);
 
-                if (ev.unidentified)
+                if (ev.unidentified) {
+                    abortFlag = true;
                     goto quitConversion;
-
-                // check loop count for all
-                seqLooped = seq.track[0].looped;
-                for (tr = 1; tr < seq.numOfTracks; tr++) {
-                    seqLooped = min(seqLooped, seq.track[tr].looped);
-                }
-
-                // check if each track has end
-                for (tr = 0; tr < seq.numOfTracks; tr++) {
-                    trackHasEnd[tr] = seq.track[tr].hasEnd || (chunSpcLoopMax > 0 && seq.track[tr].looped >= chunSpcLoopMax);
-                }
-
-                // check if all tracks has end
-                seqHasEnd = true;
-                for (tr = 0; tr < seq.numOfTracks; tr++) {
-                    if (!trackHasEnd[tr]) {
-                        seqHasEnd = false;
-                        break;
-                    }
                 }
             }
         }
 
-        // step, faster than seq.tick++;
-        minTickStep = 0;
-        for (tr = 0; tr < seq.numOfTracks; tr++) {
-            if (!seq.track[tr].hasEnd) {
-                if (minTickStep == 0)
-                    minTickStep = seq.track[tr].tick - seq.tick;
-                else
-                    minTickStep = min(minTickStep, seq.track[tr].tick - seq.tick);
+        // end of seq, quit
+        if (!seq->active) {
+            // rewind tracks to end point
+            for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
+                seq->track[tr].tick = seq->tick;
+                if (seq->track[tr].used)
+                    smfSetEndTimingOfTrack(seq->smf, tr, seq->tick);
             }
         }
+        else {
+            chunSpcSeqAdvTick(seq);
 
-        // faders
-        for (tr = 0; tr < seq.numOfTracks; tr++) {
-            for (tick = seq.tick; tick < seq.tick + minTickStep; tick++) {
-                // pitch slide
-                if (seq.track[tr].pitchSlideEndTick >= 0) {
-                    int pitch;
-                    int targetPitch = seq.track[tr].pitchSlideTarget;
-                    int step = seq.track[tr].pitchSlideEndTick - seq.track[tr].pitchSlideStartTick;
-
-                    if (tick > seq.track[tr].pitchSlideEndTick)
-                        break;
-
-                    pitch = (int) floor(targetPitch * ((double) (tick - seq.track[tr].pitchSlideStartTick) / step) + 0.5);
-                    if (pitch != seq.track[tr].lastPitch) {
-                        if (pitch == 8192)
-                            pitch--;
-                        smfInsertPitchBend(smf, tick, tr, tr, pitch);
-                        seq.track[tr].lastPitch = pitch;
-                    }
-                }
+            // check time limit
+            if (seq->time >= chunSpcTimeLimit) {
+            	fprintf(stderr, "TIMEOUT %f %f\n", seq->time, chunSpcTimeLimit);
+                seq->active = false;
             }
-        }
-
-        seq.tick += minTickStep;
-        seq.time += (double) 60 / seq.tempo * minTickStep / SPC_TIMEBASE;
-        // check time limit
-        if (seq.time >= chunSpcTimeLimit) {
-            seqHasEnd = true;
         }
     }
 
 quitConversion:
 
-    // finalize for all tied notes
-    for (tr = 0; tr < seq.numOfTracks; tr++) {
-        chunSpcDequeueTiedNote(&seq, tr, smf);
-    }
+    // finalize for all notes
+    chunSpcTruncateNoteAll(seq);
+    chunSpcDequeueNoteAll(seq);
 
-    myprintf("        </table>\n");
-    if (seqHasEnd) {
+    printEventTableFooter(seq, smf);
+    if (!abortFlag) {
         myprintf("        <p>Congratulations! MIDI conversion went successfully!</p>\n");
     }
     else {
@@ -1484,6 +2224,11 @@ quitConversion:
 finalize:
     myprintf("    </div>\n");
     printHtmlFooter();
+
+    if (seq) {
+        delChunSpcSeq(&seq);
+    }
+
     return smf;
 
 abort:
@@ -1491,11 +2236,12 @@ abort:
         smfDelete(smf);
         smf = NULL;
     }
+
     goto finalize;
 }
 
-/** convert summer/winter spc to midi data from SPC file located in memory. */
-Smf* chunSpcToMidi(const byte *data, size_t size)
+/** convert spc to midi data from SPC file located in memory. */
+Smf* chunSpcToMidi (const byte *data, size_t size)
 {
     Smf* smf = NULL;
 
@@ -1510,8 +2256,8 @@ finalize:
     return smf;
 }
 
-/** convert summer/winter spc to midi data from SPC file. */
-Smf* chunSpcToMidiFromFile(const char *filename)
+/** convert spc to midi data from SPC file. */
+Smf* chunSpcToMidiFromFile (const char *filename)
 {
     Smf* smf = NULL;
     FILE *fp;
@@ -1550,137 +2296,269 @@ finalize:
 
 //----
 
-/** handle command-line options. */
-static bool handleCmdLineOpts(int *argc, char **argv[], const char *cmd)
-{
-    bool dispatched = false;
+static int gArgc;
+static char **gArgv;
+static bool manDisplayed = false;
 
-    (*argv)++; (*argc)--;
-    while(*argc && (*argv)[0][0] == '-') {
-        if (strcmp((*argv)[0], "--help") == 0) {
-            man(cmd);
-            dispatched = true;
-        }
-        else if (strcmp((*argv)[0], "--loopcount") == 0) {
-            if (*argc <= 2) {
-                fprintf(stderr, "Error: invalid use of \"--loopcount [count=0-]\"\n");
-            }
-            else {
-                chunSpcSetLoopCount(atoi((*argv)[1]));
-                dispatched = true;
-                (*argv)++; (*argc)--;
-            }
-        }
-        else if (strcmp((*argv)[0], "--nopatch") == 0) {
-            chunSpcNoPatchChange = true;
-            dispatched = true;
-        }
-        else if (strcmp((*argv)[0], "--voloffset") == 0) {
-            if (*argc <= 2) {
-                fprintf(stderr, "Error: invalid use of \"--voloffset [offset=0-127]\"\n");
-            }
-            else {
-                chunSpcChannelVolOffset = atoi((*argv)[1]);
-                dispatched = true;
-                (*argv)++; (*argc)--;
-            }
-        }
-        else if (strcmp((*argv)[0], "--linear") == 0) {
-            chunSpcVolIsLinear = true;
-            dispatched = true;
-        }
-        else if (strcmp((*argv)[0], "--bendrange") == 0) {
-            if (*argc <= 2) {
-                fprintf(stderr, "Error: invalid use of \"--bendrange [range=0-24]\"\n");
-            }
-            else {
-                chunSpcPitchBendSens = atoi((*argv)[1]);
-                dispatched = true;
-                (*argv)++; (*argc)--;
-            }
-        }
-        else {
-            fprintf(stderr, "Error: unknown option \"%s\"\n", (*argv)[0]);
-        }
-        (*argv)++; (*argc)--;
-    }
-    return dispatched;
-}
+typedef bool (*CmdDispatcher) (void);
+
+typedef struct TagCmdOptDefs {
+    char *name;
+    char shortName;
+    int numArgs;
+    CmdDispatcher dispatch;
+    char *syntax;
+    char *description;
+} CmdOptDefs;
+
+static bool cmdOptHelp (void);
+static bool cmdOptLoop (void);
+static bool cmdOptPatchFix (void);
+static bool cmdOptGS (void);
+static bool cmdOptXG (void);
+static bool cmdOptGM2 (void);
+static bool cmdOptSong (void);
+static bool cmdOptSongList (void);
+static bool cmdOptBendRange (void);
+
+static CmdOptDefs optDef[] = {
+    { "help", '\0', 0, cmdOptHelp, "", "show usage" },
+    { "loop", '\0', 1, cmdOptLoop, "<times>", "set loop count" },
+    { "patchfix", '\0', 1, cmdOptPatchFix, "<file>", "modify patch/transpose" },
+    { "gs", '\0', 0, cmdOptGS, "", "Insert GS Reset at beginning of seq" },
+    { "xg", '\0', 0, cmdOptXG, "", "Insert XG System On at beginning of seq" },
+    { "gm2", '\0', 0, cmdOptGM2, "", "Insert GM2 System On at beginning of seq" },
+    { "song", '\0', 1, cmdOptSong, "<index>", "force set song index" },
+    { "songlist", '\0', 1, cmdOptSongList, "<addr>", "force set song (list) address" },
+    { "bendrange", '\0', 0, cmdOptBendRange, "<range>", "set pitch bend sensitivity (0:auto)" },
+};
+
+//----
 
 /** display how to use. */
-void man(const char *cmd)
+void man (void)
 {
-    const char *cmdname = "chunspc";
-    //const char *cmdname = (cmd != NULL) ? cmd : "chunspc";
+    const char *cmdname = APPSHORTNAME;
+    int op;
 
-    fprintf(stderr, "chunspc - Chunsoft summer/winter SPC2MIDI %s\n", VERSION);
+    fprintf(stderr, "%s - %s %s\n", APPSHORTNAME, APPNAME, VERSION);
     fprintf(stderr, "Syntax: %s (options) [spcfile] [midfile] (htmlfile)\n", cmdname);
     fprintf(stderr, "http://loveemu.yh.land.to/\n");
 
     fprintf(stderr, "\n");
     fprintf(stderr, "Options:\n");
-    fprintf(stderr, "--help         show usage\n");
-    fprintf(stderr, "--loopcount    loop count of midi output\n");
-    fprintf(stderr, "--nopatch      disable program change\n");
-    fprintf(stderr, "--voloffset N  offset of midi volume\n");
-    fprintf(stderr, "--linear       assume midi volume is linear\n");
-    fprintf(stderr, "--bendrange N  pitch bend sensitivity (0:auto)\n");
+    for (op = 0; op < countof(optDef); op++) {
+        if (optDef[op].description) {
+            if (optDef[op].dispatch) {
+                fprintf(stderr, " %s%c  %s%-10s  %-15s  %s\n",
+                    (optDef[op].shortName != '\0') ? "-" : " ",
+                    (optDef[op].shortName != '\0') ? optDef[op].shortName : ' ',
+                    optDef[op].name ? "--" : "  ",
+                    optDef[op].name ? optDef[op].name : "",
+                    optDef[op].syntax ? optDef[op].syntax : "",
+                    optDef[op].description ? optDef[op].description : "");
+            }
+            else
+                fprintf(stderr, "\n");
+        }
+    }
+    fprintf(stderr, "\n");
+
+    manDisplayed = true;
 }
 
-/** display about chunspc application. */
-void about(const char *cmd)
+/** display about application. */
+void about (void)
 {
-    const char *cmdname = "chunspc";
-    //const char *cmdname = (cmd != NULL) ? cmd : "chunspc";
+    const char *cmdname = APPSHORTNAME;
 
-    fprintf(stderr, "chunspc - Chunsoft summer/winter SPC2MIDI %s\n", VERSION);
+    fprintf(stderr, "%s - %s %s\n", APPSHORTNAME, APPNAME, VERSION);
     fprintf(stderr, "Programmed by loveemu - http://loveemu.yh.land.to/\n");
     fprintf(stderr, "Syntax: %s (options) [spcfile] [midfile] (htmlfile)\n", cmdname);
 }
 
-/** chunspc application main. */
-int main(int argc, char *argv[])
+//----
+
+/** show usage */
+static bool cmdOptHelp (void)
+{
+    man();
+    return true;
+}
+
+/** set loop count */
+static bool cmdOptLoop (void)
+{
+    int loopCount = strtol(gArgv[0], NULL, 0);
+    chunSpcSetLoopCount(loopCount);
+    return true;
+}
+
+/** set song index. */
+static bool cmdOptSong (void)
+{
+    int songIndex = strtol(gArgv[0], NULL, 0);
+    chunSpcForceSongIndex = songIndex;
+    return true;
+}
+
+/** set song (list) address. */
+static bool cmdOptSongList (void)
+{
+    int songListAddr = strtol(gArgv[0], NULL, 16);
+    chunSpcForceSongListAddr = songListAddr;
+    return true;
+}
+
+/** set pitchbend range. */
+static bool cmdOptBendRange (void)
+{
+    int range = strtol(gArgv[0], NULL, 0);
+    chunSpcPitchBendSens = range;
+    return true;
+}
+
+/** import patch fix file. */
+static bool cmdOptPatchFix (void)
+{
+    if (chunSpcImportPatchFixFile(gArgv[0]))
+        return true;
+    else {
+        fprintf(stderr, "Error: unable to import patchfix.\n");
+        return false;
+    }
+}
+
+/** use GS reset. */
+static bool cmdOptGS (void)
+{
+    chunSpcMidiResetType = SMF_RESET_GS;
+    return true;
+}
+
+/** use XG reset. */
+static bool cmdOptXG (void)
+{
+    chunSpcMidiResetType = SMF_RESET_XG;
+    return true;
+}
+
+/** use GM2 reset. */
+static bool cmdOptGM2 (void)
+{
+    chunSpcMidiResetType = SMF_RESET_GM2;
+    return true;
+}
+
+/** handle command-line options. */
+static bool handleCmdLineOpts (void)
+{
+    int op;
+
+    // dispatch options
+    while (gArgc > 0 && gArgv[0][0] == '-') {
+        bool shortOpt = (gArgv[0][1] != '-');
+        int optLen;
+        int chIndex;
+
+        // match for each option
+        optLen = (int) strlen(gArgv[0]);
+        for (chIndex = 1; chIndex < (shortOpt ? optLen : 2); chIndex++) {
+            bool unknown = true;
+
+            for (op = 0; op < countof(optDef); op++) {
+                if (optDef[op].dispatch
+                        && ((!shortOpt && optDef[op].name && strcmp(&gArgv[0][2], optDef[op].name) == 0)
+                        || (shortOpt && optDef[op].shortName != '\0' && gArgv[0][chIndex] == optDef[op].shortName))) {
+                    unknown = false;
+                    if (!shortOpt) {
+                        gArgc--;
+                        gArgv++;
+                        if (gArgc >= optDef[op].numArgs) {
+                            if (!optDef[op].dispatch())
+                                return false;
+                            gArgc -= optDef[op].numArgs;
+                            gArgv += optDef[op].numArgs;
+                        }
+                        else {
+                            fprintf(stderr, "Error: too few arguments for option \"--%s\".\n", optDef[op].name);
+                            gArgv += gArgc;
+                            gArgc = 0;
+                            return false;
+                        }
+                    }
+                    else {
+                        assert(optDef[op].numArgs == 0);
+                        if (!optDef[op].dispatch())
+                            return false;
+                    }
+                    break;
+                }
+            }
+            if (unknown) {
+                if (!shortOpt)
+                    fprintf(stderr, "Error: unknown option \"%s\".\n", gArgv[0]);
+                else
+                    fprintf(stderr, "Error: unknown option \"-%c\".\n", gArgv[0][chIndex]);
+                gArgc--;
+                gArgv++;
+                return false;
+            }
+        }
+        if (shortOpt) {
+            gArgc--;
+            gArgv++;
+        }
+    }
+    return true;
+}
+
+//----
+
+/** application main. */
+int main (int argc, char *argv[])
 {
     Smf* smf;
     FILE *htmlFile = NULL;
-    const char *cmd = (const char *) argv[0];
-    bool cmdDispatched;
+    bool result = true;
 
-    cmdDispatched = handleCmdLineOpts(&argc, &argv, cmd);
+    // handle options
+    gArgc = argc - 1;
+    gArgv = argv + 1;
+    handleCmdLineOpts();
 
-    if (argc < 2 || argc > 3) {
-        if (!cmdDispatched) {
-            about(cmd);
+    // too few or much args
+    if (gArgc < 2 || gArgc > 3) {
+        if (!manDisplayed) {
+            about();
             fprintf(stderr, "Run with --help, for more details.\n");
+            return (argc == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
         }
-        else {
-            fprintf(stderr, "Error: too few/many arguments.\n");
-        }
-        return EXIT_SUCCESS;
+        else
+            return EXIT_SUCCESS;
     }
 
-    if (argc >= 3) {
-        htmlFile = fopen(argv[2], "w");
+    // set html handle
+    if (gArgc >= 3) {
+        htmlFile = fopen(gArgv[2], "w");
         if (htmlFile != NULL)
             chunSpcSetLogStreamHandle(htmlFile);
     }
-    else {
-        //chunSpcSetLogStreamHandle(stdout);
-        chunSpcSetLogStreamHandle(NULL);
-    }
 
-    fprintf(stderr, "%s: Conversion started!\n", argv[0]);
-    smf = chunSpcToMidiFromFile(argv[0]);
+    // convert input file
+    fprintf(stderr, "%s:\n", gArgv[0]);
+    smf = chunSpcToMidiFromFile(gArgv[0]);
+    // then output result
     if (smf != NULL) {
-        smfWriteFile(smf, argv[1]);
+        smfWriteFile(smf, gArgv[1]);
     }
     else {
         fprintf(stderr, "Error: Conversion failed.\n");
+        result = false;
     }
 
-    if (htmlFile != NULL) {
+    if (htmlFile != NULL)
         fclose(htmlFile);
-    }
 
-    return EXIT_SUCCESS;
+    return result ? EXIT_SUCCESS : EXIT_FAILURE;
 }
