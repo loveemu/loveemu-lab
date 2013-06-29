@@ -117,7 +117,7 @@ struct TagChunSpcTrackStat {
     int loopCountAlt;       // repeat count for alternative loop command
     bool refNoteLen;        // refer note length from prior channel
     int pitchBendSensMax;   // limit of pitch slide for MIDI output
-    bool pitchNeedsFinalize;// whether write bend=0 at note on
+    int lastPitchSlideTick; // indicates whether write bend=0 at note on
 };
 
 struct TagChunSpcSeqStat {
@@ -270,7 +270,7 @@ static void chunSpcResetTrackParam (ChunSpcSeqStat *seq, int track)
     tr->loopCount = 0;
     tr->loopCountAlt = 0;
     tr->pitchBendSensMax = (chunSpcPitchBendSens == 0) ? SMF_PITCHBENDSENS_DEFAULT : chunSpcPitchBendSens;
-    tr->pitchNeedsFinalize = false;
+    tr->lastPitchSlideTick = INT_MAX;
 }
 
 /** reset before play/convert song. */
@@ -1274,10 +1274,10 @@ static void chunSpcEventNote(ChunSpcSeqStat *seq, SeqEventReport *ev)
             tr->lastNote.dur += dur;
         }
         else {
-            if (tr->pitchNeedsFinalize)
+            if (tr->lastPitchSlideTick < tr->tick)
             {
                 smfInsertPitchBend(seq->smf, tr->tick, ev->track, ev->track, 0);
-                tr->pitchNeedsFinalize = false;
+                tr->lastPitchSlideTick = INT_MAX;
             }
 
             tr->lastNote.tick = ev->tick;
@@ -2001,7 +2001,7 @@ static void chunSpcEventPitchSlide (ChunSpcSeqStat *seq, SeqEventReport *ev)
             }
         }
     }
-    tr->pitchNeedsFinalize = (arg1 != 0);
+    tr->lastPitchSlideTick = ev->tick;
 }
 
 /** vcmd ff: end of track. */
