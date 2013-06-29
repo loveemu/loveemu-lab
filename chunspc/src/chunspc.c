@@ -1396,8 +1396,13 @@ static void chunSpcEventExpressionFade (ChunSpcSeqStat *seq, SeqEventReport *ev)
             faderValue = (int)(valueTo * faderPos + valueFrom * (1.0 - faderPos)); // alphablend
             if (tr->expression != faderValue)
             {
+                int lastMidiVal = chunSpcMidiVolOf(tr->expression);
+                int currMidiVal = chunSpcMidiVolOf(faderValue);
                 tr->expression = faderValue;
-                smfInsertControl(seq->smf, ev->tick + faderStep, ev->track, ev->track, SMF_CONTROL_EXPRESSION, chunSpcMidiVolOf(tr->expression));
+                if (currMidiVal != lastMidiVal)
+                {
+                    smfInsertControl(seq->smf, ev->tick + faderStep, ev->track, ev->track, SMF_CONTROL_EXPRESSION, currMidiVal);
+                }
             }
         }
     }
@@ -1441,8 +1446,13 @@ static void chunSpcEventPanpotFade (ChunSpcSeqStat *seq, SeqEventReport *ev)
             faderValue = (int)(valueTo * faderPos + valueFrom * (1.0 - faderPos)); // alphablend
             if (tr->panpot != faderValue)
             {
+                int lastMidiVal = chunSpcMidiPanOf(tr->panpot);
+                int currMidiVal = chunSpcMidiPanOf(faderValue);
                 tr->panpot = faderValue;
-                smfInsertControl(seq->smf, ev->tick + faderStep, ev->track, ev->track, SMF_CONTROL_PANPOT, chunSpcMidiPanOf(tr->panpot));
+                if (currMidiVal != lastMidiVal)
+                {
+                    smfInsertControl(seq->smf, ev->tick + faderStep, ev->track, ev->track, SMF_CONTROL_PANPOT, currMidiVal);
+                }
             }
         }
     }
