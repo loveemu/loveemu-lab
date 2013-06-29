@@ -1277,6 +1277,7 @@ static void chunSpcEventNote(ChunSpcSeqStat *seq, SeqEventReport *ev)
             if (tr->pitchNeedsFinalize)
             {
                 smfInsertPitchBend(seq->smf, tr->tick, ev->track, ev->track, 0);
+                tr->pitchNeedsFinalize = false;
             }
 
             tr->lastNote.tick = ev->tick;
