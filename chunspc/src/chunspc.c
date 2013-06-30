@@ -16,7 +16,7 @@
 
 #define APPNAME "Chunsoft SPC2MIDI"
 #define APPSHORTNAME "chunspc"
-#define VERSION "[2013-06-29]"
+#define VERSION "[2013-06-30]"
 
 static int chunSpcLoopMax = 2;            // maximum loop count of parser
 static int chunSpcTextLoopMax = 1;        // maximum loop count of text output
@@ -1213,6 +1213,7 @@ static void chunSpcEventNote(ChunSpcSeqStat *seq, SeqEventReport *ev)
     byte noteByte = ev->code;
     bool rest;
     bool tie;
+    bool slur = false;
     int key;
     int len;
     int dur;
@@ -1240,7 +1241,11 @@ static void chunSpcEventNote(ChunSpcSeqStat *seq, SeqEventReport *ev)
     {
         dur--;
     }
-    else if (tr->durRate != 0)
+    else if (tr->durRate == 0)
+    {
+        slur = true;
+    }
+    else
     {
         dur = len * (tr->durRate + 1) / 256;
     }
@@ -1260,6 +1265,13 @@ static void chunSpcEventNote(ChunSpcSeqStat *seq, SeqEventReport *ev)
         sprintf(argDumpStr, ", len = %d, dur = %d", len, dur);
         strcat(ev->note, argDumpStr);
         strcat(ev->classStr, " ev-note");
+    }
+
+    if (tr->lastNote.active && tr->lastNote.tied &&
+        !tie && !rest && (tr->lastNote.key != key))
+    {
+        if (!chunSpcLessTextInSMF)
+           smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, "Slur");
     }
 
     // output old note first
@@ -1288,7 +1300,7 @@ static void chunSpcEventNote(ChunSpcSeqStat *seq, SeqEventReport *ev)
             tr->lastNote.patch = tr->note.patch;
             tr->lastNote.active = true;
         }
-        tr->lastNote.tied = tie;
+        tr->lastNote.tied = slur;
     }
     tr->tick += len;
 }
@@ -1309,7 +1321,7 @@ static void chunSpcEventDurFromTable(ChunSpcSeqStat *seq, SeqEventReport *ev)
     durIndex = ev->code - 0xa0;
     tr->durRate = durRateTable[durIndex];
     sprintf(ev->note, "Duration Rate From Table, index = %d, rate = %d/255%s", durIndex, tr->durRate,
-        (tr->durRate == 0) ? " (tie)" : ((tr->durRate == 254) ? " (full -1 tick)" : ""));
+        (tr->durRate == 0) ? " (tie/slur)" : ((tr->durRate == 254) ? " (full -1 tick)" : ""));
     strcat(ev->classStr, " ev-durrate");
 
     //if (!chunSpcLessTextInSMF)
@@ -1528,7 +1540,7 @@ static void chunSpcEventDurRate(ChunSpcSeqStat *seq, SeqEventReport *ev)
     tr->durRate = arg1;
 
     sprintf(ev->note, "Duration Rate, rate = %d/255%s", arg1,
-        (tr->durRate == 0) ? " (tie)" : ((tr->durRate == 254) ? " (full -1 tick)" : ""));
+        (tr->durRate == 0) ? " (tie/slur)" : ((tr->durRate == 254) ? " (full -1 tick)" : ""));
     strcat(ev->classStr, " ev-durrate");
 
     //if (!chunSpcLessTextInSMF)
