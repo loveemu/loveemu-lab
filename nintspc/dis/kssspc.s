@@ -5,6 +5,8 @@
 ; 
 ; The game was also released as:
 ; * Hoshi no Kirby Super Deluxe (J)
+;
+; Main ASM for research of modern N-SPC.
 
 0700: 20        clrp
 0701: cd ff     mov   x,#$ff
@@ -71,13 +73,13 @@
 0780: 69 3e 3d  cmp   ($3d),($3e)
 0783: f0 02     beq   $0787
 0785: ab 3d     inc   $3d
-0787: e4 43     mov   a,$43
+0787: e4 43     mov   a,$43             ; tempo
 0789: ee        pop   y
 078a: cf        mul   ya
 078b: 60        clrc
 078c: 84 41     adc   a,$41
-078e: c4 41     mov   $41,a
-0790: b0 18     bcs   $07aa
+078e: c4 41     mov   $41,a             ; update tempo counter
+0790: b0 18     bcs   $07aa             ; tick
 0792: e4 04     mov   a,$04
 0794: f0 9c     beq   $0732
 0796: cd 00     mov   x,#$00
@@ -978,27 +980,28 @@
 0dfe: f5 80 02  mov   a,$0280+x
 0e01: da 1c     movw  $1c,ya
 0e03: 3f 16 0e  call  $0e16
-0e06: d4 d0     mov   $d0+x,a
+0e06: d4 d0     mov   $d0+x,a           ; VOL(L)
 0e08: 8d 14     mov   y,#$14
 0e0a: e8 00     mov   a,#$00
 0e0c: 9a 1c     subw  ya,$1c
 0e0e: da 1c     movw  $1c,ya
 0e10: 3f 16 0e  call  $0e16
-0e13: d4 d1     mov   $d1+x,a
+0e13: d4 d1     mov   $d1+x,a           ; VOL(R)
 0e15: 6f        ret
 
-0e16: eb 1d     mov   y,$1d
+; calculate volume balance from $1c/d (integer/fractional, signed)
+0e16: eb 1d     mov   y,$1d             ; pan value (0-20)
 0e18: f6 e8 10  mov   a,$10e8+y         ; next pan val from table
 0e1b: 80        setc
 0e1c: b6 e7 10  sbc   a,$10e7+y         ; pan val
 0e1f: eb 1c     mov   y,$1c
-0e21: cf        mul   ya
+0e21: cf        mul   ya                ; multiple by fractional part (linear interpolation)
 0e22: dd        mov   a,y
 0e23: eb 1d     mov   y,$1d
 0e25: 60        clrc
 0e26: 96 e7 10  adc   a,$10e7+y         ; add integer part to pan val
 0e29: fd        mov   y,a
-0e2a: f5 71 02  mov   a,$0271+x         ; volume
+0e2a: f5 71 02  mov   a,$0271+x         ; base volume
 0e2d: cf        mul   ya
 0e2e: f5 a1 02  mov   a,$02a1+x         ; bits 7/6 will negate volume L/R
 0e31: 1c        asl   a
@@ -1007,7 +1010,7 @@
 0e36: dd        mov   a,y
 0e37: 90 03     bcc   $0e3c
 0e39: 48 ff     eor   a,#$ff
-0e3b: bc        inc   a
+0e3b: bc        inc   a                 ; reverse-phase
 0e3c: 6f        ret
 
 ; do readahead
@@ -1190,9 +1193,10 @@
 0f9b: da 1c     movw  $1c,ya
 0f9d: 6f        ret
 
+; calculate base volume
 0f9e: e2 1f     set7  $1f
-0fa0: eb 41     mov   y,$41
-0fa2: f5 11 01  mov   a,$0111+x
+0fa0: eb 41     mov   y,$41             ; tempo counter (i.e. fractional part of tick counter)
+0fa2: f5 11 01  mov   a,$0111+x         ; tremolo rate
 0fa5: cf        mul   ya
 0fa6: dd        mov   a,y
 0fa7: 60        clrc
@@ -1200,20 +1204,20 @@
 0fab: 1c        asl   a
 0fac: 90 02     bcc   $0fb0
 0fae: 48 ff     eor   a,#$ff
-0fb0: fb b1     mov   y,$b1+x
+0fb0: fb b1     mov   y,$b1+x           ; tremolo depth
 0fb2: cf        mul   ya
 0fb3: dd        mov   a,y
 0fb4: 48 ff     eor   a,#$ff
-0fb6: eb 49     mov   y,$49
+0fb6: eb 49     mov   y,$49             ; master volume
 0fb8: cf        mul   ya
-0fb9: f5 10 02  mov   a,$0210+x
+0fb9: f5 10 02  mov   a,$0210+x         ; per-note volume (velocity)
 0fbc: cf        mul   ya
-0fbd: f5 51 02  mov   a,$0251+x
+0fbd: f5 51 02  mov   a,$0251+x         ; channel volume
 0fc0: cf        mul   ya
 0fc1: dd        mov   a,y
 0fc2: cf        mul   ya
-0fc3: dd        mov   a,y
-0fc4: d5 71 02  mov   $0271+x,a
+0fc3: dd        mov   a,y               ; (^2 exponential)
+0fc4: d5 71 02  mov   $0271+x,a         ; base volume is derermined
 0fc7: 6f        ret
 
 0fc8: eb 09     mov   y,$09

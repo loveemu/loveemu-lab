@@ -1666,8 +1666,8 @@
 122c: 6f        ret
 ;
 122d: e2 13     set7  $13
-122f: eb 49     mov   y,$49
-1231: f5 62 03  mov   a,$0362+x
+122f: eb 49     mov   y,$49             ; tempo counter (i.e. fractional part of tick counter)
+1231: f5 62 03  mov   a,$0362+x         ; tremolo rate
 1234: cf        mul   ya
 1235: dd        mov   a,y
 1236: 60        clrc
@@ -1675,9 +1675,9 @@
 123a: 1c        asl   a
 123b: 90 02     bcc   $123f
 123d: 48 ff     eor   a,#$ff
-123f: fb b1     mov   y,$b1+x
+123f: fb b1     mov   y,$b1+x           ; tremolo depth
 1241: cf        mul   ya
-1242: f5 11 02  mov   a,$0211+x
+1242: f5 11 02  mov   a,$0211+x         ; per-note volume (velocity)
 1245: cf        mul   ya
 1246: dd        mov   a,y
 1247: 48 ff     eor   a,#$ff
@@ -1685,13 +1685,13 @@
 124a: 95 11 02  adc   a,$0211+x
 124d: fd        mov   y,a
 ; set voice volume from master/base/A
-124e: f5 41 02  mov   a,$0241+x
+124e: f5 41 02  mov   a,$0241+x         ; channel volume
 1251: cf        mul   ya
 1252: e4 57     mov   a,$57             ; master volume
 1254: cf        mul   ya
 1255: dd        mov   a,y
 1256: cf        mul   ya
-1257: dd        mov   a,y
+1257: dd        mov   a,y               ; (^2 exponential)
 1258: d5 71 03  mov   $0371+x,a         ; voice volume
 125b: 6f        ret
 ; get next vcmd stream byte for voice $46

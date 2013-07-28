@@ -1,3 +1,6 @@
+; Yoshi's Safari
+; It is based on N-SPC, but there are many minor differences.
+
 0800: 20        clrp
 0801: cd 7f     mov   x,#$7f
 0803: bd        mov   sp,x
@@ -222,15 +225,16 @@
 09e8: c4 2d     mov   $2d,a
 09ea: f5 90 02  mov   a,$0290+x
 09ed: c4 2e     mov   $2e,a
+;
 09ef: 3f 88 0c  call  $0c88
 09f2: c4 e3     mov   $e3,a
 09f4: 68 00     cmp   a,#$00
-09f6: f0 1f     beq   $0a17
+09f6: f0 1f     beq   $0a17             ; end repeat/return
 09f8: 68 80     cmp   a,#$80
-09fa: 90 3b     bcc   $0a37
+09fa: 90 3b     bcc   $0a37             ; note params
 09fc: 68 e0     cmp   a,#$e0
-09fe: 90 5f     bcc   $0a5f
-0a00: 3f ce 10  call  $10ce
+09fe: 90 5f     bcc   $0a5f             ; note
+0a00: 3f ce 10  call  $10ce             ; dispatch vcmd
 0a03: 90 ea     bcc   $09ef
 0a05: e4 2d     mov   a,$2d
 0a07: d5 80 02  mov   $0280+x,a
@@ -241,6 +245,7 @@
 0a13: 8f 80 2c  mov   $2c,#$80
 0a16: 6f        ret
 
+; vcmd 00 - end repeat/return
 0a17: f5 d3 00  mov   a,$00d3+x
 0a1a: d0 0a     bne   $0a26
 0a1c: d5 00 02  mov   $0200+x,a
@@ -256,18 +261,20 @@
 0a30: 2f bd     bra   $09ef
 0a32: 3f 0a 13  call  $130a
 0a35: 2f b8     bra   $09ef
+
+; vcmds 01-7f - note params
 0a37: 60        clrc
 0a38: 84 1a     adc   a,$1a
-0a3a: d5 20 06  mov   $0620+x,a
+0a3a: d5 20 06  mov   $0620+x,a         ; set duration by opcode
 0a3d: 3f 88 0c  call  $0c88
 0a40: c4 e3     mov   $e3,a
 0a42: 68 80     cmp   a,#$80
-0a44: b0 ae     bcs   $09f4
+0a44: b0 ae     bcs   $09f4             ; process next byte if < 0x80
 0a46: 2d        push  a
 0a47: 28 0f     and   a,#$0f
 0a49: fd        mov   y,a
 0a4a: f6 0b 0c  mov   a,$0c0b+y
-0a4d: d5 90 03  mov   $0390+x,a
+0a4d: d5 90 03  mov   $0390+x,a         ; set per-note vol from low nybble
 0a50: ae        pop   a
 0a51: 5c        lsr   a
 0a52: 5c        lsr   a
@@ -275,11 +282,12 @@
 0a54: 5c        lsr   a
 0a55: fd        mov   y,a
 0a56: f6 80 1d  mov   a,$1d80+y
-0a59: d5 40 06  mov   $0640+x,a
+0a59: d5 40 06  mov   $0640+x,a         ; set dur% from high nybble
 0a5c: 5f ef 09  jmp   $09ef
 
 0a5f: 68 ca     cmp   a,#$ca
 0a61: 90 0f     bcc   $0a72
+; vcmds ca-df - percussion note
 0a63: 80        setc
 0a64: a8 ca     sbc   a,#$ca
 0a66: 60        clrc
@@ -293,7 +301,8 @@
 0a76: 3f 21 11  call  $1121
 0a79: ae        pop   a
 0a7a: 68 c8     cmp   a,#$c8
-0a7c: d0 12     bne   $0a90
+0a7c: d0 12     bne   $0a90             ; not a tie
+; vcmd c8 - tie
 0a7e: 8d 00     mov   y,#$00
 0a80: f7 2d     mov   a,($2d)+y
 0a82: 68 f9     cmp   a,#$f9
@@ -305,9 +314,11 @@
 
 0a90: 68 c9     cmp   a,#$c9
 0a92: d0 06     bne   $0a9a
+; vcmd c9 - rest
 0a94: d5 40 03  mov   $0340+x,a
 0a97: 5f 5a 0b  jmp   $0b5a
 
+; vcmds 80-c7 - note (opcode in A)
 0a9a: 28 7f     and   a,#$7f
 0a9c: c8 08     cmp   x,#$08
 0a9e: b0 03     bcs   $0aa3
@@ -458,11 +469,13 @@
 0be7: dw $0fcd
 0be9: dw $1095
 
-0beb: db $02,$02,$03,$04,$01,$02,$03,$02
-0bf3: db $03,$02,$02,$04,$01,$02,$03,$04
-0bfb: db $02,$04,$04,$01,$02,$04,$01,$04
-0c03: db $04,$04,$02,$01,$01,$01,$01,$01
+; vcmd length table (includes opcode itself, unlike normal N-SPC)
+0beb: db $02,$02,$03,$04,$01,$02,$03,$02 ; e0-e7
+0bf3: db $03,$02,$02,$04,$01,$02,$03,$04 ; e8-ef
+0bfb: db $02,$04,$04,$01,$02,$04,$01,$04 ; f0-f7
+0c03: db $04,$04,$02,$01,$01,$01,$01,$01 ; f8-ff
 
+; per-note velocity values
 0c0b: db $10,$20,$30,$40,$50,$60,$70,$80
 0c13: db $90,$a0,$b0,$c0,$d0,$e0,$f0,$ff
 
@@ -526,6 +539,7 @@
 0c84: d5 80 03  mov   $0380+x,a
 0c87: 6f        ret
 
+; read new argument to A, advance ptr
 0c88: 8d 00     mov   y,#$00
 0c8a: f7 2d     mov   a,($2d)+y
 0c8c: 3a 2d     incw  $2d
@@ -546,6 +560,7 @@
 0ca3: da 0c     movw  $0c,ya
 0ca5: 6f        ret
 
+; read new argument to A
 0ca6: 8d 00     mov   y,#$00
 0ca8: f7 2d     mov   a,($2d)+y
 0caa: 6f        ret
@@ -932,13 +947,13 @@
 0fc6: 8d 1c     mov   y,#$1c
 0fc8: 5f 99 10  jmp   $1099
 
-0fcb: f5 b0 03  mov   a,$03b0+x
+0fcb: f5 b0 03  mov   a,$03b0+x         ; channel volume
 0fce: fd        mov   y,a
 0fcf: c8 08     cmp   x,#$08
 0fd1: b0 0c     bcs   $0fdf
-0fd3: e4 30     mov   a,$30
+0fd3: e4 30     mov   a,$30             ; master volume
 0fd5: cf        mul   ya
-0fd6: e4 37     mov   a,$37
+0fd6: e4 37     mov   a,$37             ; another master volume
 0fd8: 68 ff     cmp   a,#$ff
 0fda: f0 0a     beq   $0fe6
 0fdc: cf        mul   ya
@@ -947,19 +962,19 @@
 0fe1: 68 ff     cmp   a,#$ff
 0fe3: f0 01     beq   $0fe6
 0fe5: cf        mul   ya
-0fe6: f5 90 03  mov   a,$0390+x
+0fe6: f5 90 03  mov   a,$0390+x         ; per-note volume (velocity)
 0fe9: 68 ff     cmp   a,#$ff
 0feb: f0 01     beq   $0fee
 0fed: cf        mul   ya
-0fee: f5 80 04  mov   a,$0480+x
+0fee: f5 80 04  mov   a,$0480+x         ; tremolo level
 0ff1: 68 ff     cmp   a,#$ff
 0ff3: f0 01     beq   $0ff6
 0ff5: cf        mul   ya
 0ff6: dd        mov   a,y
-0ff7: 5c        lsr   a
+0ff7: 5c        lsr   a                 ; make it 7 bit
 0ff8: 8d 80     mov   y,#$80
-0ffa: cf        mul   ya
-0ffb: cb 00     mov   $00,y
+0ffa: cf        mul   ya                ; halve it
+0ffb: cb 00     mov   $00,y             ; base volume is determined
 0ffd: cb 02     mov   $02,y
 0fff: cb 03     mov   $03,y
 1001: e4 3b     mov   a,$3b
@@ -967,25 +982,25 @@
 1005: e8 0a     mov   a,#$0a
 1007: 80        setc
 1008: b5 70 05  sbc   a,$0570+x
-100b: b0 02     bcs   $100f
+100b: b0 02     bcs   $100f             ; decrease left volume if pan <= 0x0a
 100d: e8 00     mov   a,#$00
 100f: 8d 19     mov   y,#$19
 1011: cf        mul   ya
 1012: 48 ff     eor   a,#$ff
 1014: eb 00     mov   y,$00
-1016: cf        mul   ya
-1017: cb 02     mov   $02,y
+1016: cf        mul   ya                ; vol = vol * (255 - 25 * max(10 - pan, 0)) / 256
+1017: cb 02     mov   $02,y             ; VOL(L)
 1019: f5 70 05  mov   a,$0570+x
 101c: 80        setc
 101d: a8 0a     sbc   a,#$0a
-101f: b0 02     bcs   $1023
+101f: b0 02     bcs   $1023             ; decrease right volume if pan >= 0x0a
 1021: e8 00     mov   a,#$00
 1023: 8d 19     mov   y,#$19
 1025: cf        mul   ya
 1026: 48 ff     eor   a,#$ff
 1028: eb 00     mov   y,$00
-102a: cf        mul   ya
-102b: cb 03     mov   $03,y
+102a: cf        mul   ya                ; vol = vol * (255 - 25 * max(pan - 10, 0)) / 256
+102b: cb 03     mov   $03,y             ; VOL(R)
 102d: c8 08     cmp   x,#$08
 102f: b0 06     bcs   $1037
 1031: f5 08 02  mov   a,$0208+x
@@ -1076,6 +1091,7 @@
 10cb: 9a 00     subw  ya,$00
 10cd: 6f        ret
 
+; dispatch vcmd in A (e0-ff)
 10ce: 28 1f     and   a,#$1f
 10d0: 1c        asl   a
 10d1: fd        mov   y,a
@@ -1085,39 +1101,41 @@
 10d9: 2d        push  a
 10da: 6f        ret
 
-10db: dw $111b  ; 00
-10dd: dw $115d  ; 01
-10df: dw $1165  ; 02
-10e1: dw $1182  ; 03
-10e3: dw $119f  ; 04
-10e5: dw $11a9  ; 05
-10e7: dw $11b3  ; 06
-10e9: dw $11ce  ; 07
-10eb: dw $11fc  ; 08
-10ed: dw $1260  ; 09
-10ef: dw $1267  ; 0a
-10f1: dw $126f  ; 0b
-10f3: dw $1283  ; 0c
-10f5: dw $128f  ; 0d
-10f7: dw $1297  ; 0e
-10f9: dw $12b4  ; 0f
-10fb: dw $135f  ; 10
-10fd: dw $1380  ; 11
-10ff: dw $1399  ; 12
-1101: dw $13b2  ; 13
-1103: dw $13b9  ; 14
-1105: dw $13c1  ; 15
-1107: dw $13d2  ; 16
-1109: dw $13e3  ; 17
-110b: dw $142d  ; 18
-110d: dw $1454  ; 19
-110f: dw $1470  ; 1a
-1111: dw $147d  ; 1b
-1113: dw $1484  ; 1c
-1115: dw $1484  ; 1d
-1117: dw $1484  ; 1e
-1119: dw $1484  ; 1f
+; vcmd dispatch table
+10db: dw $111b  ; e0 - set instrument
+10dd: dw $115d  ; e1 - pan
+10df: dw $1165  ; e2 - pan fade
+10e1: dw $1182  ; e3 - vibrato on
+10e3: dw $119f  ; e4 - vibrato off
+10e5: dw $11a9  ; e5 - master volume
+10e7: dw $11b3  ; e6 - master volume fade
+10e9: dw $11ce  ; e7 - tempo
+10eb: dw $11fc  ; e8 - tempo fade
+10ed: dw $1260  ; e9 - global transpose
+10ef: dw $1267  ; ea - per-voice transpose
+10f1: dw $126f  ; eb - tremolo on
+10f3: dw $1283  ; ec - tremolo off
+10f5: dw $128f  ; ed - volume
+10f7: dw $1297  ; ee - volume fade
+10f9: dw $12b4  ; ef - call subroutine
+10fb: dw $135f  ; f0 - vibrato fade
+10fd: dw $1380  ; f1 - pitch envelope (release)
+10ff: dw $1399  ; f2 - pitch envelope (attack)
+1101: dw $13b2  ; f3 - pitch envelope off
+1103: dw $13b9  ; f4 - tuning
+1105: dw $13c1  ; f5 - echo vbits/volume
+1107: dw $13d2  ; f6 - disable echo
+1109: dw $13e3  ; f7 - set echo params
+110b: dw $142d  ; f8 - echo volume fade
+110d: dw $1454  ; f9 - pitch slide
+110f: dw $1470  ; fa - set perc base
+1111: dw $147d  ; fb - write APU port 3
+1113: dw $1484  ; fc - nop
+1115: dw $1484  ; fd - nop
+1117: dw $1484  ; fe - nop
+1119: dw $1484  ; ff - nop
 
+; vcmd e0 - set instrument
 111b: 3f 88 0c  call  $0c88
 111e: d5 70 06  mov   $0670+x,a
 1121: c8 08     cmp   x,#$08
@@ -1155,11 +1173,14 @@
 115b: 60        clrc
 115c: 6f        ret
 
+; vcmd e1 - pan
+; (note: reverse-phase function seems to be removed)
 115d: 3f 88 0c  call  $0c88
 1160: d5 70 05  mov   $0570+x,a
 1163: 60        clrc
 1164: 6f        ret
 
+; vcmd e2 - pan fade
 1165: 3f 88 0c  call  $0c88
 1168: d4 b3     mov   $b3+x,a
 116a: 2d        push  a
@@ -1175,6 +1196,7 @@
 1180: 60        clrc
 1181: 6f        ret
 
+; vcmd e3 - vibrato on
 1182: 3f 88 0c  call  $0c88
 1185: d5 00 04  mov   $0400+x,a
 1188: 3f 88 0c  call  $0c88
@@ -1188,18 +1210,21 @@
 119d: 60        clrc
 119e: 6f        ret
 
+; vcmd e4 - vibrato off
 119f: e8 00     mov   a,#$00
 11a1: d5 f0 03  mov   $03f0+x,a
 11a4: d5 10 04  mov   $0410+x,a
 11a7: 60        clrc
 11a8: 6f        ret
 
+; vcmd e5 - master volume
 11a9: 3f 88 0c  call  $0c88
 11ac: c4 30     mov   $30,a
 11ae: 3f bf 0f  call  $0fbf
 11b1: 60        clrc
 11b2: 6f        ret
 
+; vcmd e6 - master volume fade
 11b3: 3f 88 0c  call  $0c88
 11b6: c4 31     mov   $31,a
 11b8: 3f 88 0c  call  $0c88
@@ -1214,6 +1239,7 @@
 11cc: 60        clrc
 11cd: 6f        ret
 
+; vcmd e7 - tempo
 11ce: 3f 88 0c  call  $0c88
 11d1: c8 08     cmp   x,#$08
 11d3: 90 08     bcc   $11dd
@@ -1239,6 +1265,7 @@
 11fa: 80        setc
 11fb: 6f        ret
 
+; vcmd e8 - tempo fade
 11fc: c8 08     cmp   x,#$08
 11fe: 90 1d     bcc   $121d
 1200: 3f 88 0c  call  $0c88
@@ -1289,16 +1316,19 @@
 125e: 60        clrc
 125f: 6f        ret
 
+; vcmd e9 - global transpose
 1260: 3f 88 0c  call  $0c88
 1263: c4 3a     mov   $3a,a
 1265: 60        clrc
 1266: 6f        ret
 
+; vcmd ea - per-voice transpose
 1267: 3f 88 0c  call  $0c88
 126a: d5 50 03  mov   $0350+x,a
 126d: 60        clrc
 126e: 6f        ret
 
+; vcmd eb - tremolo on
 126f: 3f 88 0c  call  $0c88
 1272: d5 90 04  mov   $0490+x,a
 1275: 3f 88 0c  call  $0c88
@@ -1308,6 +1338,7 @@
 1281: 60        clrc
 1282: 6f        ret
 
+; vcmd ec - tremolo off
 1283: e8 ff     mov   a,#$ff
 1285: d5 80 04  mov   $0480+x,a
 1288: e8 00     mov   a,#$00
@@ -1315,11 +1346,13 @@
 128d: 60        clrc
 128e: 6f        ret
 
+; vcmd ed - volume
 128f: 3f 88 0c  call  $0c88
 1292: d5 b0 03  mov   $03b0+x,a
 1295: 60        clrc
 1296: 6f        ret
 
+; vcmd ee - volume fade
 1297: 3f 88 0c  call  $0c88
 129a: d4 63     mov   $63+x,a
 129c: 2d        push  a
@@ -1335,6 +1368,7 @@
 12b2: 60        clrc
 12b3: 6f        ret
 
+; vcmd ef - call subroutine
 12b4: 3f 88 0c  call  $0c88
 12b7: c4 00     mov   $00,a
 12b9: 3f 88 0c  call  $0c88
@@ -1404,6 +1438,7 @@
 135d: 60        clrc
 135e: 6f        ret
 
+; vcmd f0 - vibrato fade
 135f: 3f 88 0c  call  $0c88
 1362: d4 83     mov   $83+x,a
 1364: 2d        push  a
@@ -1421,6 +1456,7 @@
 137e: 60        clrc
 137f: 6f        ret
 
+; vcmd f1 - pitch envelope (release)
 1380: 3f 88 0c  call  $0c88
 1383: d5 50 05  mov   $0550+x,a
 1386: 3f 88 0c  call  $0c88
@@ -1432,6 +1468,7 @@
 1397: 60        clrc
 1398: 6f        ret
 
+; vcmd f2 - pitch envelope (attack)
 1399: 3f 88 0c  call  $0c88
 139c: d5 50 05  mov   $0550+x,a
 139f: 3f 88 0c  call  $0c88
@@ -1443,16 +1480,19 @@
 13b0: 60        clrc
 13b1: 6f        ret
 
+; vcmd f3 - pitch envelope off
 13b2: e8 00     mov   a,#$00
 13b4: d5 00 05  mov   $0500+x,a
 13b7: 60        clrc
 13b8: 6f        ret
 
+; vcmd f4 - tuning
 13b9: 3f 88 0c  call  $0c88
 13bc: d5 60 03  mov   $0360+x,a
 13bf: 60        clrc
 13c0: 6f        ret
 
+; vcmd f5 - echo vbits/volume
 13c1: 3f 88 0c  call  $0c88
 13c4: c4 26     mov   $26,a
 13c6: 3f 88 0c  call  $0c88
@@ -1462,6 +1502,7 @@
 13d0: 60        clrc
 13d1: 6f        ret
 
+; vcmd f6 - disable echo
 13d2: e8 00     mov   a,#$00
 13d4: c4 24     mov   $24,a
 13d6: c4 26     mov   $26,a
@@ -1472,6 +1513,7 @@
 13e1: 60        clrc
 13e2: 6f        ret
 
+; vcmd f7 - set echo params
 13e3: 3f 88 0c  call  $0c88
 13e6: c4 24     mov   $24,a
 13e8: 3f 4a 10  call  $104a
@@ -1500,6 +1542,7 @@
 141d: db $0c,$21,$2b,$2b,$13,$fe,$f3,$f9
 1425: db $34,$33,$00,$d9,$e5,$01,$fc,$eb
 
+; vcmd f8 - echo volume fade
 142d: 3f 88 0c  call  $0c88
 1430: c4 23     mov   $23,a
 1432: 3f 88 0c  call  $0c88
@@ -1520,6 +1563,7 @@
 1452: 60        clrc
 1453: 6f        ret
 
+; vcmd f9 - pitch slide
 1454: 3f 88 0c  call  $0c88
 1457: d5 50 05  mov   $0550+x,a
 145a: 3f 88 0c  call  $0c88
@@ -1533,6 +1577,7 @@
 146e: 60        clrc
 146f: 6f        ret
 
+; vcmd fa - set perc base
 1470: 3f 88 0c  call  $0c88
 1473: c5 80 06  mov   $0680,a
 1476: e8 00     mov   a,#$00
@@ -1540,14 +1585,17 @@
 147b: 60        clrc
 147c: 6f        ret
 
+; vcmd fb - write APU port 3
 147d: 3f 88 0c  call  $0c88
 1480: c4 44     mov   $44,a
 1482: 60        clrc
 1483: 6f        ret
 
+; vcmds fc-ff - nop
 1484: 60        clrc
 1485: 6f        ret
 
+; play song in A
 1486: 9c        dec   a
 1487: 1c        asl   a
 1488: fd        mov   y,a
@@ -1568,6 +1616,7 @@
 14a9: 3d        inc   x
 14aa: c8 08     cmp   x,#$08
 14ac: 90 ec     bcc   $149a
+; process next section list word
 14ae: 8d 00     mov   y,#$00
 14b0: f7 4c     mov   a,($4c)+y
 14b2: c4 00     mov   $00,a
@@ -1576,21 +1625,22 @@
 14b8: f7 4c     mov   a,($4c)+y
 14ba: c4 01     mov   $01,a
 14bc: c4 4f     mov   $4f,a
-14be: 3a 4c     incw  $4c
+14be: 3a 4c     incw  $4c               ; read a word from section list ptr
 14c0: 68 00     cmp   a,#$00
-14c2: d0 28     bne   $14ec
+14c2: d0 28     bne   $14ec             ; >= $0100, load that section ($00/1)
 14c4: e4 00     mov   a,$00
-14c6: f0 4c     beq   $1514
-14c8: eb 50     mov   y,$50
-14ca: f0 0e     beq   $14da
+14c6: f0 4c     beq   $1514             ; == $0000, song end
+14c8: eb 50     mov   y,$50             ; == $00xx, repeat section (slightly different from usual N-SPC)
+14ca: f0 0e     beq   $14da             ; start new repeat if repeat count has not been set
 14cc: ad ff     cmp   y,#$ff
-14ce: f0 0c     beq   $14dc
+14ce: f0 0c     beq   $14dc             ; infinite loop ($00ff xxxx)
 14d0: 8b 50     dec   $50
 14d2: d0 08     bne   $14dc
 14d4: 3a 4c     incw  $4c
 14d6: 3a 4c     incw  $4c
 14d8: 2f d4     bra   $14ae
-14da: c4 50     mov   $50,a
+;
+14da: c4 50     mov   $50,a             ; set section repeat count
 14dc: 8d 00     mov   y,#$00
 14de: f7 4c     mov   a,($4c)+y
 14e0: 2d        push  a
@@ -1598,29 +1648,31 @@
 14e3: f7 4c     mov   a,($4c)+y
 14e5: c4 4d     mov   $4d,a
 14e7: ae        pop   a
-14e8: c4 4c     mov   $4c,a
+14e8: c4 4c     mov   $4c,a             ; repeat from $4c/d (used for backjump)
 14ea: 2f c2     bra   $14ae
+; load section $00/1, set vcmd ptr for each channels
 14ec: cd 00     mov   x,#$00
 14ee: 8d 00     mov   y,#$00
 14f0: e8 00     mov   a,#$00
-14f2: d5 00 02  mov   $0200+x,a
+14f2: d5 00 02  mov   $0200+x,a         ; inactivate channel
 14f5: e4 10     mov   a,$10
 14f7: d5 10 02  mov   $0210+x,a
 14fa: f7 00     mov   a,($00)+y
 14fc: c4 02     mov   $02,a
 14fe: fc        inc   y
 14ff: f7 00     mov   a,($00)+y
-1501: c4 03     mov   $03,a
+1501: c4 03     mov   $03,a             ; read vcmd ptr to $02/3
 1503: fc        inc   y
 1504: 04 02     or    a,$02
 1506: f0 03     beq   $150b
-1508: 3f 78 15  call  $1578
+1508: 3f 78 15  call  $1578             ; start channel unless it is zero
 150b: 3d        inc   x
 150c: c8 08     cmp   x,#$08
 150e: 90 e0     bcc   $14f0
 1510: 8f 01 52  mov   $52,#$01
 1513: 6f        ret
 
+; song end
 1514: c5 00 02  mov   $0200,a
 1517: c5 01 02  mov   $0201,a
 151a: c5 02 02  mov   $0202,a
@@ -1672,12 +1724,13 @@
 1575: b0 d7     bcs   $154e
 1577: 6f        ret
 
+; start channel
 1578: e4 02     mov   a,$02
 157a: d5 80 02  mov   $0280+x,a
 157d: e4 03     mov   a,$03
-157f: d5 90 02  mov   $0290+x,a
+157f: d5 90 02  mov   $0290+x,a         ; set vcmd ptr
 1582: e8 01     mov   a,#$01
-1584: d5 00 02  mov   $0200+x,a
+1584: d5 00 02  mov   $0200+x,a         ; activate channel
 1587: c8 08     cmp   x,#$08
 1589: b0 1e     bcs   $15a9
 158b: e4 52     mov   a,$52
@@ -2144,3 +2197,5 @@
 1978: d0 c8     bne   $1942
 197a: 6f        ret
 
+; note dur%'s
+1d80: db $32,$65,$7f,$98,$b2,$cb,$e5,$fc
