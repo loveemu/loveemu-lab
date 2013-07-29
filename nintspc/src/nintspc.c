@@ -16,7 +16,7 @@
 
 #define APPNAME         "Nintendo SPC2MIDI"
 #define APPSHORTNAME    "nintspc"
-#define VERSION         "[2013-06-04]"
+#define VERSION         "[2013-07-29]"
 #define AUTHOR          "loveemu"
 #define WEBSITE         "http://loveemu.yh.land.to/"
 
@@ -71,6 +71,7 @@ enum {
     SPC_VER_STD_AT_LEAST,   // has the same spec as SPC_VER_STD, at least
     SPC_VER_STD_MODIFIED,   // seems to be based on SPC_VER_STD, but it's somewhat different from original
     SPC_VER_EXT1,           // has vcmd fb-fe, Super Metroid family
+    SPC_VER_YSFR,           // Yoshi's Safari
 };
 
 const byte NINT_STD_EVT_LEN_TABLE[] = {
@@ -334,6 +335,8 @@ static const char *nintSpcVerToStrHtml (int version)
         return "Nintendo / Unknown Modified Version";
     case SPC_VER_EXT1:
         return "Nintendo / Extended (Super Metroid family)";
+    case SPC_VER_YSFR:
+        return "Nintendo / Extended (Yoshi's Safari family)";
     default:
         return "Unknown Version / Unsupported";
     }
@@ -702,12 +705,22 @@ static int nintSpcCheckVer (NintSpcSeqStat *seq)
         // mov   a,$....+x
         // movw  blockPtrAddr,ya
         byte songLoad4[] = { 0xf5, '.', '.', 0xf0, '.', 0xfd, 0xf5, '.', '.', 0xda, '\\', '.', 0 };
+        // variant: Yoshi's Safari
+        // 1488: fd        mov   y,a
+        // 1489: f7 48     mov   a,($48)+y
+        // 148b: c4 4c     mov   $4c,a
+        // 148d: fc        inc   y
+        // 148e: f7 48     mov   a,($48)+y
+        // 1490: c4 4d     mov   $4d,a
+        byte songLoad5[] = { 0xfd, 0xf7, '.', 0xc4, '.', 0xfc, 0xf7, '.', 0xc4, '.', 0 };
 
         songLoad1[9]  = (byte) seq->ver.blockPtrAddr;
         songLoad2[16] = (byte) seq->ver.blockPtrAddr;
         songLoad3[5]  = (byte) seq->ver.blockPtrAddr;
         songLoad3[11] = (byte) (seq->ver.blockPtrAddr + 1);
         songLoad4[11] = (byte) seq->ver.blockPtrAddr;
+        songLoad5[4]  = (byte) seq->ver.blockPtrAddr;
+        songLoad5[9]  = (byte) (seq->ver.blockPtrAddr + 1);
 
         if ((pos1 = indexOfHexPat(aRAM, songLoad1, SPC_ARAM_SIZE, NULL)) >= 0) {
             seq->ver.seqListAddr = mget2l(&aRAM[pos1 + 5]);
@@ -720,6 +733,26 @@ static int nintSpcCheckVer (NintSpcSeqStat *seq)
         }
         else if ((pos1 = indexOfHexPat(aRAM, songLoad4, SPC_ARAM_SIZE, NULL)) >= 0) {
             seq->ver.seqListAddr = mget2l(&aRAM[pos1 + 7]);
+        }
+        else if ((pos1 = indexOfHexPat(aRAM, songLoad5, SPC_ARAM_SIZE, NULL)) >= 0 &&
+                aRAM[pos1 + 2] == aRAM[pos1 + 7]) {
+            byte songPtrAddr = aRAM[pos1 + 2];
+
+            // 0880: 8f 00 46  mov   $46,#$00
+            // 0883: 8f 1c 47  mov   $47,#$1c
+            // 0886: 8f 00 48  mov   $48,#$00
+            // 0889: 8f 1e 49  mov   $49,#$1e
+            // 088c: 8f 00 4a  mov   $4a,#$00
+            // 088f: 8f 1f 4b  mov   $4b,#$1f
+            if ((pos2 = indexOfHexPat(aRAM, (const byte *) "\x8f..\x8f..\x8f..\x8f..\x8f..\x8f..", SPC_ARAM_SIZE, NULL)) >= 0 &&
+                    aRAM[pos2 + 2]  + 1 == aRAM[pos2 + 5] &&
+                    aRAM[pos2 + 5]  + 1 == aRAM[pos2 + 8] &&
+                    aRAM[pos2 + 8]  + 1 == aRAM[pos2 + 11] &&
+                    aRAM[pos2 + 11] + 1 == aRAM[pos2 + 14] &&
+                    aRAM[pos2 + 14] + 1 == aRAM[pos2 + 17] &&
+                    aRAM[pos2 + 8] == songPtrAddr) {
+                seq->ver.seqListAddr = aRAM[pos2 + 7] | (aRAM[pos2 + 10] << 8);
+            }
         }
     }
 
@@ -767,6 +800,56 @@ static int nintSpcCheckVer (NintSpcSeqStat *seq)
     // mov   $....+x,a
     else if ((pos1 = indexOfHexPat(aRAM, (const byte *) "\xc4.\x4b.\x1c\x84.\xd5..\x3f..\x30\x07\x1c\xd5..", SPC_ARAM_SIZE, NULL)) >= 0) {
         seq->ver.noteInfoType = SPC_NOTEPARAM_DIR;
+    }
+
+    // Special Case: Yoshi's Safari
+    // ; dispatch vcmd in A (e0-ff)
+    // 10ce: 28 1f     and   a,#$1f
+    // 10d0: 1c        asl   a
+    // 10d1: fd        mov   y,a
+    // 10d2: f6 dc 10  mov   a,$10dc+y
+    // 10d5: 2d        push  a
+    // 10d6: f6 db 10  mov   a,$10db+y
+    // 10d9: 2d        push  a
+    // 10da: 6f        ret
+    if (version == SPC_VER_UNKNOWN && (pos1 = indexOfHexPat(aRAM, (const byte *) "\x28\x1f\x1c\xfd\xf6..\x2d\xf6..\x2d\x6f", SPC_ARAM_SIZE, NULL)) >= 0 &&
+            mget2l(&aRAM[pos1 + 5]) == mget2l(&aRAM[pos1 + 9]) + 1)
+    {
+        seq->ver.vcmdListAddr = mget2l(&aRAM[pos1 + 9]);
+
+        // 0b2a: 80        setc
+        // 0b2b: a8 e0     sbc   a,#$e0
+        // 0b2d: cb 00     mov   $00,y
+        // 0b2f: fd        mov   y,a
+        // 0b30: f6 eb 0b  mov   a,$0beb+y ; read vcmd length
+        if ((pos1 = indexOfHexPat(aRAM, (const byte *) "\x80\xa8\xe0\xcb.\xfd\xf6..", SPC_ARAM_SIZE, NULL)) >= 0)
+        {
+            seq->ver.vcmdLensAddr = mget2l(&aRAM[pos1 + 7]);
+
+            // 0a47: 28 0f     and   a,#$0f
+            // 0a49: fd        mov   y,a
+            // 0a4a: f6 0b 0c  mov   a,$0c0b+y
+            // 0a4d: d5 90 03  mov   $0390+x,a         ; set per-note vol from low nybble
+            // 0a50: ae        pop   a
+            // 0a51: 5c        lsr   a
+            // 0a52: 5c        lsr   a
+            // 0a53: 5c        lsr   a
+            // 0a54: 5c        lsr   a
+            // 0a55: fd        mov   y,a
+            // 0a56: f6 80 1d  mov   a,$1d80+y
+            // 0a59: d5 40 06  mov   $0640+x,a         ; set dur% from high nybble
+            if ((pos1 = indexOfHexPat(aRAM, (const byte *) "\x28\x0f\xfd\xf6..\xd5..\xae\\\x5c\\\x5c\\\x5c\\\x5c\xfd\xf6..\xd5..", SPC_ARAM_SIZE, NULL)) >= 0)
+            {
+                seq->ver.velTableAddr = mget2l(&aRAM[pos1 + 4]);
+                seq->ver.durTableAddr = mget2l(&aRAM[pos1 + 16]);
+
+                if (seq->ver.blockPtrAddr != -1 && seq->ver.seqListAddr != -1)
+                {
+                    version = SPC_VER_YSFR;
+                }
+            }
+        }
+        seq->ver.vcmdByteMin = 0xe0;
     }
 
     if (nintSpcForceSongListAddr >= 0)
@@ -907,48 +990,107 @@ bool nintSpcReadNewBlock (NintSpcSeqStat *seq)
     }
     seq->blockStartTick = seq->tick;
 
-    if (seq->blockLoopCnt == 0) {
-        // read next block
-        seq->blockPtr += 2; // skip old block addr
-        seq->blockPtrAlt = seq->blockPtr;
-        seq->blockLooped = 0;
+    if (seq->ver.id == SPC_VER_YSFR)
+    {
+        bool infiniteLoop = false;
+        do
+        {
+            seq->blockPtrAlt = seq->blockPtr;
+            seq->blockLooped = 0;
 
-        blockAddr = mget2l(&aRAM[seq->blockPtr]);
-        memset(&seq->aRAMRef[seq->blockPtr], 0x7f, 2);
-        if (blockAddr == 0) {
-            seq->active = false;
-            return false;
-        }
-        else if ((blockAddr & 0xff00) == 0) {
-            seq->blockLoopCnt = utos1(blockAddr & 0xff);
+            blockAddr = mget2l(&aRAM[seq->blockPtr]);
+            memset(&seq->aRAMRef[seq->blockPtr], 0x7f, 2);
             seq->blockPtr += 2;
+
+            if (blockAddr == 0) {
+                // end
+                seq->active = false;
+                return false;
+            }
+            else if (blockAddr <= 0xff)
+            {
+                // jump (repeat until)
+                bool doJump = true;
+                if (seq->blockLoopCnt == 0)
+                {
+                    seq->blockLoopCnt = blockAddr;
+                    infiniteLoop |= (seq->blockLoopCnt == 0 || seq->blockLoopCnt == 0xff);
+                }
+                else if (seq->blockLoopCnt != 0xff) // $ff = infinite loop
+                {
+                    infiniteLoop |= (seq->blockLoopCnt == 0);
+
+                    seq->blockLoopCnt--;
+                    doJump = (seq->blockLoopCnt != 0);
+                }
+                else
+                {
+                    infiniteLoop |= (seq->blockLoopCnt == 0xff);
+                }
+
+                blockAddr = mget2l(&aRAM[seq->blockPtr]);
+                memset(&seq->aRAMRef[seq->blockPtr], 0x7f, 2);
+                if (doJump)
+                    seq->blockPtr = blockAddr;
+                continue;
+            }
+            // else: play the section, fail through
+            if (infiniteLoop)
+            {
+                seq->looped++;
+                if (nintSpcLoopMax > 0 && seq->looped >= nintSpcLoopMax) {
+                    seq->active = false;
+                    return false;
+                }
+            }
+            break;
+        } while(true);
+    }
+    else
+    {
+        if (seq->blockLoopCnt == 0) {
+            // read next block
+            seq->blockPtr += 2; // skip old block addr
+            seq->blockPtrAlt = seq->blockPtr;
+            seq->blockLooped = 0;
+
             blockAddr = mget2l(&aRAM[seq->blockPtr]);
             memset(&seq->aRAMRef[seq->blockPtr], 0x7f, 2);
             if (blockAddr == 0) {
                 seq->active = false;
                 return false;
             }
-
-            if (seq->blockLoopCnt < 0) {
-                seq->looped++;
-                if (nintSpcLoopMax > 0 && seq->looped >= nintSpcLoopMax) {
+            else if ((blockAddr & 0xff00) == 0) {
+                seq->blockLoopCnt = utos1(blockAddr & 0xff);
+                seq->blockPtr += 2;
+                blockAddr = mget2l(&aRAM[seq->blockPtr]);
+                memset(&seq->aRAMRef[seq->blockPtr], 0x7f, 2);
+                if (blockAddr == 0) {
                     seq->active = false;
                     return false;
                 }
 
-                seq->blockLoopCnt = 1;
-                seq->blockPtr = blockAddr;
-                return nintSpcReadNewBlock(seq);
+                if (seq->blockLoopCnt < 0) {
+                    seq->looped++;
+                    if (nintSpcLoopMax > 0 && seq->looped >= nintSpcLoopMax) {
+                        seq->active = false;
+                        return false;
+                    }
+      
+                    seq->blockLoopCnt = 1;
+                    seq->blockPtr = blockAddr;
+                    return nintSpcReadNewBlock(seq);
+                }
             }
         }
-    }
-    else {
-        // repeat block
-        if (seq->blockLoopCnt > 0)
-            seq->blockLoopCnt--;
-        seq->blockLooped++;
-        blockAddr = mget2l(&aRAM[seq->blockPtr]);
-        memset(&seq->aRAMRef[seq->blockPtr], 0x7f, 2);
+        else {
+            // repeat block
+            if (seq->blockLoopCnt > 0)
+                seq->blockLoopCnt--;
+            seq->blockLooped++;
+            blockAddr = mget2l(&aRAM[seq->blockPtr]);
+            memset(&seq->aRAMRef[seq->blockPtr], 0x7f, 2);
+        }
     }
 
     for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
@@ -1013,22 +1155,35 @@ bool nintSpcDetectSeq (NintSpcSeqStat *seq)
         int curBlock = mget2l(&aRAM[blockPtrAddr]);
         int songAddr;
 
-        // adjust current block
-        if (curBlock) {
+        if (curBlock != 0) {
+            // adjust current block
             curBlock -= 2;
-        }
 
-        // auto search
-        songIndex = 0;
-        for (songId = 0; songId < SPC_SONG_MAX; songId++) {
-            songAddr = mget2l(&aRAM[seqListAddr + songId * 2]);
-            dist = abs(curBlock - songAddr);
-            if (songAddr > curBlock) {
-                dist++; // penalty
+            // auto search
+            songIndex = 0;
+            for (songId = 0; songId < SPC_SONG_MAX; songId++) {
+                songAddr = mget2l(&aRAM[seqListAddr + songId * 2]);
+                dist = abs(curBlock - songAddr);
+                if (songAddr > curBlock) {
+                    dist++; // penalty
+                }
+                if (dist < minDist) {
+                    songIndex = songId;
+                    minDist = dist;
+                }
             }
-            if (dist < minDist) {
-                songIndex = songId;
-                minDist = dist;
+        }
+        else
+        {
+            int songIndexTemp;
+            for (songIndexTemp = 0; songIndexTemp < 8; songIndexTemp++)
+            {
+                curBlock = mget2l(&aRAM[seqListAddr + songIndexTemp * 2]);
+                if (curBlock != 0)
+                {
+                    songIndex = songIndexTemp;
+                    break;
+                }
             }
         }
 
@@ -1037,6 +1192,9 @@ bool nintSpcDetectSeq (NintSpcSeqStat *seq)
             switch (seq->ver.id) {
             case SPC_VER_OLD:
                 songIndexInPort = aRAM[0xf6];
+                break;
+            case SPC_VER_YSFR:
+                songIndexInPort = 0; // NYI
                 break;
             default:
                 songIndexInPort = aRAM[0xf4];
@@ -1065,7 +1223,8 @@ bool nintSpcDetectSeq (NintSpcSeqStat *seq)
     for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
         seq->track[tr].active = false;
     }
-    seq->blockPtr -= 2;
+    if (seq->ver.id != SPC_VER_YSFR)
+        seq->blockPtr -= 2;
     return nintSpcReadNewBlock(seq);
 }
 
@@ -1157,7 +1316,14 @@ static void printHtmlInfoList (NintSpcSeqStat *seq)
     myprintf("      <h2>Informations</h2>\n");
     myprintf("      <div class=\"section\" id=\"informations\">\n");
     myprintf("        <ul class=\"info-tree\">\n");
-    myprintf("          <li>Version: %s</li>\n", nintSpcVerToStrHtml(seq->ver.id));
+    myprintf("          <li>Version: %s", nintSpcVerToStrHtml(seq->ver.id));
+    if (seq->ver.id == SPC_VER_YSFR)
+    {
+        myprintf("            <ul>\n");
+        myprintf("              <li>This version has a different volume balance calculation algorithm from usual version, but this tool does not care about that.</li>\n"));
+        myprintf("            </ul>\n");
+    }
+    myprintf("</li>\n");
     myprintf("          <li>Song List: $%04X</li>\n", seq->ver.seqListAddr);
     myprintf("          <li>Block Pointer: $%02X</li>\n", seq->ver.blockPtrAddr);
     if (seq->ver.noteInfoType != SPC_NOTEPARAM_DIR) {
@@ -2860,6 +3026,14 @@ static void nintSpcSetEventList (NintSpcSeqStat *seq)
         event[vcmdStart+0x1d] = (NintSpcEvent) nintSpcEventUnknown0;
         event[vcmdStart+0x1e] = (NintSpcEvent) nintSpcEventUnknown0;
         break;
+
+    case SPC_VER_YSFR:
+        event[vcmdStart+0x1b] = (NintSpcEvent) nintSpcEventUnknown1; // write APU port
+        //event[vcmdStart+0x1c] = (NintSpcEvent) nintSpcEventUnknown0; // nop
+        //event[vcmdStart+0x1d] = (NintSpcEvent) nintSpcEventUnknown0; // nop
+        //event[vcmdStart+0x1e] = (NintSpcEvent) nintSpcEventUnknown0; // nop
+        //event[vcmdStart+0x1f] = (NintSpcEvent) nintSpcEventUnknown0; // nop
+        break;
     }
 
     // autoguess
@@ -2977,7 +3151,7 @@ Smf* nintSpcARAMToMidi (const byte *aRAM)
                 if (seq->endBlock
                     && ev.code != seq->ver.endBlockByte
                     && ev.code != seq->ver.pitchSlideByte)
-                    break;
+                    break; // ???
 
                 evtr->mmlWritten = false;
                 evtr->used = true;
@@ -3004,6 +3178,13 @@ Smf* nintSpcARAMToMidi (const byte *aRAM)
 
                 if (nintSpcTextLoopMax == 0 || max(seq->looped, seq->blockLooped) < nintSpcTextLoopMax) {
                     printHtmlEventDump(seq, &ev);
+                }
+
+                if (seq->endBlock &&
+                    ev.code == seq->ver.endBlockByte &&
+                    nextVcmd == seq->ver.endBlockByte)
+                {
+                    break; // prevent overrun
                 }
 
                 if (ev.unidentified && !nintSpcParseForce) {
