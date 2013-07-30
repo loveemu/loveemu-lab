@@ -1320,7 +1320,7 @@ static void printHtmlInfoList (NintSpcSeqStat *seq)
     if (seq->ver.id == SPC_VER_YSFR)
     {
         myprintf("            <ul>\n");
-        myprintf("              <li>This version has a different volume balance calculation algorithm from usual version, but this tool does not care about that.</li>\n"));
+        myprintf("              <li>This version has a different volume balance calculation algorithm from usual version, but this tool does not care about that.</li>\n");
         myprintf("            </ul>\n");
     }
     myprintf("</li>\n");
