@@ -72,6 +72,7 @@ enum {
     SPC_VER_STD_MODIFIED,   // seems to be based on SPC_VER_STD, but it's somewhat different from original
     SPC_VER_EXT1,           // has vcmd fb-fe, Super Metroid family
     SPC_VER_YSFR,           // Yoshi's Safari
+    SPC_VER_TA,             // Tetris Attack
     SPC_VER_FE3,            // Fire Emblem 3 (Monshou no Nazo)
     SPC_VER_FE4,            // Fire Emblem 4 (Seisen no Keifu)
     SPC_VER_KONAMI,         // Old Konami Driver
@@ -82,6 +83,14 @@ const byte NINT_STD_EVT_LEN_TABLE[] = {
     2, 1, 1, 3, 0, 1, 2, 3,
     1, 3, 3, 0, 1, 3, 0, 3,
     3, 3, 1,
+};
+
+const byte NINT_TA_EVT_LEN_TABLE[] = { // Tetris Attack
+    1, 1, 2, 3, 0, 1, 2, 1,
+    2, 1, 1, 3, 0, 1, 2, 3,
+    1, 3, 3, 0, 1, 3, 0, 3,
+    3, 3, 1, 0, 0, 2, 2, 0,
+    1, 1, 1, 1,
 };
 
 // MIDI limitations
@@ -344,10 +353,12 @@ static const char *nintSpcVerToStrHtml (int version)
         return "Nintendo / Extended (Super Metroid family)";
     case SPC_VER_YSFR:
         return "Nintendo / Extended (Yoshi's Safari family)";
+    case SPC_VER_TA:
+        return "Nintendo / Intelligent Systems / Tetris Attack";
     case SPC_VER_FE3:
-        return "Nintendo / Fire Emblem 3";
+        return "Nintendo / Intelligent Systems / Fire Emblem 3";
     case SPC_VER_FE4:
-        return "Nintendo / Fire Emblem 4";
+        return "Nintendo / Intelligent Systems / Fire Emblem 4";
     case SPC_VER_KONAMI:
         return "Konami / Old Engine";
     default:
@@ -966,6 +977,12 @@ static int nintSpcCheckVer (NintSpcSeqStat *seq)
                 }
             }
         }
+    }
+
+    if (version == SPC_VER_STD_AT_LEAST && seq->ver.vcmdByteMin == 0xda && seq->ver.vcmdLensAddr != -1 &&
+        memcmp(&aRAM[seq->ver.vcmdLensAddr], NINT_TA_EVT_LEN_TABLE, sizeof(NINT_TA_EVT_LEN_TABLE)) == 0)
+    {
+        version = SPC_VER_TA;
     }
 
     if (nintSpcForceSongListAddr >= 0)
@@ -3195,13 +3212,11 @@ static void nintSpcEventTAFD (NintSpcSeqStat *seq, SeqEventReport *ev)
     ev->size++;
     arg1 = seq->aRAM[*p];
     (*p)++;
-/*
+
     switch (arg1) {
       case 0x00:
-        if (seq->ver.id == SPC_VER_FE3) {
-            ev->size += 3;
-            (*p) += 3;
-        }
+        ev->size += 3;
+        (*p) += 3;
         break;
       case 0x01:
         ev->size++;
@@ -3216,13 +3231,11 @@ static void nintSpcEventTAFD (NintSpcSeqStat *seq, SeqEventReport *ev)
       case 0x04:
         break;
       case 0x05:
-        if (seq->ver.id == SPC_VER_FE3) {
-            ev->size++;
-            (*p)++;
-        }
+        ev->size++;
+        (*p)++;
         break;
     }
-*/
+
     nintSpcEventUnknownInline(seq, ev);
     sprintf(argDumpStr, ", arg1 = %d", arg1);
     strcat(ev->note, argDumpStr);
@@ -3363,6 +3376,18 @@ static void nintSpcSetEventList (NintSpcSeqStat *seq)
         //event[vcmdStart+0x1d] = (NintSpcEvent) nintSpcEventNOP;
         //event[vcmdStart+0x1e] = (NintSpcEvent) nintSpcEventNOP;
         //event[vcmdStart+0x1f] = (NintSpcEvent) nintSpcEventNOP;
+        break;
+
+    case SPC_VER_TA:
+        event[vcmdStart+0x1b] = (NintSpcEvent) nintSpcEventUnknown0; // vcmd f5
+        event[vcmdStart+0x1c] = (NintSpcEvent) nintSpcEventUnknown0;
+        event[vcmdStart+0x1d] = (NintSpcEvent) nintSpcEventUnknown2;
+        event[vcmdStart+0x1e] = (NintSpcEvent) nintSpcEventUnknown2;
+        event[vcmdStart+0x1f] = (NintSpcEvent) nintSpcEventUnknown0;
+        event[vcmdStart+0x20] = (NintSpcEvent) nintSpcEventFE3FA;
+        event[vcmdStart+0x21] = (NintSpcEvent) nintSpcEventUnknown1;
+        event[vcmdStart+0x22] = (NintSpcEvent) nintSpcEventFE4FC;
+        event[vcmdStart+0x23] = (NintSpcEvent) nintSpcEventTAFD;
         break;
 
     case SPC_VER_FE3:
