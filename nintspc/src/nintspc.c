@@ -72,6 +72,7 @@ enum {
     SPC_VER_STD_MODIFIED,   // seems to be based on SPC_VER_STD, but it's somewhat different from original
     SPC_VER_EXT1,           // has vcmd fb-fe, Super Metroid family
     SPC_VER_YSFR,           // Yoshi's Safari
+    SPC_VER_LEM,            // Lemmings
     SPC_VER_TA,             // Tetris Attack
     SPC_VER_FE3,            // Fire Emblem 3 (Monshou no Nazo)
     SPC_VER_FE4,            // Fire Emblem 4 (Seisen no Keifu)
@@ -353,6 +354,8 @@ static const char *nintSpcVerToStrHtml (int version)
         return "Nintendo / Extended (Super Metroid family)";
     case SPC_VER_YSFR:
         return "Nintendo / Extended (Yoshi's Safari family)";
+    case SPC_VER_LEM:
+        return "Nintendo / Extended (Lemmings)";
     case SPC_VER_TA:
         return "Nintendo / Intelligent Systems / Tetris Attack";
     case SPC_VER_FE3:
@@ -983,6 +986,25 @@ static int nintSpcCheckVer (NintSpcSeqStat *seq)
         memcmp(&aRAM[seq->ver.vcmdLensAddr], NINT_TA_EVT_LEN_TABLE, sizeof(NINT_TA_EVT_LEN_TABLE)) == 0)
     {
         version = SPC_VER_TA;
+    }
+
+    // 0ad0: 30 1e     bmi   $0af0             ; vcmds 01-7f - note info:
+    // 0ad2: d5 00 02  mov   $0200+x,a         ; set duration by opcode
+    // 0ad5: 3f 85 0b  call  $0b85             ; read next byte
+    // 0ad8: 30 16     bmi   $0af0             ; process it, if < $80
+    // 0ada: c4 11     mov   $11,a
+    // 0adc: 4b 11     lsr   $11
+    // 0ade: 1c        asl   a                 ; a  = (a << 1) | (a & 1)
+    // 0adf: 84 11     adc   a,$11             ; a += (a >> 1)
+    // 0ae1: d5 01 02  mov   $0201+x,a         ; set duration rate
+    // 0ae4: 3f 85 0b  call  $0b85             ; read next byte
+    // 0ae7: 30 07     bmi   $0af0             ; process it, if < $80
+    // 0ae9: 1c        asl   a                 ; a *= 2
+    // 0aea: d5 10 02  mov   $0210+x,a         ; set per-note volume (velocity)
+    if ((pos1 = indexOfHexPat(aRAM, (const byte *) "\x30\x1e\xd5..\x3f..\x30.\xc4.\x4b.\x1c\x84.\xd5..\x3f..\x30\x07\x1c\xd5..", SPC_ARAM_SIZE, NULL)) >= 0)
+    {
+        seq->ver.noteInfoType = SPC_NOTEPARAM_DIR;
+        version = SPC_VER_LEM;
     }
 
     if (nintSpcForceSongListAddr >= 0)
@@ -2116,7 +2138,7 @@ static void nintSpcEventNoteInfo (NintSpcSeqStat *seq, SeqEventReport *ev)
 
         switch (seq->ver.noteInfoType) {
         case SPC_NOTEPARAM_DIR:
-            tr->note.durRate = (arg2 * 2 + arg2 / 2) & 0xff; // what a weird formula...
+            tr->note.durRate = ((arg2 << 1) + (arg2 >> 1) + (arg2 & 1)) & 0xff; // uh, what a weird formula (approx % ?)
             sprintf(argDumpStr, ", dur = $%02X", tr->note.durRate);
             strcat(ev->note, argDumpStr);
 
@@ -3376,6 +3398,15 @@ static void nintSpcSetEventList (NintSpcSeqStat *seq)
         //event[vcmdStart+0x1d] = (NintSpcEvent) nintSpcEventNOP;
         //event[vcmdStart+0x1e] = (NintSpcEvent) nintSpcEventNOP;
         //event[vcmdStart+0x1f] = (NintSpcEvent) nintSpcEventNOP;
+        break;
+
+    case SPC_VER_LEM:
+        event[vcmdStart+0x05] = (NintSpcEvent) nintSpcEventUnknown1; // master volume NYI?
+        event[vcmdStart+0x06] = (NintSpcEvent) nintSpcEventUnknown2; // master volume fade?
+        event[vcmdStart+0x1b] = (NintSpcEvent) nintSpcEventUnknown2; // nop
+        event[vcmdStart+0x1c] = (NintSpcEvent) nintSpcEventUnknown0;
+        event[vcmdStart+0x1d] = (NintSpcEvent) nintSpcEventUnknown0;
+        event[vcmdStart+0x1e] = (NintSpcEvent) nintSpcEventUnknown0;
         break;
 
     case SPC_VER_TA:

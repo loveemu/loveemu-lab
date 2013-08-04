@@ -368,23 +368,25 @@
 0ac9: f5 31 02  mov   a,$0231+x
 0acc: d4 31     mov   $31+x,a
 0ace: 2f e4     bra   $0ab4
-0ad0: 30 1e     bmi   $0af0
-0ad2: d5 00 02  mov   $0200+x,a
-0ad5: 3f 85 0b  call  $0b85
-0ad8: 30 16     bmi   $0af0
+; vcmd branches
+0ad0: 30 1e     bmi   $0af0             ; vcmds 01-7f - note info:
+0ad2: d5 00 02  mov   $0200+x,a         ; set duration by opcode
+0ad5: 3f 85 0b  call  $0b85             ; read next byte
+0ad8: 30 16     bmi   $0af0             ; process it, if < $80
 0ada: c4 11     mov   $11,a
 0adc: 4b 11     lsr   $11
-0ade: 1c        asl   a
-0adf: 84 11     adc   a,$11
-0ae1: d5 01 02  mov   $0201+x,a
-0ae4: 3f 85 0b  call  $0b85
-0ae7: 30 07     bmi   $0af0
-0ae9: 1c        asl   a
-0aea: d5 10 02  mov   $0210+x,a
-0aed: 3f 85 0b  call  $0b85
+0ade: 1c        asl   a                 ; a  = (a << 1) | (a & 1)
+0adf: 84 11     adc   a,$11             ; a += (a >> 1)
+0ae1: d5 01 02  mov   $0201+x,a         ; set duration rate
+0ae4: 3f 85 0b  call  $0b85             ; read next byte
+0ae7: 30 07     bmi   $0af0             ; process it, if < $80
+0ae9: 1c        asl   a                 ; a *= 2
+0aea: d5 10 02  mov   $0210+x,a         ; set per-note volume (velocity)
+0aed: 3f 85 0b  call  $0b85             ; read next byte (must be >= $80)
+; vcmd branches 80-ff
 0af0: 68 e0     cmp   a,#$e0
 0af2: 90 05     bcc   $0af9
-0af4: 3f 73 0b  call  $0b73
+0af4: 3f 73 0b  call  $0b73             ; dispatch vcmd
 0af7: 2f bb     bra   $0ab4
 0af9: f5 00 04  mov   a,$0400+x
 0afc: 04 1b     or    a,$1b
@@ -447,7 +449,8 @@
 0b70: d0 f3     bne   $0b65
 0b72: 6f        ret
 
-0b73: 1c        asl   a                 ; dispatch vcmd?
+; dispatch vcmd
+0b73: 1c        asl   a
 0b74: fd        mov   y,a
 0b75: f6 34 0d  mov   a,$0d34+y
 0b78: 2d        push  a
@@ -466,6 +469,7 @@
 0b8d: fd        mov   y,a
 0b8e: 6f        ret
 
+; vcmd e0 - set instrument
 0b8f: d5 11 02  mov   $0211+x,a
 0b92: fd        mov   y,a
 0b93: 10 06     bpl   $0b9b
@@ -514,13 +518,15 @@
 0be4: d5 20 02  mov   $0220+x,a
 0be7: 6f        ret
 
+; vcmd e1 - pan
 0be8: d5 51 03  mov   $0351+x,a
 0beb: 28 1f     and   a,#$1f
-0bed: d5 31 03  mov   $0331+x,a
+0bed: d5 31 03  mov   $0331+x,a         ; voice pan value
 0bf0: e8 00     mov   a,#$00
 0bf2: d5 30 03  mov   $0330+x,a
 0bf5: 6f        ret
 
+; vcmd e2 - pan fade
 0bf6: d4 91     mov   $91+x,a
 0bf8: 2d        push  a
 0bf9: 3f 85 0b  call  $0b85
@@ -534,16 +540,19 @@
 0c0b: d5 41 03  mov   $0341+x,a
 0c0e: 6f        ret
 
+; vcmd e3 - vibrato on
 0c0f: d5 b0 02  mov   $02b0+x,a
 0c12: 3f 85 0b  call  $0b85
 0c15: d5 a1 02  mov   $02a1+x,a
 0c18: 3f 85 0b  call  $0b85
+; vcmd e4 - vibrato off
 0c1b: d4 b1     mov   $b1+x,a
 0c1d: d5 c1 02  mov   $02c1+x,a
 0c20: e8 00     mov   a,#$00
 0c22: d5 b1 02  mov   $02b1+x,a
 0c25: 6f        ret
 
+; vcmd f0 - vibrato fade
 0c26: d5 b1 02  mov   $02b1+x,a
 0c29: 2d        push  a
 0c2a: 8d 00     mov   y,#$00
@@ -554,8 +563,10 @@
 0c32: d5 c0 02  mov   $02c0+x,a
 0c35: 6f        ret
 
+; vcmd e5
 0c36: 6f        ret
 
+; vcmd e6
 0c37: c4 5a     mov   $5a,a
 0c39: 3f 85 0b  call  $0b85
 0c3c: c4 5b     mov   $5b,a
@@ -566,10 +577,12 @@
 0c46: da 5c     movw  $5c,ya
 0c48: 6f        ret
 
+; vcmd e7 - tempo
 0c49: e8 00     mov   a,#$00
 0c4b: da 52     movw  $52,ya
 0c4d: 6f        ret
 
+; vcmd e8 - tempo fade
 0c4e: c4 54     mov   $54,a
 0c50: 3f 85 0b  call  $0b85
 0c53: c4 55     mov   $55,a
@@ -580,21 +593,27 @@
 0c5d: da 56     movw  $56,ya
 0c5f: 6f        ret
 
+; vcmd e9 - global transpose
 0c60: c4 50     mov   $50,a
 0c62: 6f        ret
 
+; vcmd ea - per-voice transpose
 0c63: d5 f0 02  mov   $02f0+x,a
 0c66: 6f        ret
 
+; vcmd eb - tremolo on
 0c67: d5 e0 02  mov   $02e0+x,a
 0c6a: 3f 85 0b  call  $0b85
 0c6d: d5 d1 02  mov   $02d1+x,a
 0c70: 3f 85 0b  call  $0b85
+; vcmd ec - tremolo off
 0c73: d4 c1     mov   $c1+x,a
 0c75: 6f        ret
 
+; vcmd f1 - pitch envelope (release)
 0c76: e8 01     mov   a,#$01
 0c78: 2f 02     bra   $0c7c
+; vcmd f2 - pitch envelope (attack)
 0c7a: e8 00     mov   a,#$00
 0c7c: d5 90 02  mov   $0290+x,a
 0c7f: dd        mov   a,y
@@ -605,14 +624,17 @@
 0c8c: d5 91 02  mov   $0291+x,a
 0c8f: 6f        ret
 
+; vcmd f2 - pitch envelope (attack)
 0c90: d5 80 02  mov   $0280+x,a
 0c93: 6f        ret
 
+; vcmd ed - volume
 0c94: d5 01 03  mov   $0301+x,a
 0c97: e8 00     mov   a,#$00
 0c99: d5 00 03  mov   $0300+x,a
 0c9c: 6f        ret
 
+; vcmd ee - volume fade
 0c9d: d4 90     mov   $90+x,a
 0c9f: 2d        push  a
 0ca0: 3f 85 0b  call  $0b85
@@ -626,9 +648,11 @@
 0cb2: d5 11 03  mov   $0311+x,a
 0cb5: 6f        ret
 
+; vcmd f4 - tuning
 0cb6: d5 81 03  mov   $0381+x,a
 0cb9: 6f        ret
 
+; vcmd ef - call subroutine
 0cba: d5 40 02  mov   $0240+x,a
 0cbd: 3f 85 0b  call  $0b85
 0cc0: d5 41 02  mov   $0241+x,a
@@ -645,6 +669,7 @@
 0cda: d4 31     mov   $31+x,a
 0cdc: 6f        ret
 
+; vcmd f5 - echo vbits/volume
 0cdd: 28 7f     and   a,#$7f
 0cdf: c4 4a     mov   $4a,a
 0ce1: 3f 85 0b  call  $0b85
@@ -656,6 +681,7 @@
 0cef: b2 48     clr5  $48
 0cf1: 6f        ret
 
+; vcmd f8 - echo volume fade
 0cf2: c4 68     mov   $68,a
 0cf4: 3f 85 0b  call  $0b85
 0cf7: c4 69     mov   $69,a
@@ -673,11 +699,13 @@
 0d10: da 66     movw  $66,ya
 0d12: 6f        ret
 
+; vcmd f6 - disable echo
 0d13: da 60     movw  $60,ya
 0d15: da 62     movw  $62,ya
 0d17: a2 48     set5  $48
 0d19: 6f        ret
 
+; vcmd f7 - set echo params
 0d1a: 3f 3c 0d  call  $0d3c
 0d1d: 3f 85 0b  call  $0b85
 0d20: c4 4e     mov   $4e,a
@@ -731,17 +759,22 @@
 0d7d: 8d 6d     mov   y,#$6d
 0d7f: 5f d6 09  jmp   $09d6             ; set echo region to $FC00-delay*8
 
+; vcmd fa - set perc base
 0d82: c4 5f     mov   $5f,a
 0d84: 6f        ret
 
+; vcmd fb
 0d85: 3f 87 0b  call  $0b87
 0d88: 6f        ret
 
+; vcmd fc
 0d89: bc        inc   a
 0d8a: d5 00 04  mov   $0400+x,a
 0d8d: 6f        ret
 
+; vcmd fd
 0d8e: bc        inc   a
+; vcmd fe
 0d8f: c4 1b     mov   $1b,a
 0d91: 5f 03 0a  jmp   $0a03
 
@@ -752,6 +785,7 @@
 0d9c: d0 2d     bne   $0dcb             ; return if [$30+X] != #$F9
 0d9e: 3f 87 0b  call  $0b87
 0da1: 3f 85 0b  call  $0b85
+; vcmd f9 - pitch slide
 0da4: d4 a1     mov   $a1+x,a
 0da6: 3f 85 0b  call  $0b85
 0da9: d4 a0     mov   $a0+x,a
@@ -798,33 +832,33 @@
 0df2: 6f        ret
 
 ; vcmd dispatch table ($0d33)
-0df3: dw $0b8f  ; e0
-0df5: dw $0be8  ; e1
-0df7: dw $0bf6  ; e2
-0df9: dw $0c0f  ; e3
-0dfb: dw $0c1b  ; e4
-0dfd: dw $0c36  ; e5
-0dff: dw $0c37  ; e6
-0e01: dw $0c49  ; e7
-0e03: dw $0c4e  ; e8
-0e05: dw $0c60  ; e9
-0e07: dw $0c63  ; ea
-0e09: dw $0c67  ; eb
-0e0b: dw $0c73  ; ec
-0e0d: dw $0c94  ; ed
-0e0f: dw $0c9d  ; ee
-0e11: dw $0cba  ; ef
-0e13: dw $0c26  ; f0
-0e15: dw $0c76  ; f1
-0e17: dw $0c7a  ; f2
-0e19: dw $0c90  ; f3
-0e1b: dw $0cb6  ; f4
-0e1d: dw $0cdd  ; f5
-0e1f: dw $0d13  ; f6
-0e21: dw $0d1a  ; f7
-0e23: dw $0cf2  ; f8
-0e25: dw $0da4  ; f9
-0e27: dw $0d82  ; fa
+0df3: dw $0b8f  ; e0 - set instrument
+0df5: dw $0be8  ; e1 - pan
+0df7: dw $0bf6  ; e2 - pan fade
+0df9: dw $0c0f  ; e3 - vibrato on
+0dfb: dw $0c1b  ; e4 - vibrato off
+0dfd: dw $0c36  ; e5 - ?
+0dff: dw $0c37  ; e6 - ?
+0e01: dw $0c49  ; e7 - tempo
+0e03: dw $0c4e  ; e8 - tempo fade
+0e05: dw $0c60  ; e9 - global transpose
+0e07: dw $0c63  ; ea - per-voice transpose
+0e09: dw $0c67  ; eb - tremolo on
+0e0b: dw $0c73  ; ec - tremolo off
+0e0d: dw $0c94  ; ed - volume
+0e0f: dw $0c9d  ; ee - volume fade
+0e11: dw $0cba  ; ef - call subroutine
+0e13: dw $0c26  ; f0 - vibrato fade
+0e15: dw $0c76  ; f1 - pitch envelope (release)
+0e17: dw $0c7a  ; f2 - pitch envelope (attack)
+0e19: dw $0c90  ; f3 - pitch envelope off
+0e1b: dw $0cb6  ; f4 - tuning
+0e1d: dw $0cdd  ; f5 - echo vbits/volume
+0e1f: dw $0d13  ; f6 - disable echo
+0e21: dw $0d1a  ; f7 - set echo params
+0e23: dw $0cf2  ; f8 - echo volume fade
+0e25: dw $0da4  ; f9 - pitch slide
+0e27: dw $0d82  ; fa - set perc base
 0e29: dw $0d85  ; fb
 0e2b: dw $0d89  ; fc
 0e2d: dw $0d8e  ; fd
