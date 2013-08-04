@@ -16,7 +16,7 @@
 
 #define APPNAME         "Nintendo SPC2MIDI"
 #define APPSHORTNAME    "nintspc"
-#define VERSION         "[2013-07-29]"
+#define VERSION         "[2013-08-04]"
 #define AUTHOR          "loveemu"
 #define WEBSITE         "http://loveemu.yh.land.to/"
 
@@ -72,6 +72,8 @@ enum {
     SPC_VER_STD_MODIFIED,   // seems to be based on SPC_VER_STD, but it's somewhat different from original
     SPC_VER_EXT1,           // has vcmd fb-fe, Super Metroid family
     SPC_VER_YSFR,           // Yoshi's Safari
+    SPC_VER_FE3,            // Fire Emblem 3 (Monshou no Nazo)
+    SPC_VER_FE4,            // Fire Emblem 4 (Seisen no Keifu)
 };
 
 const byte NINT_STD_EVT_LEN_TABLE[] = {
@@ -119,6 +121,7 @@ typedef struct TagNintSpcVerInfo {
     int blockPtrAddr;
     int durTableAddr;
     int velTableAddr;
+    int fireEmbDurVelTableAddr;
     int vcmdListAddr;
     int vcmdLensAddr;
     int defaultTempo;
@@ -144,8 +147,8 @@ typedef struct TagNintSpcNoteParam {
 } NintSpcNoteParam;
 
 struct TagNintSpcTrackStat {
-    bool active;        // if the channel is still active
-    bool used;          // if the channel used once or not
+    bool active;        // true if the channel is still active
+    bool used;          // true if the channel used once or not
     int pos;            // current address on ARAM
     int tick;           // timing (must be synchronized with seq)
     int nextTick;       // next timing (for pitch slide)
@@ -154,7 +157,7 @@ struct TagNintSpcTrackStat {
     int loopStart;      // loop start address for loop command
     int loopCount;      // repeat count for loop command
     int retnAddr;       // return address for loop command
-    bool ignoreNotePrm; // if note param vcmd works as a note cmd
+    //bool fireEmbNoteParamIsDone;    // true if note params got dispatched (then, next bytes must be dispatched as >= 0x80, a note/vcmd)
     byte lastPerc;
     bool newPerc;
     StringStreamBuf *mml;
@@ -180,6 +183,7 @@ struct TagNintSpcSeqStat {
     int blockLooped;            // how many times looped block (internal)
     int songIndex;              // song index in song table
     bool active;                // if the seq is still active
+    byte fe3ByteCA;             // Fire Emblem $(00)ca
     NintSpcVerInfo ver;         // game version info
     NintSpcTrackStat track[SPC_TRACK_MAX]; // status of each tracks
 };
@@ -337,6 +341,10 @@ static const char *nintSpcVerToStrHtml (int version)
         return "Nintendo / Extended (Super Metroid family)";
     case SPC_VER_YSFR:
         return "Nintendo / Extended (Yoshi's Safari family)";
+    case SPC_VER_FE3:
+        return "Nintendo / Fire Emblem 3";
+    case SPC_VER_FE4:
+        return "Nintendo / Fire Emblem 4";
     default:
         return "Unknown Version / Unsupported";
     }
@@ -472,7 +480,7 @@ static void nintSpcResetTrackParam (NintSpcSeqStat *seq, int track)
     tr->lastNote.mmlOct = -801;
     tr->loopCount = 0;
     tr->retnAddr = 0;
-    tr->ignoreNotePrm = false;
+    //tr->ignoreNotePrm = false;
     tr->newPerc = true;
 }
 
@@ -490,6 +498,7 @@ static void nintSpcResetParam (NintSpcSeqStat *seq)
     seq->transpose = 0;
     seq->looped = 0;
     seq->active = true;
+    seq->fe3ByteCA = 0x80;
 
     // reset each track as well
     for (track = 0; track < SPC_TRACK_MAX; track++) {
@@ -632,6 +641,7 @@ static int nintSpcCheckVer (NintSpcSeqStat *seq)
     seq->ver.blockPtrAddr = -1;
     seq->ver.durTableAddr = -1;
     seq->ver.velTableAddr = -1;
+    seq->ver.fireEmbDurVelTableAddr = -1;
 
     // mov   y,#$00
     // mov   a,($..)+y
@@ -852,6 +862,81 @@ static int nintSpcCheckVer (NintSpcSeqStat *seq)
         seq->ver.vcmdByteMin = 0xe0;
     }
 
+    // (Fire Emblem 3/4)
+    // ; dispatch vcmd in A (d6-ff)
+    // 0845: 1c        asl   a                 ; d6-ff => ac-fe (8 bit)
+    // 0846: fd        mov   y,a
+    // 0847: f6 22 07  mov   a,$0722+y
+    // 084a: 2d        push  a
+    // 084b: f6 21 07  mov   a,$0721+y
+    // 084e: 2d        push  a                 ; push jump address from table
+    // 084f: dd        mov   a,y
+    // 0850: 5c        lsr   a
+    // 0851: fd        mov   y,a
+    // 0852: f6 c7 07  mov   a,$07c7+y         ; vcmd length
+    // 0855: f0 06     beq   $085d             ; if non zero
+    if (version == SPC_VER_UNKNOWN && (pos1 = indexOfHexPat(aRAM, (const byte *) "\x1c\xfd\xf6..\x2d\xf6..\x2d\xdd\\\x5c\xfd\xf6..\xf0.", SPC_ARAM_SIZE, NULL)) >= 0 &&
+            mget2l(&aRAM[pos1 + 3]) == mget2l(&aRAM[pos1 + 7]) + 1)
+    {
+        // 074b: 68 d6     cmp   a,#$d6
+        // 074d: 90 05     bcc   $0754
+        // 074f: 3f 45 08  call  $0845             ; vcmds d6-ff
+        byte codeCallVcmdDispatcher[] = { 0x68, '.', 0x90, '.', 0x3f, pos1 & 0xff, (pos1 >> 8) & 0xff, '\0' };
+        if ((pos2 = indexOfHexPat(aRAM, codeCallVcmdDispatcher, SPC_ARAM_SIZE, NULL)) >= 0)
+        {
+            seq->ver.vcmdByteMin = aRAM[pos2 + 1];
+            seq->ver.vcmdListAddr = ((seq->ver.vcmdByteMin * 2) & 0xff) + mget2l(&aRAM[pos1 + 7]);
+            seq->ver.vcmdLensAddr = (seq->ver.vcmdByteMin & 0x7f) + mget2l(&aRAM[pos1 + 14]);
+            seq->ver.noteInfoType = SPC_NOTEPARAM_INT;
+
+            if (seq->ver.durTableAddr != -1 && seq->ver.velTableAddr != -1)
+            {
+                // It has usual N-SPC dur/vel code.
+                // However, it also has its own dur/vel code. (compatible with FE4)
+
+                // ; intelligent style - set from larger table
+                // 062f: 68 40     cmp   a,#$40
+                // 0631: b0 0c     bcs   $063f
+                // ; 00-3f - set dur% from least 6 bits
+                // 0633: 28 3f     and   a,#$3f
+                // 0635: fd        mov   y,a
+                // 0636: f6 00 ff  mov   a,$ff00+y
+                // 0639: d5 01 02  mov   $0201+x,a
+                // 063c: 5f 43 07  jmp   $0743
+                // ; 40-7f - set per-note vol from least 6 bits
+                // 063f: 28 3f     and   a,#$3f
+                // 0641: fd        mov   y,a
+                // 0642: f6 00 ff  mov   a,$ff00+y
+                // 0645: d5 10 02  mov   $0210+x,a
+                // 0648: 5f 22 07  jmp   $0722
+                if ((pos1 = indexOfHexPat(aRAM, "\x68\x40\xb0\x0c\x28\x3f\xfd\xf6..\xd5..\x5f..\x28\x3f\xfd\xf6..\xd5..\x5f..", SPC_ARAM_SIZE, NULL)) >= 0 &&
+                    mget2l(&aRAM[pos1 + 8]) == mget2l(&aRAM[pos1 + 20]))
+                {
+                    seq->ver.fireEmbDurVelTableAddr = mget2l(&aRAM[pos1 + 8]);
+                    version = SPC_VER_FE3;
+                }
+            }
+            else
+            {
+                // It does not have usual N-SPC dur/vel code.
+
+                // 0932: 68 40     cmp   a,#$40
+                // 0934: 28 3f     and   a,#$3f
+                // 0936: fd        mov   y,a
+                // 0937: f6 38 10  mov   a,$1038+y
+                // 093a: b0 05     bcs   $0941
+                // 093c: d5 11 02  mov   $0211+x,a         ;   00-3f - set dur%
+                // 093f: 2f ee     bra   $092f             ;   check more bytes
+                // 0941: d5 20 02  mov   $0220+x,a         ;   40-7f - set vel
+                if ((pos1 = indexOfHexPat(aRAM, "\x68\x40\x28\x3f\xfd\xf6..\xb0\x05\xd5..\x2f.\xd5..", SPC_ARAM_SIZE, NULL)) >= 0)
+                {
+                    seq->ver.fireEmbDurVelTableAddr = mget2l(&aRAM[pos1 + 6]);
+                    version = SPC_VER_FE4;
+                }
+            }
+        }
+    }
+
     if (nintSpcForceSongListAddr >= 0)
         seq->ver.seqListAddr = nintSpcForceSongListAddr;
     if (nintSpcForceBlockPtrAddr >= 0)
@@ -863,7 +948,8 @@ static int nintSpcCheckVer (NintSpcSeqStat *seq)
 
     if (seq->ver.seqListAddr == -1
         || seq->ver.blockPtrAddr == -1
-        || (seq->ver.noteInfoType != SPC_NOTEPARAM_DIR && (seq->ver.durTableAddr == -1 || seq->ver.velTableAddr == -1)))
+        || (seq->ver.noteInfoType == SPC_NOTEPARAM_STD && (seq->ver.durTableAddr == -1 || seq->ver.velTableAddr == -1))
+        || (seq->ver.noteInfoType == SPC_NOTEPARAM_INT && seq->ver.fireEmbDurVelTableAddr == -1))
     {
         version = SPC_VER_UNKNOWN;
     }
@@ -1327,8 +1413,15 @@ static void printHtmlInfoList (NintSpcSeqStat *seq)
     myprintf("          <li>Song List: $%04X</li>\n", seq->ver.seqListAddr);
     myprintf("          <li>Block Pointer: $%02X</li>\n", seq->ver.blockPtrAddr);
     if (seq->ver.noteInfoType != SPC_NOTEPARAM_DIR) {
-        myprintf("          <li>Duration Table: $%04X</li>\n", seq->ver.durTableAddr);
-        myprintf("          <li>Velocity Table: $%04X</li>\n", seq->ver.velTableAddr);
+        if (seq->ver.id != SPC_VER_FE4)
+        {
+            myprintf("          <li>Duration Table: $%04X</li>\n", seq->ver.durTableAddr);
+            myprintf("          <li>Velocity Table: $%04X</li>\n", seq->ver.velTableAddr);
+        }
+        if (seq->ver.id == SPC_VER_FE3 || seq->ver.id == SPC_VER_FE4)
+        {
+            myprintf("          <li>Fire Emblem Dur/Vel Table: $%04X</li>\n", seq->ver.fireEmbDurVelTableAddr);
+        }
     }
     myprintf("          <li>Voice Commands<ul>\n");
     myprintf("            <li>First Command: $%02X</li>\n", seq->ver.vcmdByteMin);
@@ -1948,12 +2041,12 @@ static void nintSpcEventNoteInfo (NintSpcSeqStat *seq, SeqEventReport *ev)
     sprintf(ev->note, "Note Param, length = %d", arg1);
     strcat(ev->classStr, " ev-noteparam");
 
-    if (tr->ignoreNotePrm) {
-        // force dispatch them as note cmd
-        nintSpcEventNote(seq, ev);
-        tr->ignoreNotePrm = false;
-        return;
-    }
+    //if (tr->ignoreNotePrm) {
+    //    // force dispatch them as note cmd
+    //    nintSpcEventNote(seq, ev);
+    //    tr->ignoreNotePrm = false;
+    //    return;
+    //}
 
     arg2 = seq->aRAM[*p];
     hasNextArg = (arg2 < seq->ver.noteByteMin);
@@ -1983,33 +2076,41 @@ static void nintSpcEventNoteInfo (NintSpcSeqStat *seq, SeqEventReport *ev)
             }
             break;
         case SPC_NOTEPARAM_INT:
-            // intelligent style
-            do {
-                arg2 = seq->aRAM[*p];
-
-                (*p)++;
-                ev->size++;
-
-                if (arg2 < 0x40) {
-                    durRateIndex = arg2 & 0x3f;
-                    durVal = nintSpcDurRateOf(seq, durRateIndex);
-                    tr->note.durRate = durVal;
-
-                    sprintf(argDumpStr, ", dur = %d:$%02X", durRateIndex, durVal);
-                    strcat(ev->note, argDumpStr);
-                }
-                else {
-                    velIndex = arg2 & 0x3f;
-                    velVal = nintSpcVelRateOf(seq, velIndex);
-                    tr->note.vel = velVal;
-
-                    sprintf(argDumpStr, ", vel = %d:$%02X", velIndex, velVal);
-                    strcat(ev->note, argDumpStr);
-                }
-
-                arg3 = seq->aRAM[*p];
-            } while (arg2 < 0x40 && arg3 < 0x80);
-            break;
+            if (seq->ver.id != SPC_VER_FE3 || (seq->fe3ByteCA & 0x80) != 0)
+            {
+                // Intelligent Systems style:
+                // The code below does not care the case,
+                // that a number less than 0x80 continues for more than 3 bytes
+                // in an unexpected order. (for instance, arg1 >= 0x40 && arg2 < 0x40)
+                // I think they are just unexpected thing, and I hate complication.
+                do {
+                    arg2 = seq->aRAM[*p];
+                
+                    (*p)++;
+                    ev->size++;
+                              //
+                    if (arg2 < 0x40) {
+                        durRateIndex = arg2 & 0x3f;
+                        durVal = seq->aRAM[seq->ver.fireEmbDurVelTableAddr + durRateIndex];
+                        tr->note.durRate = durVal;
+                              //
+                        sprintf(argDumpStr, ", dur = %d:$%02X", durRateIndex, durVal);
+                        strcat(ev->note, argDumpStr);
+                    }
+                    else {
+                        velIndex = arg2 & 0x3f;
+                        velVal = seq->aRAM[seq->ver.fireEmbDurVelTableAddr + velIndex];
+                        tr->note.vel = velVal;
+                              //
+                        sprintf(argDumpStr, ", vel = %d:$%02X", velIndex, velVal);
+                        strcat(ev->note, argDumpStr);
+                    }
+                              //
+                    arg3 = seq->aRAM[*p];
+                } while (arg2 < 0x40 && arg3 < 0x80);
+                break;
+            }
+            // FALL THROUGH, usual N-SPC note params
         default:
             (*p)++;
             ev->size++;
@@ -2805,7 +2906,7 @@ static void nintSpcEventSkip2 (NintSpcSeqStat *seq, SeqEventReport *ev)
 }
 
 /** vcmd: short jump (forward only). */
-static void nintSpcEventShortJump (NintSpcSeqStat *seq, SeqEventReport *ev)
+static void nintSpcEventShortJumpU8 (NintSpcSeqStat *seq, SeqEventReport *ev)
 {
     int arg1;
     int *p = &seq->track[ev->track].pos;
@@ -2821,7 +2922,35 @@ static void nintSpcEventShortJump (NintSpcSeqStat *seq, SeqEventReport *ev)
     strcat(ev->classStr, " ev-shortjump");
 }
 
-/** vcmd: Fire Emblem vcmd fa. */
+
+/** vcmd: Fire Emblem 3 vcmd f5. */
+static void nintSpcEventFE3F5 (NintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    if (arg1 < 0) {
+        // 
+    }
+    else {
+        if (arg1 & 8)
+            seq->fe3ByteCA |= (1 << (arg1 & 7));
+        else
+            seq->fe3ByteCA &= ~(1 << (arg1 & 7));
+    }
+
+    nintSpcEventUnknownInline(seq, ev);
+    sprintf(argDumpStr, ", arg1 = %d", arg1);
+    strcat(ev->note, argDumpStr);
+    if (!nintSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd: Fire Emblem 3 vcmd fa. */
 static void nintSpcEventFE3FA (NintSpcSeqStat *seq, SeqEventReport *ev)
 {
     int arg1;
@@ -2831,23 +2960,96 @@ static void nintSpcEventFE3FA (NintSpcSeqStat *seq, SeqEventReport *ev)
     arg1 = utos1(seq->aRAM[*p]);
     (*p)++;
 
-    nintSpcEventUnknownInline(seq, ev);
-    sprintf(argDumpStr, ", arg1 = %d", arg1);
-    strcat(ev->note, argDumpStr);
-    if (!nintSpcLessTextInSMF)
-        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
-/*
     if (arg1 < 0) {
-        if (seq->ver.id != SPC_VER_FE4) {
-            ev->size += 6;
-            (*p) += 6;
-        }
+        ev->size += 6;
+        (*p) += 6;
     }
     else {
         ev->size += (arg1 * 4);
         (*p) += (arg1 * 4);
     }
-*/
+
+    nintSpcEventUnknownInline(seq, ev);
+    sprintf(argDumpStr, ", arg1 = %d", arg1);
+    strcat(ev->note, argDumpStr);
+    if (!nintSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd: Fire Emblem 4 vcmd fa. */
+static void nintSpcEventFE4FA (NintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    if (arg1 < 0) {
+        // no more args? it is complicated...
+    }
+    else {
+        ev->size += (arg1 * 4);
+        (*p) += (arg1 * 4);
+    }
+
+    nintSpcEventUnknownInline(seq, ev);
+    sprintf(argDumpStr, ", arg1 = %d", arg1);
+    strcat(ev->note, argDumpStr);
+    if (!nintSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+
+/** vcmd: Fire Emblem 4 vcmd fc. */
+static void nintSpcEventFE4FC (NintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    int paramSize;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    paramSize = ((arg1 & 15) + 1) * 3;
+    ev->size += paramSize;
+    (*p) += paramSize;
+
+    nintSpcEventUnknownInline(seq, ev);
+    sprintf(argDumpStr, ", arg1 = %d", arg1);
+    strcat(ev->note, argDumpStr);
+    if (!nintSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd: Fire Emblem 4 vcmd fd. */
+static void nintSpcEventFE4FD (NintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    switch (arg1) {
+      case 0x01:
+        ev->size++;
+        (*p)++;
+        break;
+      case 0x02:
+        ev->size++;
+        (*p)++;
+        break;
+    }
+
+    nintSpcEventUnknownInline(seq, ev);
+    sprintf(argDumpStr, ", arg1 = %d", arg1);
+    strcat(ev->note, argDumpStr);
+    if (!nintSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmd: Tetris Attack vcmd fc. */
@@ -3034,6 +3236,34 @@ static void nintSpcSetEventList (NintSpcSeqStat *seq)
         //event[vcmdStart+0x1e] = (NintSpcEvent) nintSpcEventUnknown0; // nop
         //event[vcmdStart+0x1f] = (NintSpcEvent) nintSpcEventUnknown0; // nop
         break;
+
+    case SPC_VER_FE3:
+        event[vcmdStart+0x1b] = (NintSpcEvent) nintSpcEventUnknown0; // vcmd f1
+        event[vcmdStart+0x1c] = (NintSpcEvent) nintSpcEventUnknown0;
+        event[vcmdStart+0x1d] = (NintSpcEvent) nintSpcEventUnknown0;
+        event[vcmdStart+0x1e] = (NintSpcEvent) nintSpcEventUnknown0;
+        event[vcmdStart+0x1f] = (NintSpcEvent) nintSpcEventFE3F5;
+        event[vcmdStart+0x20] = (NintSpcEvent) nintSpcEventUnknown1;
+        event[vcmdStart+0x21] = (NintSpcEvent) nintSpcEventUnknown1;
+        event[vcmdStart+0x22] = (NintSpcEvent) nintSpcEventShortJumpU8;
+        event[vcmdStart+0x23] = (NintSpcEvent) nintSpcEventUnknown36;
+        event[vcmdStart+0x24] = (NintSpcEvent) nintSpcEventFE3FA;
+        event[vcmdStart+0x25] = (NintSpcEvent) nintSpcEventUnknown1;
+        event[vcmdStart+0x26] = (NintSpcEvent) nintSpcEventUnknown2;
+        event[vcmdStart+0x27] = (NintSpcEvent) nintSpcEventUnknown2;
+        break;
+
+    case SPC_VER_FE4:
+        event[vcmdStart+0x1b] = (NintSpcEvent) nintSpcEventUnknown0; // vcmd f5
+        event[vcmdStart+0x1c] = (NintSpcEvent) nintSpcEventUnknown0;
+        event[vcmdStart+0x1d] = (NintSpcEvent) nintSpcEventUnknown1;
+        event[vcmdStart+0x1e] = event[vcmdStart+0x1d];
+        event[vcmdStart+0x1f] = (NintSpcEvent) nintSpcEventUnknown0;
+        event[vcmdStart+0x20] = (NintSpcEvent) nintSpcEventFE4FA;
+        event[vcmdStart+0x21] = (NintSpcEvent) nintSpcEventUnknown1;
+        event[vcmdStart+0x22] = (NintSpcEvent) nintSpcEventFE4FC;
+        event[vcmdStart+0x23] = (NintSpcEvent) nintSpcEventFE4FD;
+        break;
     }
 
     // autoguess
@@ -3087,7 +3317,7 @@ Smf* nintSpcARAMToMidi (const byte *aRAM)
     Smf* smf = NULL;
     int mmlTemp;
     int track;
-    bool oldIgnoreNotePrm;
+    //bool oldIgnoreNotePrm;
 
     printHtmlHeader();
     myprintf("    <h1>%s %s</h1>\n", APPNAME, VERSION);
@@ -3146,7 +3376,7 @@ Smf* nintSpcARAMToMidi (const byte *aRAM)
                 inSub = (evtr->loopCount > 0);
                 strcat(ev.classStr, inSub ? " sub" : "");
 
-                oldIgnoreNotePrm = evtr->ignoreNotePrm;
+                //oldIgnoreNotePrm = evtr->ignoreNotePrm;
 
                 if (seq->endBlock
                     && ev.code != seq->ver.endBlockByte
@@ -3165,8 +3395,8 @@ Smf* nintSpcARAMToMidi (const byte *aRAM)
                     evtr->tick = evtr->nextTick;
 
                 // 
-                if (evtr->ignoreNotePrm == oldIgnoreNotePrm)
-                    evtr->ignoreNotePrm = false;
+                //if (evtr->ignoreNotePrm == oldIgnoreNotePrm)
+                //    evtr->ignoreNotePrm = false;
 
                 if (!seq->looped && !evtr->mmlWritten) {
                     for (mmlTemp = 0; mmlTemp < ev.size; mmlTemp++) {

@@ -628,24 +628,26 @@
 08a9: 10 f8     bpl   $08a3             ; 36 bytes
 08ab: e8 24     mov   a,#$24
 08ad: 2f e2     bra   $0891
+
 ; vcmd f5
 08af: ad f0     cmp   y,#$f0
 08b1: 90 19     bcc   $08cc
+; write bit 3 of arg1, to bit (arg1 & 7) of $00ca
+; bit 7 ($80) - use own dur/vel code
 08b3: 12 0a     clr0  $0a
 08b5: 9f        xcn   a
 08b6: 30 02     bmi   $08ba
-08b8: 02 0a     set0  $0a
+08b8: 02 0a     set0  $0a               ; $0a |= 1, if (arg1 & 0x08) != 0
 08ba: 9f        xcn   a
 08bb: 28 07     and   a,#$07
 08bd: fd        mov   y,a
-08be: f6 39 11  mov   a,$1139+y
+08be: f6 39 11  mov   a,$1139+y         ; a = 1 << (arg1 & 0x07)
 08c1: 13 0a 04  bbc0  $0a,$08c8
 08c4: 0e ca 00  tset1 $00ca
 08c7: 6f        ret
-
 08c8: 4e ca 00  tclr1 $00ca
 08cb: 6f        ret
-
+; arg1 >= 0xf0
 08cc: cc 6c 01  mov   $016c,y
 08cf: 6f        ret
 
@@ -1632,3 +1634,5 @@
 1010: c5 bd 03  mov   $03bd,a
 1013: c5 6c 01  mov   $016c,a
 1016: 6f        ret
+
+1139: db $01,$02,$04,$08,$10,$20,$40,$80
