@@ -923,7 +923,7 @@
 0b51: d5 41 03  mov   $0341+x,a
 0b54: 6f        ret
 
-; vcmd e3
+; vcmd e3 - vibrato
 0b55: d5 b0 02  mov   $02b0+x,a
 0b58: 3f 69 0a  call  $0a69
 0b5b: d5 a1 02  mov   $02a1+x,a
@@ -934,7 +934,7 @@
 0b68: d5 b1 02  mov   $02b1+x,a
 0b6b: 6f        ret
 
-; vcmd f0
+; vcmd f0 - vibrato fade
 0b6c: d5 b1 02  mov   $02b1+x,a
 0b6f: 2d        push  a
 0b70: 8d 00     mov   y,#$00
@@ -945,33 +945,34 @@
 0b78: d5 c0 02  mov   $02c0+x,a
 0b7b: 6f        ret
 
-; vcmd e4
-0b7c: d5 70 02  mov   $0270+x,a
+; vcmd e4 - strange pitch envelope
+0b7c: d5 70 02  mov   $0270+x,a         ; pitch envelope speed
 0b7f: 3f 69 0a  call  $0a69
-0b82: d5 71 02  mov   $0271+x,a
+0b82: d5 71 02  mov   $0271+x,a         ; pitch envelope depth
 0b85: e8 00     mov   a,#$00
 0b87: d4 20     mov   $20+x,a
 0b89: d4 21     mov   $21+x,a
 0b8b: 6f        ret
 
-; vcmd e5
+; vcmd e5 - repeat start
 0b8c: f4 30     mov   a,$30+x
 0b8e: d5 60 02  mov   $0260+x,a
 0b91: f4 31     mov   a,$31+x
-0b93: d5 61 02  mov   $0261+x,a
+0b93: d5 61 02  mov   $0261+x,a         ; save the repeat start address
 0b96: e8 00     mov   a,#$00
-0b98: d4 81     mov   $81+x,a
+0b98: d4 81     mov   $81+x,a           ; zero repeat counter
 0b9a: 6f        ret
 
-; vcmd e6
-0b9b: bb 81     inc   $81+x
+; vcmd e6 - repeat end
+0b9b: bb 81     inc   $81+x             ; increment repeat counter
 0b9d: 74 81     cmp   a,$81+x
-0b9f: f0 39     beq   $0bda
-0ba1: 3f 69 0a  call  $0a69
+0b9f: f0 39     beq   $0bda             ; test if arg1 == repeat counter
+; repeat continue
+0ba1: 3f 69 0a  call  $0a69             ; arg2 - per-note volume increment amount (decrement, if negative)
 0ba4: 60        clrc
 0ba5: 95 01 01  adc   a,$0101+x
 0ba8: d5 01 01  mov   $0101+x,a
-0bab: 3f 69 0a  call  $0a69
+0bab: 3f 69 0a  call  $0a69             ; arg3 - tuning increment amount (decrement, if negative. $10 = semitone)
 0bae: 8d 00     mov   y,#$00
 0bb0: 1c        asl   a
 0bb1: 90 01     bcc   $0bb4
@@ -983,7 +984,7 @@
 0bba: 2b 1e     rol   $1e
 0bbc: 1c        asl   a
 0bbd: 2b 1e     rol   $1e
-0bbf: eb 1e     mov   y,$1e
+0bbf: eb 1e     mov   y,$1e             ; y/a = (signed int) arg3 * 16;
 0bc1: 60        clrc
 0bc2: 95 50 02  adc   a,$0250+x
 0bc5: d5 50 02  mov   $0250+x,a
@@ -995,16 +996,16 @@
 0bd4: f5 61 02  mov   a,$0261+x
 0bd7: d4 31     mov   $31+x,a
 0bd9: 6f        ret
-;
+; repeat end
 0bda: e8 00     mov   a,#$00
 0bdc: d4 81     mov   $81+x,a
 0bde: d5 01 01  mov   $0101+x,a
 0be1: d5 50 02  mov   $0250+x,a
 0be4: d5 51 02  mov   $0251+x,a
 0be7: 3f 6b 0a  call  $0a6b
-0bea: 5f 6b 0a  jmp   $0a6b
+0bea: 5f 6b 0a  jmp   $0a6b             ; skip next 2 bytes
 
-; vcmd e7
+; vcmd e7 - tempo
 0bed: 1c        asl   a
 0bee: d5 d1 00  mov   $00d1+x,a
 ; vcmd e8
@@ -1026,10 +1027,10 @@
 0c03: d4 c1     mov   $c1+x,a
 0c05: 6f        ret
 
-; vcmd f1
+; vcmd f1 - pitch envelope (release)
 0c06: e8 01     mov   a,#$01
 0c08: 2f 02     bra   $0c0c
-; vcmd f2
+; vcmd f2 - pitch envelope (attack)
 0c0a: e8 00     mov   a,#$00
 0c0c: d5 90 02  mov   $0290+x,a
 0c0f: dd        mov   a,y
@@ -1040,7 +1041,7 @@
 0c1c: d5 91 02  mov   $0291+x,a
 0c1f: 6f        ret
 
-; vcmd f3
+; vcmd f3 - pitch envelope off
 0c20: d5 80 02  mov   $0280+x,a
 0c23: 6f        ret
 
@@ -1068,33 +1069,36 @@
 0c46: d5 81 03  mov   $0381+x,a
 0c49: 6f        ret
 
-; vcmd ef - repeat
+; vcmd ef - call subroutine (n times)
 0c4a: d5 40 02  mov   $0240+x,a
 0c4d: 3f 69 0a  call  $0a69
-0c50: d5 41 02  mov   $0241+x,a
+0c50: d5 41 02  mov   $0241+x,a         ; arg1/2 - destination address
 0c53: f5 e1 02  mov   a,$02e1+x
 0c56: 68 80     cmp   a,#$80
 0c58: 90 10     bcc   $0c6a
+;
 0c5a: f5 41 02  mov   a,$0241+x
 0c5d: fd        mov   y,a
 0c5e: f5 40 02  mov   a,$0240+x
-0c61: 7a 4b     addw  ya,$4b
+0c61: 7a 4b     addw  ya,$4b            ; add address base
 0c63: d5 40 02  mov   $0240+x,a
 0c66: dd        mov   a,y
 0c67: d5 41 02  mov   $0241+x,a
+;
 0c6a: 3f 69 0a  call  $0a69
-0c6d: d4 80     mov   $80+x,a
+0c6d: d4 80     mov   $80+x,a           ; arg3 - repeat count
 0c6f: f4 30     mov   a,$30+x
 0c71: d5 30 02  mov   $0230+x,a
 0c74: f4 31     mov   a,$31+x
-0c76: d5 31 02  mov   $0231+x,a
+0c76: d5 31 02  mov   $0231+x,a         ; save the return address
+; jump to $0240/1
 0c79: f5 40 02  mov   a,$0240+x
 0c7c: d4 30     mov   $30+x,a
 0c7e: f5 41 02  mov   a,$0241+x
-0c81: d4 31     mov   $31+x,a
+0c81: d4 31     mov   $31+x,a           ; jump to the destination address
 0c83: 6f        ret
 
-; vcmd f5-f8 - disable echo
+; vcmd f5-f8 - disable echo write
 0c84: a2 48     set5  $48               ; disable echo write (FLG shadow)
 0c86: 6f        ret
 
@@ -1219,11 +1223,11 @@
 0d3c: dw $0a9b  ; e0 - instrument
 0d3e: dw $0b0d  ; e1 - pan
 0d40: dw $0b35  ; e2 - pan fade
-0d42: dw $0b55  ; e3
-0d44: dw $0b7c  ; e4
-0d46: dw $0b8c  ; e5
-0d48: dw $0b9b  ; e6
-0d4a: dw $0bed  ; e7
+0d42: dw $0b55  ; e3 - vibrato
+0d44: dw $0b7c  ; e4 - strange pitch envelope
+0d46: dw $0b8c  ; e5 - repeat start
+0d48: dw $0b9b  ; e6 - repeat end
+0d4a: dw $0bed  ; e7 - tempo
 0d4c: dw $0bf1  ; e8 - nop
 0d4e: dw $0bf2  ; e9 - nop
 0d50: dw $0bf3  ; ea - voice transpose
@@ -1231,18 +1235,18 @@
 0d54: dw $0c03  ; ec - tremolo off
 0d56: dw $0c24  ; ed - voice volume
 0d58: dw $0c2d  ; ee - voice volume fade
-0d5a: dw $0c4a  ; ef - repeat
-0d5c: dw $0b6c  ; f0
-0d5e: dw $0c06  ; f1
-0d60: dw $0c0a  ; f2
-0d62: dw $0c20  ; f3
-0d64: dw $0c46  ; f4 - detune
-0d66: dw $0c84  ; f5 - echo (disable)
-0d68: dw $0c84  ; f6 - echo (disable)
-0d6a: dw $0c84  ; f7 - echo (disable)
-0d6c: dw $0c84  ; f8 - echo (disable)
-0d6e: dw $0cef  ; f9
-0d70: dw $0c87  ; fa - nop
+0d5a: dw $0c4a  ; ef - call subroutine (n times)
+0d5c: dw $0b6c  ; f0 - vibrato fade
+0d5e: dw $0c06  ; f1 - pitch envelope (release)
+0d60: dw $0c0a  ; f2 - pitch envelope (attack)
+0d62: dw $0c20  ; f3 - pitch envelope off
+0d64: dw $0c46  ; f4 - tuning
+0d66: dw $0c84  ; f5 - disable echo write
+0d68: dw $0c84  ; f6 - disable echo write
+0d6a: dw $0c84  ; f7 - disable echo write
+0d6c: dw $0c84  ; f8 - disable echo write
+0d6e: dw $0cef  ; f9 - pitch slide
+0d70: dw $0c87  ; fa - set perc base (NYI)
 0d72: dw $0c88  ; fb - set envelope (ADSR/GAIN)
 0d74: dw $0cde  ; fc - nop
 0d76: dw $0cde  ; fd - nop
@@ -1512,7 +1516,7 @@
 0f80: 75 70 02  cmp   a,$0270+x
 0f83: f0 cc     beq   $0f51
 0f85: 6f        ret
-; table for above routine
+; pitch envelope table for vcmd e4 (-9~9)
 0f86: db $fe,$04,$fd,$fc,$fe,$01,$fb,$ff,$fa,$02,$01,$01,$fd,$01,$07,$02
 0f96: db $07,$02,$04,$02,$08,$07,$02,$fd,$00,$04,$01,$05,$06,$07,$03,$00
 0fa6: db $fb,$03,$02,$02,$fe,$02,$08,$03,$01,$07,$00,$ff,$01,$04,$fe,$02

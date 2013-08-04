@@ -74,6 +74,7 @@ enum {
     SPC_VER_YSFR,           // Yoshi's Safari
     SPC_VER_FE3,            // Fire Emblem 3 (Monshou no Nazo)
     SPC_VER_FE4,            // Fire Emblem 4 (Seisen no Keifu)
+    SPC_VER_KONAMI,         // Old Konami Driver
 };
 
 const byte NINT_STD_EVT_LEN_TABLE[] = {
@@ -127,6 +128,7 @@ typedef struct TagNintSpcVerInfo {
     int defaultTempo;
     bool percBaseIsNYI;
     int noteInfoType;
+    int konamiAddrBase;
     NintSpcEvent event[256]; // vcmds
     PatchFixInfo patchFix[256];
 } NintSpcVerInfo;
@@ -157,9 +159,10 @@ struct TagNintSpcTrackStat {
     int loopStart;      // loop start address for loop command
     int loopCount;      // repeat count for loop command
     int retnAddr;       // return address for loop command
-    //bool fireEmbNoteParamIsDone;    // true if note params got dispatched (then, next bytes must be dispatched as >= 0x80, a note/vcmd)
     byte lastPerc;
     bool newPerc;
+    int konamiRepeatStart;
+    int konamiRepeatCount;
     StringStreamBuf *mml;
     bool mmlWritten;
 };
@@ -345,6 +348,8 @@ static const char *nintSpcVerToStrHtml (int version)
         return "Nintendo / Fire Emblem 3";
     case SPC_VER_FE4:
         return "Nintendo / Fire Emblem 4";
+    case SPC_VER_KONAMI:
+        return "Konami / Old Engine";
     default:
         return "Unknown Version / Unsupported";
     }
@@ -480,8 +485,9 @@ static void nintSpcResetTrackParam (NintSpcSeqStat *seq, int track)
     tr->lastNote.mmlOct = -801;
     tr->loopCount = 0;
     tr->retnAddr = 0;
-    //tr->ignoreNotePrm = false;
     tr->newPerc = true;
+    tr->konamiRepeatStart = 0;
+    tr->konamiRepeatCount = 0;
 }
 
 /** reset before play/convert song. */
@@ -549,6 +555,7 @@ static int nintSpcCheckVer (NintSpcSeqStat *seq)
     seq->ver.percByteMax = 0xdf;
     seq->ver.defaultTempo = 0x20;
     seq->ver.percBaseIsNYI = false;
+    seq->ver.konamiAddrBase = 0;
 
     // call  $....
     // cmp   a,#$..
@@ -658,23 +665,6 @@ static int nintSpcCheckVer (NintSpcSeqStat *seq)
         )
             seq->ver.blockPtrAddr = aRAM[pos1 + 0x3];
     }
-    // variant: Gradius 3 (Konami)
-    // mov   y,#$00
-    // mov   a,($40)+y
-    // incw  $40
-    // push  a
-    // mov   a,($40)+y
-    // beq   $0737
-    // incw  $40
-    // mov   y,a
-    // pop   a
-    else if ((pos1 = indexOfHexPat(aRAM, (const byte *) "\x8d\\\x00\xf7.\x3a.\x2d\xf7.\\\xf0.\x3a.\xfd\xae", SPC_ARAM_SIZE, NULL)) >= 0) {
-        if (   aRAM[pos1 + 0x3] == aRAM[pos1 + 0x5]
-            && aRAM[pos1 + 0x5] == aRAM[pos1 + 0x8]
-            && aRAM[pos1 + 0x8] == aRAM[pos1 + 0xc]
-        )
-            seq->ver.blockPtrAddr = aRAM[pos1 + 0x3];
-    }
     // variant: Dragon Ball Z: Super Butouden 2
     // mov   y,#$00
     // mov   a,($4d)+y
@@ -707,14 +697,6 @@ static int nintSpcCheckVer (NintSpcSeqStat *seq)
         // mov   a,$....+y
         // mov   blockPtrAddr+1,a
         byte songLoad3[] = { 0xf6, '.', '.', 0xc4, '\\', '.', 0xf6, '.', '.', 0xc4, '\\', '.', 0 };
-        // variant: Gradius 3 (Konami)
-        // mov   x,a
-        // mov   a,$....+x
-        // beq   $..
-        // mov   y,a
-        // mov   a,$....+x
-        // movw  blockPtrAddr,ya
-        byte songLoad4[] = { 0xf5, '.', '.', 0xf0, '.', 0xfd, 0xf5, '.', '.', 0xda, '\\', '.', 0 };
         // variant: Yoshi's Safari
         // 1488: fd        mov   y,a
         // 1489: f7 48     mov   a,($48)+y
@@ -722,15 +704,14 @@ static int nintSpcCheckVer (NintSpcSeqStat *seq)
         // 148d: fc        inc   y
         // 148e: f7 48     mov   a,($48)+y
         // 1490: c4 4d     mov   $4d,a
-        byte songLoad5[] = { 0xfd, 0xf7, '.', 0xc4, '.', 0xfc, 0xf7, '.', 0xc4, '.', 0 };
+        byte songLoad4[] = { 0xfd, 0xf7, '.', 0xc4, '.', 0xfc, 0xf7, '.', 0xc4, '.', 0 };
 
         songLoad1[9]  = (byte) seq->ver.blockPtrAddr;
         songLoad2[16] = (byte) seq->ver.blockPtrAddr;
         songLoad3[5]  = (byte) seq->ver.blockPtrAddr;
         songLoad3[11] = (byte) (seq->ver.blockPtrAddr + 1);
-        songLoad4[11] = (byte) seq->ver.blockPtrAddr;
-        songLoad5[4]  = (byte) seq->ver.blockPtrAddr;
-        songLoad5[9]  = (byte) (seq->ver.blockPtrAddr + 1);
+        songLoad4[4]  = (byte) seq->ver.blockPtrAddr;
+        songLoad4[9]  = (byte) (seq->ver.blockPtrAddr + 1);
 
         if ((pos1 = indexOfHexPat(aRAM, songLoad1, SPC_ARAM_SIZE, NULL)) >= 0) {
             seq->ver.seqListAddr = mget2l(&aRAM[pos1 + 5]);
@@ -741,10 +722,7 @@ static int nintSpcCheckVer (NintSpcSeqStat *seq)
         else if ((pos1 = indexOfHexPat(aRAM, songLoad3, SPC_ARAM_SIZE, NULL)) >= 0) {
             seq->ver.seqListAddr = mget2l(&aRAM[pos1 + 1]);
         }
-        else if ((pos1 = indexOfHexPat(aRAM, songLoad4, SPC_ARAM_SIZE, NULL)) >= 0) {
-            seq->ver.seqListAddr = mget2l(&aRAM[pos1 + 7]);
-        }
-        else if ((pos1 = indexOfHexPat(aRAM, songLoad5, SPC_ARAM_SIZE, NULL)) >= 0 &&
+        else if ((pos1 = indexOfHexPat(aRAM, songLoad4, SPC_ARAM_SIZE, NULL)) >= 0 &&
                 aRAM[pos1 + 2] == aRAM[pos1 + 7]) {
             byte songPtrAddr = aRAM[pos1 + 2];
 
@@ -781,24 +759,6 @@ static int nintSpcCheckVer (NintSpcSeqStat *seq)
         seq->ver.durTableAddr = mget2l(&aRAM[pos1 + 6]);
         seq->ver.velTableAddr = mget2l(&aRAM[pos1 + 16]);
     }
-    // variant: Gradius 3 (Konami)
-    // push  a
-    // xcn   a
-    // and   a,#$07
-    // mov   y,a
-    // mov   a,$....+y
-    // mov   $0201+x,a         ;   set dur% from high nybble
-    // pop   a
-    // and   a,#$0f
-    // mov   y,a
-    // mov   a,$....+y
-    // clrc
-    // adc   a,$....+x
-    // mov   $....+x,a         ;   set per-note vol from low nybble
-    else if ((pos1 = indexOfHexPat(aRAM, (const byte *) "\x2d\x9f\x28\x07\xfd\xf6..\xd5..\xae\x28\x0f\xfd\xf6..\x60\x95..\xd5..", SPC_ARAM_SIZE, NULL)) >= 0) {
-        seq->ver.durTableAddr = mget2l(&aRAM[pos1 + 6]);
-        seq->ver.velTableAddr = mget2l(&aRAM[pos1 + 16]);
-    }
     // mov   $..,a
     // lsr   $..
     // asl   a
@@ -810,6 +770,77 @@ static int nintSpcCheckVer (NintSpcSeqStat *seq)
     // mov   $....+x,a
     else if ((pos1 = indexOfHexPat(aRAM, (const byte *) "\xc4.\x4b.\x1c\x84.\xd5..\x3f..\x30\x07\x1c\xd5..", SPC_ARAM_SIZE, NULL)) >= 0) {
         seq->ver.noteInfoType = SPC_NOTEPARAM_DIR;
+    }
+
+    // Special Case: Gradius 3 (Konami)
+    // mov   y,#$00
+    // mov   a,($40)+y
+    // incw  $40
+    // push  a
+    // mov   a,($40)+y
+    // beq   $0737
+    // incw  $40
+    // mov   y,a
+    // pop   a
+    if (version == SPC_VER_STD_MODIFIED && (pos1 = indexOfHexPat(aRAM, (const byte *) "\x8d\\\x00\xf7.\x3a.\x2d\xf7.\\\xf0.\x3a.\xfd\xae", SPC_ARAM_SIZE, NULL)) >= 0 &&
+        aRAM[pos1 + 0x3] == aRAM[pos1 + 0x5] &&
+        aRAM[pos1 + 0x5] == aRAM[pos1 + 0x8] && 
+        aRAM[pos1 + 0x8] == aRAM[pos1 + 0xc])
+    {
+        byte codeSongLoad[] = { 0xf5, '.', '.', 0xf0, '.', 0xfd, 0xf5, '.', '.', 0xda, '\\', '.' /* seq->ver.blockPtrAddr */, 0 };
+
+        seq->ver.blockPtrAddr = aRAM[pos1 + 0x3];
+        codeSongLoad[11] = (byte) seq->ver.blockPtrAddr;
+
+        // mov   x,a
+        // mov   a,$....+x
+        // beq   $..
+        // mov   y,a
+        // mov   a,$....+x
+        // movw  blockPtrAddr,ya
+        if ((pos1 = indexOfHexPat(aRAM, codeSongLoad, SPC_ARAM_SIZE, NULL)) >= 0)
+        {
+            seq->ver.seqListAddr = mget2l(&aRAM[pos1 + 7]);
+
+            // push  a
+            // xcn   a
+            // and   a,#$07
+            // mov   y,a
+            // mov   a,$....+y
+            // mov   $0201+x,a         ;   set dur% from high nybble
+            // pop   a
+            // and   a,#$0f
+            // mov   y,a
+            // mov   a,$....+y
+            // clrc
+            // adc   a,$....+x
+            // mov   $....+x,a         ;   set per-note vol from low nybble
+            if ((pos1 = indexOfHexPat(aRAM, (const byte *) "\x2d\x9f\x28\x07\xfd\xf6..\xd5..\xae\x28\x0f\xfd\xf6..\x60\x95..\xd5..", SPC_ARAM_SIZE, NULL)) >= 0)
+            {
+                seq->ver.durTableAddr = mget2l(&aRAM[pos1 + 6]);
+                seq->ver.velTableAddr = mget2l(&aRAM[pos1 + 16]);
+
+                if (seq->ver.vcmdListAddr != -1 && seq->ver.vcmdLensAddr != -1)
+                {
+                    version = SPC_VER_KONAMI;
+
+                    // 0724: 8d 00     mov   y,#$00
+                    // 0726: f7 40     mov   a,($40)+y
+                    // 0728: 3a 40     incw  $40
+                    // 072a: 2d        push  a
+                    // 072b: f7 40     mov   a,($40)+y
+                    // 072d: f0 08     beq   $0737
+                    // 072f: 3a 40     incw  $40
+                    // 0731: fd        mov   y,a
+                    // 0732: ae        pop   a
+                    // 0733: 7a 4b     addw  ya,$4b
+                    if ((pos1 = indexOfHexPat(aRAM, (const byte *) "\x8d\\\x00\xf7.\x3a.\x2d\xf7.\xf0\x08\x3a.\xfd\xae\x7a.", SPC_ARAM_SIZE, NULL)) >= 0)
+                    {
+                        seq->ver.konamiAddrBase = mget2l(&aRAM[aRAM[pos1 + 16]]);
+                    }
+                }
+            }
+        }
     }
 
     // Special Case: Yoshi's Safari
@@ -1155,6 +1186,7 @@ bool nintSpcReadNewBlock (NintSpcSeqStat *seq)
                     seq->active = false;
                     return false;
                 }
+                blockAddr += seq->ver.konamiAddrBase;
 
                 if (seq->blockLoopCnt < 0) {
                     seq->looped++;
@@ -1168,13 +1200,17 @@ bool nintSpcReadNewBlock (NintSpcSeqStat *seq)
                     return nintSpcReadNewBlock(seq);
                 }
             }
+            else
+            {
+                blockAddr += seq->ver.konamiAddrBase;
+            }
         }
         else {
             // repeat block
             if (seq->blockLoopCnt > 0)
                 seq->blockLoopCnt--;
             seq->blockLooped++;
-            blockAddr = mget2l(&aRAM[seq->blockPtr]);
+            blockAddr = mget2l(&aRAM[seq->blockPtr]) + seq->ver.konamiAddrBase;
             memset(&seq->aRAMRef[seq->blockPtr], 0x7f, 2);
         }
     }
@@ -1208,7 +1244,7 @@ bool nintSpcReadNewBlock (NintSpcSeqStat *seq)
             seq->track[tr].active = false;
             continue;
         }
-        seq->track[tr].pos = newPos;
+        seq->track[tr].pos = newPos + seq->ver.konamiAddrBase;
         seq->track[tr].active = (newPos != 0);
     }
     seq->endBlock = false;
@@ -1423,6 +1459,10 @@ static void printHtmlInfoList (NintSpcSeqStat *seq)
             myprintf("          <li>Fire Emblem Dur/Vel Table: $%04X</li>\n", seq->ver.fireEmbDurVelTableAddr);
         }
     }
+    if (seq->ver.id == SPC_VER_KONAMI)
+    {
+            myprintf("          <li>Address Base: $%04X</li>\n", seq->ver.konamiAddrBase);
+    }
     myprintf("          <li>Voice Commands<ul>\n");
     myprintf("            <li>First Command: $%02X</li>\n", seq->ver.vcmdByteMin);
     myprintf("            <li>Dispatch Table: $%04X</li>\n", seq->ver.vcmdListAddr);
@@ -1459,9 +1499,13 @@ static void printHtmlInfoListMore (NintSpcSeqStat *seq)
             blockAddr = mget2l(&aRAM[blockPtr]);
         }
         else
+        {
             blockCnt = 0;
+        }
 
         hasBlock = (blockAddr & 0xff00) && (blockCnt >= 0);
+        if ((blockAddr & 0xff00) != 0)
+            blockAddr += seq->ver.konamiAddrBase;
         myprintf("            <li>");
         if (hasBlock)
             myprintf("<a href=\"#block-%04x\">", dumpBlockPtr);
@@ -1481,10 +1525,12 @@ static void printHtmlInfoListMore (NintSpcSeqStat *seq)
             myprintf("              <li>");
 
             for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
+                int trackAddr = mget2l(&aRAM[blockAddr + tr * 2]);
                 if (tr)
                     myprintf(" ");
-
-                myprintf("%d:$%04X", tr + 1, mget2l(&aRAM[blockAddr + tr * 2]));
+                if (trackAddr != 0)
+                    trackAddr += seq->ver.konamiAddrBase;
+                myprintf("%d:$%04X", tr + 1, trackAddr);
             }
 
             myprintf("</li>\n");
@@ -1653,16 +1699,12 @@ static double nintSpcTempo (NintSpcSeqStat *seq)
 /** convert SPC channel volume into MIDI one. */
 static int nintSpcMidiVolOf (int value)
 {
-    if (nintSpcVolIsLinear)
-        return (int) floor(pow((double) value/255, 2) * 127 + 0.5);
-    else
-        return value/2;
-/*
-    if (nintSpcVolIsLinear)
-        return value/2; // linear
-    else
-        return (int) floor(sqrt((double) value/255) * 127 + 0.5); // more similar with MIDI?
-*/
+    return value/2; // Note: Nintendo SPC uses exponencial curve for volume
+
+    //if (nintSpcVolIsLinear)
+    //    return (int) floor(pow((double) value/255, 2) * 127 + 0.5);
+    //else
+    //    return value/2;
 }
 
 /** create new smf object and link to spc seq. */
@@ -1999,6 +2041,12 @@ static void nintSpcEventReserved (NintSpcSeqStat *seq, SeqEventReport *ev)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
+/** vcmds: no operation. */
+static void nintSpcEventNOP (NintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    sprintf(ev->note, "NOP");
+}
+
 /** vcmd 00: end of block. */
 static void nintSpcEventEndOfBlock (NintSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -2040,13 +2088,6 @@ static void nintSpcEventNoteInfo (NintSpcSeqStat *seq, SeqEventReport *ev)
 
     sprintf(ev->note, "Note Param, length = %d", arg1);
     strcat(ev->classStr, " ev-noteparam");
-
-    //if (tr->ignoreNotePrm) {
-    //    // force dispatch them as note cmd
-    //    nintSpcEventNote(seq, ev);
-    //    tr->ignoreNotePrm = false;
-    //    return;
-    //}
 
     arg2 = seq->aRAM[*p];
     hasNextArg = (arg2 < seq->ver.noteByteMin);
@@ -2136,9 +2177,6 @@ static void nintSpcEventNoteInfo (NintSpcSeqStat *seq, SeqEventReport *ev)
             tr->mmlWritten = true;
         }
     }
-
-    //if (seq->ver.id != SPC_VER_FE3)
-    //    tr->ignoreNotePrm = true;
 
     if (seq->ver.noteInfoType == SPC_NOTEPARAM_STD)
         tr->mmlWritten = true;
@@ -2606,9 +2644,10 @@ static void nintSpcEventVolume (NintSpcSeqStat *seq, SeqEventReport *ev)
     (*p)++;
 
     sprintf(ev->note, "Volume, val = %d", arg1);
-    if (!nintSpcLessTextInSMF)
-        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+    //if (!nintSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
     strcat(ev->classStr, " ev-volume");
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_VOLUME, nintSpcMidiVolOf(arg1));
 
     if (!seq->looped)
         sbprintf(tr->mml, "v%d\n", arg1);
@@ -2644,7 +2683,7 @@ static void nintSpcEventSubroutine (NintSpcSeqStat *seq, SeqEventReport *ev)
     int *p = &tr->pos;
 
     ev->size += 3;
-    dest = mget2l(&seq->aRAM[*p]);
+    dest = mget2l(&seq->aRAM[*p]) + seq->ver.konamiAddrBase;
     (*p) += 2;
     count = seq->aRAM[*p];
     (*p)++;
@@ -2658,6 +2697,79 @@ static void nintSpcEventSubroutine (NintSpcSeqStat *seq, SeqEventReport *ev)
     strcat(ev->classStr, " ev-call");
 
     nintSpcAddVcmdToMML(seq, "\n; VCMD_SUBROUTINE", ev, true);
+}
+
+/** vcmd: (Konami) repeat start. */
+static void nintSpcEventKonamiRepeatStart (NintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    NintSpcTrackStat *tr = &seq->track[ev->track];
+    int *p = &tr->pos;
+
+    tr->konamiRepeatStart = *p;
+    tr->konamiRepeatCount = 0;
+
+    sprintf(ev->note, "Repeat Start");
+    if (!nintSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+    strcat(ev->classStr, " ev-repeatstart");
+
+    nintSpcAddVcmdToMML(seq, "\n; VCMD_KONAMI_REPEAT_START", ev, true);
+}
+
+/** vcmd: (Konami) repeat end. */
+static void nintSpcEventKonamiRepeatEnd (NintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    NintSpcTrackStat *tr = &seq->track[ev->track];
+    int arg1, arg2, arg3;
+    int *p = &tr->pos;
+
+    ev->size += 3;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = utos1(seq->aRAM[*p]);
+    (*p)++;
+    arg3 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    tr->konamiRepeatCount = (tr->konamiRepeatCount + 1) & 0xff;
+    if (tr->konamiRepeatCount != arg1)
+    {
+        // repeat continue
+        *p = tr->konamiRepeatStart;
+        sprintf(ev->note, "Repeat Again, count = %d, velocity-diff = %d, tuning-diff = %d / 16 semitones", arg1, arg2, arg3);
+    }
+    else
+    {
+        // repeat end
+        sprintf(ev->note, "Repeat End");
+    }
+
+    if (!nintSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+    strcat(ev->classStr, " ev-repeatend");
+    nintSpcAddVcmdToMML(seq, "\n; VCMD_KONAMI_REPEAT_END", ev, true);
+}
+
+/** vcmd: set ADSR/GAIN value. */
+static void nintSpcEventSetADSRGAIN (NintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    NintSpcTrackStat *tr = &seq->track[ev->track];
+    int arg1, arg2, arg3;
+    int *p = &tr->pos;
+
+    ev->size += 3;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+    arg2 = seq->aRAM[*p];
+    (*p)++;
+    arg3 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Set ADSR/GAIN, ADSR(1) = $%02X, ADSR(2) = $%02X, GAIN = $%02X", arg1, arg2, arg3);
+    if (!nintSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+    strcat(ev->classStr, " ev-adsrgain");
+    nintSpcAddVcmdToMML(seq, "\n; VCMD_ADSR_AND_GAIN", ev, true);
 }
 
 /** vcmd: vibrato fade(-in). */
@@ -3229,12 +3341,28 @@ static void nintSpcSetEventList (NintSpcSeqStat *seq)
         event[vcmdStart+0x1e] = (NintSpcEvent) nintSpcEventUnknown0;
         break;
 
+    case SPC_VER_KONAMI:
+        event[vcmdStart+0x04] = (NintSpcEvent) nintSpcEventUnknown2;
+        event[vcmdStart+0x05] = (NintSpcEvent) nintSpcEventKonamiRepeatStart;
+        event[vcmdStart+0x06] = (NintSpcEvent) nintSpcEventKonamiRepeatEnd;
+        //event[vcmdStart+0x08] = (NintSpcEvent) nintSpcEventNOP;
+        //event[vcmdStart+0x09] = (NintSpcEvent) nintSpcEventNOP;
+        event[vcmdStart+0x15] = (NintSpcEvent) nintSpcEventUnknown0;
+        event[vcmdStart+0x16] = (NintSpcEvent) nintSpcEventUnknown0;
+        event[vcmdStart+0x17] = (NintSpcEvent) nintSpcEventUnknown0;
+        event[vcmdStart+0x18] = (NintSpcEvent) nintSpcEventUnknown0;
+        event[vcmdStart+0x1b] = (NintSpcEvent) nintSpcEventSetADSRGAIN;
+        event[vcmdStart+0x1c] = (NintSpcEvent) nintSpcEventNOP;
+        event[vcmdStart+0x1d] = (NintSpcEvent) nintSpcEventNOP;
+        event[vcmdStart+0x1e] = (NintSpcEvent) nintSpcEventNOP;
+        break;
+
     case SPC_VER_YSFR:
         event[vcmdStart+0x1b] = (NintSpcEvent) nintSpcEventUnknown1; // write APU port
-        //event[vcmdStart+0x1c] = (NintSpcEvent) nintSpcEventUnknown0; // nop
-        //event[vcmdStart+0x1d] = (NintSpcEvent) nintSpcEventUnknown0; // nop
-        //event[vcmdStart+0x1e] = (NintSpcEvent) nintSpcEventUnknown0; // nop
-        //event[vcmdStart+0x1f] = (NintSpcEvent) nintSpcEventUnknown0; // nop
+        //event[vcmdStart+0x1c] = (NintSpcEvent) nintSpcEventNOP;
+        //event[vcmdStart+0x1d] = (NintSpcEvent) nintSpcEventNOP;
+        //event[vcmdStart+0x1e] = (NintSpcEvent) nintSpcEventNOP;
+        //event[vcmdStart+0x1f] = (NintSpcEvent) nintSpcEventNOP;
         break;
 
     case SPC_VER_FE3:
@@ -3317,7 +3445,6 @@ Smf* nintSpcARAMToMidi (const byte *aRAM)
     Smf* smf = NULL;
     int mmlTemp;
     int track;
-    //bool oldIgnoreNotePrm;
 
     printHtmlHeader();
     myprintf("    <h1>%s %s</h1>\n", APPNAME, VERSION);
@@ -3376,8 +3503,6 @@ Smf* nintSpcARAMToMidi (const byte *aRAM)
                 inSub = (evtr->loopCount > 0);
                 strcat(ev.classStr, inSub ? " sub" : "");
 
-                //oldIgnoreNotePrm = evtr->ignoreNotePrm;
-
                 if (seq->endBlock
                     && ev.code != seq->ver.endBlockByte
                     && ev.code != seq->ver.pitchSlideByte)
@@ -3393,10 +3518,6 @@ Smf* nintSpcARAMToMidi (const byte *aRAM)
                 nextVcmd = (ev.code != seq->ver.endBlockByte) ? aRAM[evtr->pos] : seq->ver.endBlockByte;
                 if (nextVcmd != seq->ver.pitchSlideByte)
                     evtr->tick = evtr->nextTick;
-
-                // 
-                //if (evtr->ignoreNotePrm == oldIgnoreNotePrm)
-                //    evtr->ignoreNotePrm = false;
 
                 if (!seq->looped && !evtr->mmlWritten) {
                     for (mmlTemp = 0; mmlTemp < ev.size; mmlTemp++) {
