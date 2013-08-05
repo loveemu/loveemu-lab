@@ -16,7 +16,7 @@
 
 #define APPNAME         "Nintendo SPC2MIDI"
 #define APPSHORTNAME    "nintspc"
-#define VERSION         "[2013-08-04]"
+#define VERSION         "[2013-08-05]"
 #define AUTHOR          "loveemu"
 #define WEBSITE         "http://loveemu.yh.land.to/"
 
@@ -571,15 +571,16 @@ static int nintSpcCheckVer (NintSpcSeqStat *seq)
     seq->ver.percBaseIsNYI = false;
     seq->ver.konamiAddrBase = 0;
 
-    // call  $....
     // cmp   a,#$..
     // bcc   $05
     // call  $....
     // bra   $..
-    pos1 = indexOfHexPat(aRAM, (const byte *) "\x3f..\x68.\x90\x05\x3f..\x2f.", SPC_ARAM_SIZE, NULL);
+    pos1 = indexOfHexPat(aRAM, (const byte *) "\x68.\x90\x05\x3f..\x2f.", SPC_ARAM_SIZE, NULL);
     if (pos1 >= 0) {
-        vcmdStart = aRAM[pos1 + 4];
-        pos2 = mget2l(&aRAM[pos1 + 8]);
+        int vcmdCallAsm = -1;
+
+        vcmdStart = aRAM[pos1 + 1];
+        pos2 = mget2l(&aRAM[pos1 + 5]);
 
         // asl   a
         // mov   y,a
@@ -592,12 +593,39 @@ static int nintSpcCheckVer (NintSpcSeqStat *seq)
         // mov   y,a
         // mov   a,$....+y
         // beq   $....
-        if (indexOfHexPat(&aRAM[pos2], (const byte *) "\x1c\xfd\xf6..\x2d\xf6..\x2d\xdd\\\x5c\xfd\xf6..\xf0.", 18, NULL) >= 0) {
+        vcmdCallAsm = indexOfHexPat(&aRAM[pos2], (const byte *) "\x1c\xfd\xf6..\x2d\xf6..\x2d\xdd\\\x5c\xfd\xf6..\xf0.", 18, NULL);
+        if (vcmdCallAsm >= 0)
+        {
             vcmdListAddrAsm = mget2l(&aRAM[pos2 + 7]);
             vcmdLensAddrAsm = mget2l(&aRAM[pos2 + 14]);
             vcmdListAddr = vcmdListAddrAsm + ((vcmdStart * 2) & 0xff);
             vcmdLensAddr = vcmdLensAddrAsm + (vcmdStart & 0x7f);
-
+        }
+        else {
+            // (Clock Tower)
+            // 07cc: 80        setc
+            // 07cd: a8 e0     sbc   a,#$e0
+            // 07cf: 1c        asl   a
+            // 07d0: fd        mov   y,a
+            // 07d1: f6 6d 07  mov   a,$076d+y
+            // 07d4: 2d        push  a
+            // 07d5: f6 6c 07  mov   a,$076c+y
+            // 07d8: 2d        push  a
+            // 07d9: dd        mov   a,y
+            // 07da: 5c        lsr   a
+            // 07db: fd        mov   y,a
+            // 07dc: f6 ac 07  mov   a,$07ac+y
+            // 07df: fd        mov   y,a
+            // 07e0: f0 03     beq   $07e5
+            vcmdCallAsm = indexOfHexPat(&aRAM[pos2], (const byte *) "\x80\xa8.\x1c\xfd\xf6..\x2d\xf6..\x2d\xdd\\\x5c\xfd\xf6..\xfd\xf0.", 22, NULL);
+            if (vcmdCallAsm >= 0)
+            {
+                vcmdListAddr = mget2l(&aRAM[pos2 + 10]);
+                vcmdLensAddr = mget2l(&aRAM[pos2 + 17]);
+            }
+        }
+        if (vcmdCallAsm >= 0)
+        {
             // check the lengths of standard vcmds
             if (memcmp(&aRAM[vcmdLensAddr], NINT_STD_EVT_LEN_TABLE, countof(NINT_STD_EVT_LEN_TABLE)) == 0)
             {
