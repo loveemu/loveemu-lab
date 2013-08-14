@@ -1220,14 +1220,14 @@
 0f42: 8f 04 01  mov   $01,#$04
 0f45: 5f ce 0a  jmp   $0ace
 
-; vcmd 29
+; vcmd 29 - fade-out
 0f48: ce        pop   x
 0f49: 8d 01     mov   y,#$01
 0f4b: db 3c     mov   $3c+x,y
 0f4d: e8 00     mov   a,#$00
 0f4f: d4 2c     mov   $2c+x,a
 0f51: f7 01     mov   a,($01)+y
-0f53: c4 0d     mov   $0d,a
+0f53: c4 0d     mov   $0d,a             ; arg1 - fade amount
 0f55: 8f 02 01  mov   $01,#$02
 0f58: 5f ce 0a  jmp   $0ace
 
@@ -1369,7 +1369,7 @@
 105b: dw $0ea2  ; 26 - pitch slide down (simpler)
 105d: dw $0ed7  ; 27 - pitch slide up (simpler)
 105f: dw $0f09  ; 28 - instrument and volume
-1061: dw $0f48  ; 29
+1061: dw $0f48  ; 29 - fade-out
 1063: dw $0f5b  ; 2a - set timer0 freq
 1065: dw $0f6d  ; 2b - long duration on
 1067: dw $0f7d  ; 2c - long duration off
