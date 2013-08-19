@@ -1,3 +1,5 @@
+; Super Ghouls 'N Ghosts
+
 0300: 20        clrp
 0301: cd cf     mov   x,#$cf
 0303: bd        mov   sp,x
@@ -335,16 +337,16 @@
 0599: d3 c9 0d  bbc6  $c9,$05a9
 059c: e8 00     mov   a,#$00
 059e: 8d 00     mov   y,#$00
-05a0: 3f e8 0b  call  $0be8
+05a0: 3f e8 0b  call  $0be8             ; VOL(L)
 05a3: fc        inc   y
-05a4: 3f f2 0b  call  $0bf2
+05a4: 3f f2 0b  call  $0bf2             ; VOL(R)
 05a7: 2f 16     bra   $05bf
 05a9: f4 50     mov   a,$50+x
 05ab: f0 12     beq   $05bf
 05ad: 3f 8f 0a  call  $0a8f
 05b0: f5 c0 02  mov   a,$02c0+x
 05b3: 8d 05     mov   y,#$05
-05b5: 3f e8 0b  call  $0be8
+05b5: 3f e8 0b  call  $0be8             ; ADSR(1)
 05b8: e4 cd     mov   a,$cd
 05ba: 8d 4c     mov   y,#$4c
 05bc: 3f f2 0b  call  $0bf2
@@ -445,7 +447,7 @@
 067b: f5 c0 02  mov   a,$02c0+x
 067e: 28 7f     and   a,#$7f
 0680: 8d 05     mov   y,#$05
-0682: 3f e8 0b  call  $0be8
+0682: 3f e8 0b  call  $0be8             ; ADSR(1)
 0685: e8 00     mov   a,#$00
 0687: d4 50     mov   $50+x,a
 0689: f4 30     mov   a,$30+x
@@ -576,7 +578,7 @@
 0782: 3f f2 0b  call  $0bf2
 0785: f5 c0 02  mov   a,$02c0+x
 0788: 8d 05     mov   y,#$05
-078a: 3f e8 0b  call  $0be8
+078a: 3f e8 0b  call  $0be8             ; ADSR(1)
 078d: e4 cd     mov   a,$cd
 078f: 8d 4c     mov   y,#$4c
 0791: 3f f2 0b  call  $0bf2
@@ -620,31 +622,31 @@
 07ea: dw $082e  ; 02 - dotted note switch on
 07ec: dw $0834  ; 03 - 2-oct up toggle
 07ee: dw $092d  ; 04 - set triplet/dotted/oct-up directly
-07f0: dw $083b  ; 05
-07f2: dw $085b  ; 06
-07f4: dw $085e  ; 07
-07f6: dw $086e  ; 08
-07f8: dw $08b6  ; 09
-07fa: dw $08c1  ; 0a
-07fc: dw $08ca  ; 0b
-07fe: dw $08cd  ; 0c
-0800: dw $08d0  ; 0d
-0802: dw $08d5  ; 0e
-0804: dw $08d9  ; 0f
-0806: dw $08dd  ; 10
-0808: dw $08e1  ; 11
-080a: dw $08d5  ; 12
-080c: dw $08d9  ; 13
-080e: dw $08dd  ; 14
-0810: dw $08e1  ; 15
-0812: dw $0917  ; 16
-0814: dw $0938  ; 17
-0816: dw $0959  ; 18
-0818: dw $0981  ; 19
-081a: dw $0998  ; 1a
-081c: dw $09be  ; 1b
-081e: dw $09c2  ; 1c
-0820: dw $09c3  ; 1d
+07f0: dw $083b  ; 05 - tempo
+07f2: dw $085b  ; 06 - duration rate
+07f4: dw $085e  ; 07 - volume
+07f6: dw $086e  ; 08 - instrument
+07f8: dw $08b6  ; 09 - key offset
+07fa: dw $08c1  ; 0a - global transpose
+07fc: dw $08ca  ; 0b - per-voice transpose
+07fe: dw $08cd  ; 0c - tuning
+0800: dw $08d0  ; 0d - portamento time
+0802: dw $08d5  ; 0e - loop for #1
+0804: dw $08d9  ; 0f - loop for #2
+0806: dw $08dd  ; 10 - loop for #3
+0808: dw $08e1  ; 11 - loop for #4
+080a: dw $08d5  ; 12 - loop break #1
+080c: dw $08d9  ; 13 - loop break #2
+080e: dw $08dd  ; 14 - loop break #3
+0810: dw $08e1  ; 15 - loop break #4
+0812: dw $0917  ; 16 - goto
+0814: dw $0938  ; 17 - end of track
+0816: dw $0959  ; 18 - pan
+0818: dw $0981  ; 19 - master volume
+081a: dw $0998  ; 1a - LFO param
+081c: dw $09be  ; 1b - nop (echo params)
+081e: dw $09c2  ; 1c - nop (echo on/off)
+0820: dw $09c3  ; 1d - release rate (GAIN)
 0822: dw $09d6  ; 1e
 0824: dw $09da  ; 1f
 
@@ -693,7 +695,7 @@
 0864: e8 fe     mov   a,#$fe
 0866: 5f 8e 09  jmp   $098e
 0869: e4 d6     mov   a,$d6
-086b: 5f 8e 09  jmp   $098e
+086b: 5f 8e 09  jmp   $098e             ; apply master volume
 
 ; vcmd 08 - instrument
 086e: e3 c9 0a  bbs7  $c9,$087b
@@ -707,7 +709,7 @@
 087e: da c0     movw  $c0,ya
 0880: 60        clrc
 0881: 98 80 c0  adc   $c0,#$80
-0884: 98 58 c1  adc   $c1,#$58
+0884: 98 58 c1  adc   $c1,#$58          ; $a0 = #$5880 + (a * 6)
 0887: 8d 01     mov   y,#$01
 0889: f7 c0     mov   a,($c0)+y
 088b: d5 c0 02  mov   $02c0+x,a
@@ -719,7 +721,7 @@
 0895: 8d 00     mov   y,#$00
 0897: f7 c0     mov   a,($c0)+y
 0899: c9 f2 00  mov   $00f2,x
-089c: c5 f3 00  mov   $00f3,a
+089c: c5 f3 00  mov   $00f3,a           ; ADSR(1),ADSR(2),GAIN,ENVX
 089f: 3d        inc   x
 08a0: fc        inc   y
 08a1: ad 03     cmp   y,#$03
@@ -850,6 +852,7 @@
 0967: 1c        asl   a
 0968: d0 01     bne   $096b
 096a: 9c        dec   a
+;
 096b: d5 50 01  mov   $0150+x,a
 096e: e8 00     mov   a,#$00
 0970: 88 00     adc   a,#$00
@@ -862,7 +865,7 @@
 097d: d5 00 02  mov   $0200+x,a
 0980: 6f        ret
 
-; vcmd 19 - master ovlume
+; vcmd 19 - master volume
 0981: e3 c9 13  bbs7  $c9,$0997
 0984: fd        mov   y,a
 0985: e5 01 0e  mov   a,$0e01
@@ -871,11 +874,12 @@
 098a: dd        mov   a,y
 098b: 1c        asl   a
 098c: c4 d6     mov   $d6,a
+; multiple channel volume by a/256
 098e: fd        mov   y,a
-098f: f5 e0 02  mov   a,$02e0+x
+098f: f5 e0 02  mov   a,$02e0+x         ; channel volume
 0992: cf        mul   ya
 0993: dd        mov   a,y
-0994: d5 f0 02  mov   $02f0+x,a
+0994: d5 f0 02  mov   $02f0+x,a         ; adjusted volume
 0997: 6f        ret
 
 ; vcmd 1a - LFO param
@@ -919,7 +923,7 @@
 09ca: e3 d1 08  bbs7  $d1,$09d5
 09cd: f5 d0 02  mov   a,$02d0+x
 09d0: 8d 07     mov   y,#$07
-09d2: 3f e8 0b  call  $0be8
+09d2: 3f e8 0b  call  $0be8             ; GAIN
 09d5: 6f        ret
 
 ; vcmd 1e
@@ -1185,10 +1189,10 @@
 0bc0: 28 f0     and   a,#$f0
 0bc2: 6d        push  y
 0bc3: 8d 02     mov   y,#$02
-0bc5: 3f e8 0b  call  $0be8
+0bc5: 3f e8 0b  call  $0be8             ; P(L)
 0bc8: ae        pop   a
 0bc9: fc        inc   y
-0bca: 2f 26     bra   $0bf2
+0bca: 2f 26     bra   $0bf2             ; P(H)
 0bcc: b3 c9 03  bbc5  $c9,$0bd2
 0bcf: dd        mov   a,y
 0bd0: 2f 0a     bra   $0bdc
@@ -1202,10 +1206,11 @@
 0bdb: ee        pop   y
 0bdc: cb c7     mov   $c7,y
 0bde: 8d 00     mov   y,#$00
-0be0: 3f e8 0b  call  $0be8
+0be0: 3f e8 0b  call  $0be8             ; VOL(L)
 0be3: e4 c7     mov   a,$c7
 0be5: fc        inc   y
-0be6: 2f 0a     bra   $0bf2
+0be6: 2f 0a     bra   $0bf2             ; VOL(R)
+; write A to DSP reg Y of channel X
 0be8: 2d        push  a
 0be9: cb c6     mov   $c6,y
 0beb: e4 cc     mov   a,$cc
@@ -1213,10 +1218,12 @@
 0bee: 04 c6     or    a,$c6
 0bf0: fd        mov   y,a
 0bf1: ae        pop   a
+; write A to DSP reg Y
 0bf2: cc f2 00  mov   $00f2,y
 0bf5: c5 f3 00  mov   $00f3,a
 0bf8: 6f        ret
 
+; EON,EFB,EVOL(L),EVOL(R),FLG,EDL,ESA,DIR,MVOL(L),MVOL(R),PMON,NON
 0bf9: db $4d,$0d,$2c,$3c,$6c,$7d,$6d,$5d,$0c,$1c,$2d,$3d
 0c05: db $00,$00,$00,$00,$20,$00,$0d,$58,$7f,$7f,$00,$00
 

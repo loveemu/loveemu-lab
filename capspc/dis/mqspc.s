@@ -1,3 +1,5 @@
+; The Magical Quest Starring Mickey Mouse
+
 02c0: 20        clrp
 02c1: cd cf     mov   x,#$cf
 02c3: bd        mov   sp,x
@@ -152,7 +154,7 @@
 0401: d0 dc     bne   $03df
 0403: e8 4c     mov   a,#$4c
 0405: c5 f2 00  mov   $00f2,a
-0408: e5 f3 00  mov   a,$00f3
+0408: e5 f3 00  mov   a,$00f3           ; KON
 040b: c4 a3     mov   $a3,a
 040d: e4 b6     mov   a,$b6
 040f: 04 bb     or    a,$bb
@@ -176,10 +178,10 @@
 043d: fe f2     dbnz  y,$0431
 043f: 5f 0e 0a  jmp   $0a0e
 
+; PMON,NON,DIR
 0442: db $2d,$3d,$5d
-0445: db $00,$00
+0445: db $00,$00,$66
 
-0447: 66        cmp   a,(x)
 0448: e5 f4 00  mov   a,$00f4
 044b: 65 f4 00  cmp   a,$00f4
 044e: d0 f8     bne   $0448
@@ -690,56 +692,59 @@
 ; vcmd 1e,1f - nop
 083a: 6f        ret
 
-083b: dw $087b  ; 00
-083d: dw $087f  ; 01
-083f: dw $0883  ; 02
-0841: dw $0889  ; 03
-0843: dw $097b  ; 04
-0845: dw $0890  ; 05
-0847: dw $08ab  ; 06
-0849: dw $08af  ; 07
-0851: dw $08c4  ; 08
-0853: dw $0906  ; 09
-0855: dw $0911  ; 0a
-0851: dw $0917  ; 0b
-0853: dw $091b  ; 0c
-0855: dw $091f  ; 0d
-0857: dw $0923  ; 0e
-0859: dw $0927  ; 0f
-085b: dw $092b  ; 10
-085d: dw $092f  ; 11
-085f: dw $0923  ; 12
-0861: dw $0927  ; 13
-0863: dw $092b  ; 14
-0865: dw $092f  ; 15
-0867: dw $0965  ; 16
-0869: dw $0986  ; 17
-086b: dw $09cb  ; 18
-086d: dw $09d2  ; 19
-086f: dw $09dc  ; 1a
-0871: dw $0a02  ; 1b
-0873: dw $0ab4  ; 1c
-0875: dw $0ad1  ; 1d
-0877: dw $083a  ; 1e
-0879: dw $083a  ; 1f
+083b: dw $087b  ; 00 - toggle triplet
+083d: dw $087f  ; 01 - toggle tie/slur
+083f: dw $0883  ; 02 - dotted note switch on
+0841: dw $0889  ; 03 - 2-oct up toggle
+0843: dw $097b  ; 04 - set triplet/dotted/oct-up directly
+0845: dw $0890  ; 05 - tempo
+0847: dw $08ab  ; 06 - duration rate
+0849: dw $08af  ; 07 - volume
+0851: dw $08c4  ; 08 - instrument
+0853: dw $0906  ; 09 - key offset
+0855: dw $0911  ; 0a - global transpose
+0851: dw $0917  ; 0b - per-voice transpose
+0853: dw $091b  ; 0c - tuning
+0855: dw $091f  ; 0d - portamento time
+0857: dw $0923  ; 0e - loop for #1
+0859: dw $0927  ; 0f - loop for #2
+085b: dw $092b  ; 10 - loop for #3
+085d: dw $092f  ; 11 - loop for #4
+085f: dw $0923  ; 12 - loop break #1
+0861: dw $0927  ; 13 - loop break #2
+0863: dw $092b  ; 14 - loop break #3
+0865: dw $092f  ; 15 - loop break #4
+0867: dw $0965  ; 16 - goto
+0869: dw $0986  ; 17 - end of track
+086b: dw $09cb  ; 18 - pan
+086d: dw $09d2  ; 19 - master volume
+086f: dw $09dc  ; 1a - LFO param
+0871: dw $0a02  ; 1b - echo params
+0873: dw $0ab4  ; 1c - echo on/off
+0875: dw $0ad1  ; 1d - release rate (GAIN)
+0877: dw $083a  ; 1e - nop
+0879: dw $083a  ; 1f - nop
 
-; vcmd 00
+; vcmd 00 - toggle triplet
 087b: e8 20     mov   a,#$20
 087d: 2f 0c     bra   $088b
-; vcmd 01
+
+; vcmd 01 - toggle tie/slur
 087f: e8 40     mov   a,#$40
 0881: 2f 08     bra   $088b
-; vcmd 02
+
+; vcmd 02 - dotted note switch on
 0883: e8 10     mov   a,#$10
 0885: 14 10     or    a,$10+x
 0887: 2f 04     bra   $088d
-; vcmd 03
+
+; vcmd 03 - 2-oct up toggle
 0889: e8 08     mov   a,#$08
 088b: 54 10     eor   a,$10+x
 088d: d4 10     mov   $10+x,a
 088f: 6f        ret
 
-; vcmd 05
+; vcmd 05 - tempo
 0890: 2d        push  a
 0891: 3f 2a 08  call  $082a
 0894: ee        pop   y
@@ -755,11 +760,11 @@
 08a7: 8f 00 c2  mov   $c2,#$00
 08aa: 6f        ret
 
-; vcmd 06
+; vcmd 06 - duration rate
 08ab: d5 08 02  mov   $0208+x,a
 08ae: 6f        ret
 
-; vcmd 07
+; vcmd 07 - volume
 08af: fd        mov   y,a
 08b0: 3f a2 0b  call  $0ba2
 08b3: e3 b0 0a  bbs7  $b0,$08c0
@@ -772,7 +777,7 @@
 08c0: d5 30 02  mov   $0230+x,a
 08c3: 6f        ret
 
-; vcmd 08
+; vcmd 08 - instrument
 08c4: e3 b0 08  bbs7  $b0,$08cf
 08c7: bc        inc   a
 08c8: d5 50 02  mov   $0250+x,a
@@ -783,7 +788,7 @@
 08d2: da a0     movw  $a0,ya
 08d4: 60        clrc
 08d5: 98 7c a0  adc   $a0,#$7c
-08d8: 98 66 a1  adc   $a1,#$66
+08d8: 98 66 a1  adc   $a1,#$66          ; $a0 = #$667c + (a * 6)s
 08db: 8d 01     mov   y,#$01
 08dd: f7 a0     mov   a,($a0)+y
 08df: d5 38 02  mov   $0238+x,a
@@ -796,7 +801,7 @@
 08ea: 5d        mov   x,a
 08eb: f7 a0     mov   a,($a0)+y
 08ed: c9 f2 00  mov   $00f2,x
-08f0: c5 f3 00  mov   $00f3,a
+08f0: c5 f3 00  mov   $00f3,a           ; ADSR(1),ADSR(2),GAIN,ENVX
 08f3: 3d        inc   x
 08f4: fc        inc   y
 08f5: ad 04     cmp   y,#$04
@@ -809,7 +814,7 @@
 0902: d5 28 02  mov   $0228+x,a
 0905: 6f        ret
 
-; vcmd 09
+; vcmd 09 - key offset
 0906: c4 a3     mov   $a3,a
 0908: f4 10     mov   a,$10+x
 090a: 28 f8     and   a,#$f8
@@ -817,30 +822,30 @@
 090e: d4 10     mov   $10+x,a
 0910: 6f        ret
 
-; vcmd 0a
+; vcmd 0a - global transpose
 0911: e3 b0 02  bbs7  $b0,$0916
 0914: c4 c4     mov   $c4,a
 0916: 6f        ret
 
-; vcmd 0b
+; vcmd 0b - per-voice transpose
 0917: d5 10 02  mov   $0210+x,a
 091a: 6f        ret
 
-; vcmd 0c
+; vcmd 0c - tuning
 091b: d5 18 02  mov   $0218+x,a
 091e: 6f        ret
 
-; vcmd 0d
+; vcmd 0d - portamento time
 091f: d5 28 01  mov   $0128+x,a
 0922: 6f        ret
 
-0923: 8d 30     mov   y,#$30
-0925: 2f 0a     bra   $0931
-0927: 8d 38     mov   y,#$38
-0929: 2f 06     bra   $0931
-092b: 8d 40     mov   y,#$40
-092d: 2f 02     bra   $0931
-092f: 8d 48     mov   y,#$48
+0923: 8d 30     mov   y,#$30            ; $30+x - vcmd 0e,12
+0925: 2f 0a     bra   $0931 
+0927: 8d 38     mov   y,#$38            ; $38+x - vcmd 0f,13
+0929: 2f 06     bra   $0931 
+092b: 8d 40     mov   y,#$40            ; $40+x - vcmd 10,14
+092d: 2f 02     bra   $0931 
+092f: 8d 48     mov   y,#$48            ; $48+x - vcmd 11,15
 0931: c4 a3     mov   $a3,a
 0933: cb a0     mov   $a0,y
 0935: 7d        mov   a,x
@@ -869,7 +874,7 @@
 095d: e4 a3     mov   a,$a3
 095f: 3f 7b 09  call  $097b
 0962: 3f 2a 08  call  $082a
-; vcmd 16
+; vcmd 16 - goto
 0965: 2d        push  a
 0966: 3f 2a 08  call  $082a
 0969: d4 00     mov   $00+x,a
@@ -893,7 +898,7 @@
 0983: d4 10     mov   $10+x,a
 0985: 6f        ret
 
-; vcmd 17
+; vcmd 17 - end of track
 0986: ae        pop   a
 0987: ae        pop   a
 0988: ae        pop   a
@@ -929,20 +934,20 @@
 09c9: ce        pop   x
 09ca: 6f        ret
 
-; vcmd 18
+; vcmd 18 - pan
 09cb: 60        clrc
 09cc: 88 80     adc   a,#$80
 09ce: d5 48 02  mov   $0248+x,a
 09d1: 6f        ret
 
-; vcmd 19
+; vcmd 19 - master volume
 09d2: e3 b0 06  bbs7  $b0,$09db
 09d5: fd        mov   y,a
 09d6: 3f a2 0b  call  $0ba2
 09d9: c4 c3     mov   $c3,a
 09db: 6f        ret
 
-; vcmd 1a
+; vcmd 1a - LFO param
 09dc: 2d        push  a
 09dd: 3f 2a 08  call  $082a
 09e0: ee        pop   y
@@ -967,7 +972,7 @@
 09fe: d6 08 01  mov   $0108+y,a
 0a01: 6f        ret
 
-; vcmd 1b
+; vcmd 1b - echo params
 0a02: 3f 2a 08  call  $082a
 0a05: 8d 08     mov   y,#$08
 0a07: cf        mul   ya
@@ -992,7 +997,7 @@
 0a32: 3f cf 0c  call  $0ccf
 0a35: e8 7d     mov   a,#$7d
 0a37: c5 f2 00  mov   $00f2,a
-0a3a: e5 f3 00  mov   a,$00f3
+0a3a: e5 f3 00  mov   a,$00f3           ; EDL
 0a3d: 28 0f     and   a,#$0f
 0a3f: bc        inc   a
 0a40: 48 ff     eor   a,#$ff
@@ -1045,7 +1050,7 @@
 0aa4: db $0c,$21,$2b,$2b,$13,$fe,$f3,$f9
 0aac: db $34,$33,$00,$d9,$e5,$01,$fc,$eb
 
-; vcmd 1c
+; vcmd 1c - echo on/off
 0ab4: 5c        lsr   a
 0ab5: fa b4 a3  mov   ($a3),($b4)
 0ab8: e4 b3     mov   a,$b3
@@ -1062,7 +1067,7 @@
 0ace: c4 b7     mov   $b7,a
 0ad0: 6f        ret
 
-; vcmd 1d
+; vcmd 1d - release rate (GAIN)
 0ad1: 08 a0     or    a,#$a0
 0ad3: d5 40 02  mov   $0240+x,a
 0ad6: 6f        ret
@@ -1138,36 +1143,36 @@
 0b56: 3f 9c 0b  call  $0b9c
 0b59: ee        pop   y
 0b5a: cf        mul   ya
-0b5b: f5 30 02  mov   a,$0230+x
+0b5b: f5 30 02  mov   a,$0230+x         ; channel volume
 0b5e: cf        mul   ya
 0b5f: cb a3     mov   $a3,y
 0b61: b3 b0 04  bbc5  $b0,$0b68
 0b64: e8 80     mov   a,#$80
 0b66: 2f 03     bra   $0b6b
-0b68: f5 48 02  mov   a,$0248+x
+0b68: f5 48 02  mov   a,$0248+x         ; pan (center = $80)
 0b6b: 8d 14     mov   y,#$14
 0b6d: cf        mul   ya
-0b6e: da a0     movw  $a0,ya
-0b70: 8f 01 a5  mov   $a5,#$01
+0b6e: da a0     movw  $a0,ya            ; volume balance ($a0 fractional, $a1 integer)
+0b70: 8f 01 a5  mov   $a5,#$01          ; target = right channel
 0b73: eb a1     mov   y,$a1
 0b75: f6 d5 0b  mov   a,$0bd5+y
 0b78: 80        setc
 0b79: b6 d4 0b  sbc   a,$0bd4+y
 0b7c: eb a0     mov   y,$a0
-0b7e: cf        mul   ya
+0b7e: cf        mul   ya                ; linear interpolation
 0b7f: dd        mov   a,y
 0b80: eb a1     mov   y,$a1
 0b82: 60        clrc
-0b83: 96 d4 0b  adc   a,$0bd4+y
+0b83: 96 d4 0b  adc   a,$0bd4+y         ; final volume balance
 0b86: eb a3     mov   y,$a3
-0b88: cf        mul   ya
+0b88: cf        mul   ya                ; apply linear pan
 0b89: dd        mov   a,y
 0b8a: eb a5     mov   y,$a5
-0b8c: 3f c4 0c  call  $0cc4
+0b8c: 3f c4 0c  call  $0cc4             ; VOL(L,R)
 0b8f: 8d 14     mov   y,#$14
 0b91: e8 00     mov   a,#$00
 0b93: 9a a0     subw  ya,$a0
-0b95: da a0     movw  $a0,ya
+0b95: da a0     movw  $a0,ya            ; inverse volume balance, for another speaker
 0b97: 8b a5     dec   $a5
 0b99: 10 d8     bpl   $0b73
 0b9b: 6f        ret
@@ -1194,9 +1199,12 @@
 0bbf: 96 c3 0b  adc   a,$0bc3+y
 0bc2: 6f        ret
 
+; volume table (combination of two lines)
 0bc3: db $00,$0c,$19,$26,$33,$40,$4c,$59
 0bcb: db $66,$73,$80,$8c,$99,$b3,$cc,$e6
 0bd3: db $ff
+
+; pan table (compatible with Nintendo engine)
 0bd4: db $00,$01,$03,$07,$0d,$15,$1e,$29
 0bdc: db $34,$42,$51,$5e,$67,$6e,$73,$77
 0be4: db $7a,$7c,$7d,$7e,$7f,$7f
@@ -1324,6 +1332,7 @@
 0cc0: ae        pop   a
 0cc1: fc        inc   y
 0cc2: 2f 0b     bra   $0ccf
+; write A to DSP reg Y of channel X
 0cc4: 2d        push  a
 0cc5: cb a6     mov   $a6,y
 0cc7: 7d        mov   a,x
@@ -1332,6 +1341,7 @@
 0ccb: 04 a6     or    a,$a6
 0ccd: fd        mov   y,a
 0cce: ae        pop   a
+; write A to DSP reg Y
 0ccf: cc f2 00  mov   $00f2,y
 0cd2: c5 f3 00  mov   $00f3,a
 0cd5: 6f        ret

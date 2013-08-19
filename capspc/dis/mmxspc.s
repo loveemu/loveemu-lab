@@ -1,3 +1,5 @@
+; Mega Man X
+
 02c0: 20        clrp
 02c1: cd cf     mov   x,#$cf
 02c3: bd        mov   sp,x
@@ -51,10 +53,10 @@
 031c: e3 b7 0e  bbs7  $b7,$032d
 031f: 8d 6c     mov   y,#$6c
 0321: e8 00     mov   a,#$00
-0323: 3f 64 0d  call  $0d64
+0323: 3f 64 0d  call  $0d64             ; FLG
 0326: 8d 4d     mov   y,#$4d
 0328: e8 ff     mov   a,#$ff
-032a: 3f 64 0d  call  $0d64
+032a: 3f 64 0d  call  $0d64             ; EON
 032d: ab b7     inc   $b7
 032f: 2f 1b     bra   $034c
 0331: 8d 4d     mov   y,#$4d
@@ -62,19 +64,19 @@
 0335: 48 ff     eor   a,#$ff
 0337: 24 ca     and   a,$ca
 0339: 04 c2     or    a,$c2
-033b: 3f 64 0d  call  $0d64
+033b: 3f 64 0d  call  $0d64             ; EON
 033e: 8d 2c     mov   y,#$2c
 0340: e4 bb     mov   a,$bb
-0342: 3f 64 0d  call  $0d64
+0342: 3f 64 0d  call  $0d64             ; EVOL(L)
 0345: 8d 3c     mov   y,#$3c
 0347: e4 ba     mov   a,$ba
-0349: 3f 64 0d  call  $0d64
+0349: 3f 64 0d  call  $0d64             ; EVOL(R)
 034c: 8d 0c     mov   y,#$0c
 034e: e4 b9     mov   a,$b9
-0350: 3f 64 0d  call  $0d64
+0350: 3f 64 0d  call  $0d64             ; MVOL(L)
 0353: 8d 1c     mov   y,#$1c
 0355: e4 b8     mov   a,$b8
-0357: 3f 64 0d  call  $0d64
+0357: 3f 64 0d  call  $0d64             ; MVOL(R)
 035a: cd 07     mov   x,#$07
 035c: 8d 57     mov   y,#$57
 035e: e4 c8     mov   a,$c8
@@ -99,11 +101,11 @@
 038c: c4 a1     mov   $a1,a
 038e: f5 48 02  mov   a,$0248+x
 0391: 8d 07     mov   y,#$07
-0393: 3f 59 0d  call  $0d59
+0393: 3f 59 0d  call  $0d59             ; GAIN
 0396: 8d 01     mov   y,#$01
 0398: f7 a0     mov   a,($a0)+y
 039a: 8d 05     mov   y,#$05
-039c: 3f 59 0d  call  $0d59
+039c: 3f 59 0d  call  $0d59             ; ADSR(1)
 039f: 0b c0     asl   $c0
 03a1: 0b cb     asl   $cb
 03a3: 0b c8     asl   $c8
@@ -113,10 +115,10 @@
 03a8: 10 b9     bpl   $0363
 03aa: 8d 5c     mov   y,#$5c
 03ac: e8 00     mov   a,#$00
-03ae: 3f 64 0d  call  $0d64
+03ae: 3f 64 0d  call  $0d64             ; KOF
 03b1: ae        pop   a
 03b2: 8d 4c     mov   y,#$4c
-03b4: 5f 64 0d  jmp   $0d64
+03b4: 5f 64 0d  jmp   $0d64             ; KON
 
 03b7: f2 b0     clr7  $b0
 03b9: c3 b0 56  bbs6  $b0,$0412
@@ -181,14 +183,14 @@
 0438: 8f 00 c1  mov   $c1,#$00
 043b: 8f 00 c9  mov   $c9,#$00
 043e: 8d 5c     mov   y,#$5c
-0440: 5f 64 0d  jmp   $0d64
+0440: 5f 64 0d  jmp   $0d64             ; KOF
 
 0443: 8d 07     mov   y,#$07
 0445: e8 9e     mov   a,#$9e
-0447: 3f 59 0d  call  $0d59
+0447: 3f 59 0d  call  $0d59             ; GAIN
 044a: 8d 05     mov   y,#$05
 044c: e8 00     mov   a,#$00
-044e: 5f 59 0d  jmp   $0d59
+044e: 5f 59 0d  jmp   $0d59             ; ADSR(1)
 
 0451: 8d 03     mov   y,#$03
 0453: f6 63 04  mov   a,$0463+y
@@ -198,6 +200,7 @@
 045f: fe f2     dbnz  y,$0453
 0461: 5f a1 0a  jmp   $0aa1
 
+; PMON,NON,DIR
 0464: db $2d,$3d,$5d
 0467: db $00,$00,$47
 
@@ -865,11 +868,11 @@
 
 ; vcmd 07 - volume
 0954: fd        mov   y,a
-0955: 3f 30 0c  call  $0c30
+0955: 3f 30 0c  call  $0c30             ; read volume table
 0958: e3 b0 0a  bbs7  $b0,$0965
 095b: 2d        push  a
-095c: ec 01 1c  mov   y,$1c01
-095f: 3f 30 0c  call  $0c30
+095c: ec 01 1c  mov   y,$1c01           ; maximum volume level?
+095f: 3f 30 0c  call  $0c30             ; read volume table
 0962: ee        pop   y
 0963: cf        mul   ya
 0964: dd        mov   a,y
@@ -887,7 +890,7 @@
 0977: da a0     movw  $a0,ya
 0979: 60        clrc
 097a: 98 ac a0  adc   $a0,#$ac
-097d: 98 47 a1  adc   $a1,#$47
+097d: 98 47 a1  adc   $a1,#$47          ; $a0 = #$47ac + (a * 6)
 0980: ba a0     movw  ya,$a0
 0982: d5 38 02  mov   $0238+x,a
 0985: dd        mov   a,y
@@ -901,7 +904,7 @@
 0991: 8d 00     mov   y,#$00
 0993: f7 a0     mov   a,($a0)+y
 0995: c9 f2 00  mov   $00f2,x
-0998: c5 f3 00  mov   $00f3,a
+0998: c5 f3 00  mov   $00f3,a           ; ADSR(1),ADSR(2),GAIN,ENVX
 099b: 3d        inc   x
 099c: fc        inc   y
 099d: ad 04     cmp   y,#$04
@@ -1034,7 +1037,7 @@
 ; vcmd 19 - master volume
 0a65: e3 b0 06  bbs7  $b0,$0a6e
 0a68: fd        mov   y,a
-0a69: 3f 30 0c  call  $0c30
+0a69: 3f 30 0c  call  $0c30             ; read volume table
 0a6c: c4 d0     mov   $d0,a
 0a6e: 6f        ret
 
@@ -1080,10 +1083,10 @@
 0aae: 3f ed 0a  call  $0aed
 0ab1: 8d 6d     mov   y,#$6d            ; echo start address
 0ab3: f5 96 0d  mov   a,$0d96+x
-0ab6: 3f 64 0d  call  $0d64
+0ab6: 3f 64 0d  call  $0d64             ; ESA
 0ab9: e8 7d     mov   a,#$7d            ; echo delay
 0abb: c5 f2 00  mov   $00f2,a
-0abe: e5 f3 00  mov   a,$00f3
+0abe: e5 f3 00  mov   a,$00f3           ; EDL
 0ac1: 28 0f     and   a,#$0f
 0ac3: bc        inc   a
 0ac4: 48 ff     eor   a,#$ff
@@ -1100,7 +1103,7 @@
 0adb: c4 b6     mov   $b6,a
 0add: 8d 0d     mov   y,#$0d
 0adf: f5 98 0d  mov   a,$0d98+x
-0ae2: 3f 64 0d  call  $0d64             ; feedback
+0ae2: 3f 64 0d  call  $0d64             ; EFB
 0ae5: f5 99 0d  mov   a,$0d99+x
 0ae8: 3f 06 0b  call  $0b06             ; FIR filter
 0aeb: ce        pop   x
@@ -1115,7 +1118,7 @@
 0afa: fe f3     dbnz  y,$0aef
 0afc: 8d 6c     mov   y,#$6c
 0afe: e8 20     mov   a,#$20
-0b00: 5f 64 0d  jmp   $0d64
+0b00: 5f 64 0d  jmp   $0d64             ; FLG
 
 ; EVOL(L),EVOL(R),EON
 0b03: db $2c,$3c,$4d
@@ -1127,7 +1130,7 @@
 0b0a: 5d        mov   x,a
 0b0b: 8d 0f     mov   y,#$0f
 0b0d: f5 1d 0b  mov   a,$0b1d+x
-0b10: 3f 64 0d  call  $0d64
+0b10: 3f 64 0d  call  $0d64             ; FIR
 0b13: 3d        inc   x
 0b14: dd        mov   a,y
 0b15: 60        clrc
@@ -1223,7 +1226,7 @@
 0bc8: fd        mov   y,a
 0bc9: 20        clrp
 0bca: e3 b0 1e  bbs7  $b0,$0beb
-0bcd: e4 d0     mov   a,$d0
+0bcd: e4 d0     mov   a,$d0             ; master volume
 0bcf: cf        mul   ya
 0bd0: 13 d4 10  bbc0  $d4,$0be3
 0bd3: 6d        push  y
@@ -1240,35 +1243,35 @@
 0be6: 3f 2a 0c  call  $0c2a
 0be9: ee        pop   y
 0bea: cf        mul   ya
-0beb: f5 28 02  mov   a,$0228+x
+0beb: f5 28 02  mov   a,$0228+x         ; channel volume
 0bee: cf        mul   ya
 0bef: cb a2     mov   $a2,y
-0bf1: f5 30 02  mov   a,$0230+x
+0bf1: f5 30 02  mov   a,$0230+x         ; pan (center = $80)
 0bf4: b3 b0 02  bbc5  $b0,$0bf9
 0bf7: e8 80     mov   a,#$80
 0bf9: 8d 14     mov   y,#$14
 0bfb: cf        mul   ya
-0bfc: da a0     movw  $a0,ya
-0bfe: 8f 01 a3  mov   $a3,#$01
+0bfc: da a0     movw  $a0,ya            ; volume balance ($a0 fractional, $a1 integer)
+0bfe: 8f 01 a3  mov   $a3,#$01          ; target = right channel
 0c01: eb a1     mov   y,$a1
 0c03: f6 63 0c  mov   a,$0c63+y
 0c06: 80        setc
 0c07: b6 62 0c  sbc   a,$0c62+y
 0c0a: eb a0     mov   y,$a0
-0c0c: cf        mul   ya
+0c0c: cf        mul   ya                ; linear interpolation
 0c0d: dd        mov   a,y
 0c0e: eb a1     mov   y,$a1
 0c10: 60        clrc
-0c11: 96 62 0c  adc   a,$0c62+y
+0c11: 96 62 0c  adc   a,$0c62+y         ; final volume balance
 0c14: eb a2     mov   y,$a2
-0c16: cf        mul   ya
+0c16: cf        mul   ya                ; apply linear pan
 0c17: dd        mov   a,y
 0c18: eb a3     mov   y,$a3
-0c1a: 3f 59 0d  call  $0d59
+0c1a: 3f 59 0d  call  $0d59             ; VOL(L,R)
 0c1d: 8d 14     mov   y,#$14
 0c1f: e8 00     mov   a,#$00
 0c21: 9a a0     subw  ya,$a0
-0c23: da a0     movw  $a0,ya
+0c23: da a0     movw  $a0,ya            ; inverse volume balance, for another speaker
 0c25: 8b a3     dec   $a3
 0c27: 10 d8     bpl   $0c01
 0c29: 6f        ret
@@ -1276,28 +1279,33 @@
 0c2a: cb a4     mov   $a4,y
 0c2c: 8d 04     mov   y,#$04
 0c2e: 2f 06     bra   $0c36
-0c30: e8 ff     mov   a,#$ff
+
+; read volume table index Y to A
+0c30: e8 ff     mov   a,#$ff            ; init fractional part
 0c32: cb a4     mov   $a4,y
 0c34: 8d 03     mov   y,#$03
 0c36: 4b a4     lsr   $a4
 0c38: 7c        ror   a
-0c39: fe fb     dbnz  y,$0c36
+0c39: fe fb     dbnz  y,$0c36           ; y /= 16.0
 0c3b: c4 a5     mov   $a5,a
-0c3d: eb a4     mov   y,$a4
+0c3d: eb a4     mov   y,$a4             ; integer
 0c3f: f6 52 0c  mov   a,$0c52+y
 0c42: 80        setc
 0c43: b6 51 0c  sbc   a,$0c51+y
-0c46: eb a5     mov   y,$a5
+0c46: eb a5     mov   y,$a5             ; fractional
 0c48: cf        mul   ya
 0c49: dd        mov   a,y
 0c4a: eb a4     mov   y,$a4
 0c4c: 60        clrc
-0c4d: 96 51 0c  adc   a,$0c51+y
+0c4d: 96 51 0c  adc   a,$0c51+y         ; linear interpolation
 0c50: 6f        ret
 
+; volume table (combination of two lines)
 0c51: db $00,$0c,$19,$26,$33,$40,$4c,$59
 0c59: db $66,$73,$80,$8c,$99,$b3,$cc,$e6
 0c61: db $ff
+
+; pan table (compatible with Nintendo engine)
 0c62: db $00,$01,$03,$07,$0d,$15,$1e,$29
 0c6a: db $34,$42,$51,$5e,$67,$6e,$73,$77
 0c72: db $7a,$7c,$7d,$7e,$7f,$7f
@@ -1426,11 +1434,11 @@
 0d4d: 28 f0     and   a,#$f0
 0d4f: 6d        push  y
 0d50: 8d 02     mov   y,#$02
-0d52: 3f 59 0d  call  $0d59
+0d52: 3f 59 0d  call  $0d59             ; P(L)
 0d55: ae        pop   a
 0d56: fc        inc   y
-0d57: 2f 0b     bra   $0d64
-;
+0d57: 2f 0b     bra   $0d64             ; P(H)
+; write A to DSP reg Y of channel X
 0d59: 2d        push  a
 0d5a: cb a6     mov   $a6,y
 0d5c: 7d        mov   a,x
@@ -1439,7 +1447,7 @@
 0d60: 04 a6     or    a,$a6
 0d62: fd        mov   y,a
 0d63: ae        pop   a
-;
+; write A to DSP reg Y
 0d64: cc f2 00  mov   $00f2,y
 0d67: c5 f3 00  mov   $00f3,a
 0d6a: 6f        ret
