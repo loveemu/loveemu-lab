@@ -877,10 +877,10 @@
 0e5d: 20        clrp
 0e5e: e8 00     mov   a,#$00
 0e60: c4 f2     mov   $f2,a
-0e62: 8f 00 f3  mov   $f3,#$00
+0e62: 8f 00 f3  mov   $f3,#$00          ; VOL(L)
 0e65: bc        inc   a
 0e66: c4 f2     mov   $f2,a
-0e68: 8f 00 f3  mov   $f3,#$00
+0e68: 8f 00 f3  mov   $f3,#$00          ; VOL(R)
 0e6b: 60        clrc
 0e6c: 88 0f     adc   a,#$0f
 0e6e: 68 80     cmp   a,#$80
@@ -1025,7 +1025,7 @@
 0f90: e4 cb     mov   a,$cb
 0f92: 20        clrp
 0f93: 8f 6c f2  mov   $f2,#$6c
-0f96: c4 f3     mov   $f3,a
+0f96: c4 f3     mov   $f3,a             ; FLG
 0f98: 20        clrp
 0f99: 8f 01 c8  mov   $c8,#$01
 0f9c: 6f        ret
@@ -1034,9 +1034,9 @@
 0f9e: 3f 01 10  call  $1001
 0fa1: 8d 01     mov   y,#$01
 0fa3: e8 00     mov   a,#$00
-0fa5: 3f 65 17  call  $1765
+0fa5: 3f 65 17  call  $1765             ; VOL(R)
 0fa8: 8d 00     mov   y,#$00
-0faa: 3f 65 17  call  $1765
+0faa: 3f 65 17  call  $1765             ; VOL(L)
 0fad: e8 00     mov   a,#$00
 0faf: 3f 16 14  call  $1416
 0fb2: 3f 9c 1b  call  $1b9c
@@ -1174,16 +1174,16 @@
 
 1099: f5 0e 04  mov   a,$040e+x
 109c: 8d 04     mov   y,#$04
-109e: 3f 65 17  call  $1765
+109e: 3f 65 17  call  $1765             ; SRCN
 10a1: f5 25 04  mov   a,$0425+x
 10a4: 8d 07     mov   y,#$07
-10a6: 3f 65 17  call  $1765
+10a6: 3f 65 17  call  $1765             ; GAIN
 10a9: f5 26 04  mov   a,$0426+x
 10ac: 8d 05     mov   y,#$05
-10ae: 3f 65 17  call  $1765
+10ae: 3f 65 17  call  $1765             ; ADSR(1)
 10b1: f5 3d 04  mov   a,$043d+x
 10b4: 8d 06     mov   y,#$06
-10b6: 3f 65 17  call  $1765
+10b6: 3f 65 17  call  $1765             ; ADSR(2)
 10b9: f5 0d 04  mov   a,$040d+x
 10bc: 28 20     and   a,#$20
 10be: f0 05     beq   $10c5
@@ -1271,9 +1271,9 @@
 115b: d0 bc     bne   $1119
 115d: 20        clrp
 115e: 8f 4c f2  mov   $f2,#$4c
-1161: 8f 00 f3  mov   $f3,#$00
+1161: 8f 00 f3  mov   $f3,#$00          ; KON
 1164: 8f 5c f2  mov   $f2,#$5c
-1167: 8f 00 f3  mov   $f3,#$00
+1167: 8f 00 f3  mov   $f3,#$00          ; KOF
 116a: 20        clrp
 116b: 6f        ret
 
@@ -1354,7 +1354,7 @@
 1203: d4 19     mov   $19+x,a
 1205: 2f 0d     bra   $1214
 1207: fb 18     mov   y,$18+x
-1209: 3f 31 16  call  $1631
+1209: 3f 31 16  call  $1631             ; y *= (a + 1) / 256;
 120c: dd        mov   a,y
 120d: 74 18     cmp   a,$18+x
 120f: d0 01     bne   $1212
@@ -1391,10 +1391,10 @@
 1240: 3f de 1b  call  $1bde
 1243: 8d 01     mov   y,#$01
 1245: e8 00     mov   a,#$00
-1247: 3f 65 17  call  $1765
+1247: 3f 65 17  call  $1765             ; VOL(R)
 124a: 8d 00     mov   y,#$00
 124c: e8 00     mov   a,#$00
-124e: 3f 65 17  call  $1765
+124e: 3f 65 17  call  $1765             ; VOL(L)
 1251: e8 ff     mov   a,#$ff
 1253: c5 60 05  mov   $0560,a
 1256: 3f eb 15  call  $15eb
@@ -1605,13 +1605,13 @@
 
 ; vcmd EF - set ADSR1/2 param from args
 13ba: 3f aa 15  call  $15aa
-13bd: d5 26 04  mov   $0426+x,a         ; ADSR(1)
+13bd: d5 26 04  mov   $0426+x,a
 13c0: 8d 05     mov   y,#$05
-13c2: 3f 65 17  call  $1765
+13c2: 3f 65 17  call  $1765             ; ADSR(1)
 13c5: 3f aa 15  call  $15aa
-13c8: d5 3d 04  mov   $043d+x,a         ; ADSR(2)
+13c8: d5 3d 04  mov   $043d+x,a
 13cb: 8d 06     mov   y,#$06
-13cd: 3f 65 17  call  $1765
+13cd: 3f 65 17  call  $1765             ; ADSR(2)
 13d0: 28 e0     and   a,#$e0
 13d2: 08 1d     or    a,#$1d
 13d4: d5 fd 04  mov   $04fd+x,a
@@ -1621,11 +1621,11 @@
 13d8: 3f aa 15  call  $15aa             ; arg1/2 = ADSR1/2 param
 13db: d5 26 04  mov   $0426+x,a
 13de: 8d 05     mov   y,#$05
-13e0: 3f 65 17  call  $1765
+13e0: 3f 65 17  call  $1765             ; ADSR(1)
 13e3: 3f aa 15  call  $15aa
 13e6: d5 3d 04  mov   $043d+x,a
 13e9: 8d 06     mov   y,#$06
-13eb: 3f 65 17  call  $1765
+13eb: 3f 65 17  call  $1765             ; ADSR(2)
 13ee: 28 e0     and   a,#$e0
 13f0: c5 c0 00  mov   $00c0,a
 13f3: 3f aa 15  call  $15aa             ; arg3 = release rate
@@ -1679,7 +1679,7 @@
 1449: bc        inc   a
 144a: d5 0e 04  mov   $040e+x,a
 144d: 8d 04     mov   y,#$04
-144f: 3f 65 17  call  $1765
+144f: 3f 65 17  call  $1765             ; SRCN
 1452: 8d 08     mov   y,#$08
 1454: cf        mul   ya
 1455: 8f 2f c4  mov   $c4,#$2f
@@ -1690,12 +1690,12 @@
 1461: f7 c4     mov   a,($c4)+y
 1463: d5 26 04  mov   $0426+x,a
 1466: 8d 05     mov   y,#$05
-1468: 3f 65 17  call  $1765
+1468: 3f 65 17  call  $1765             ; ADSR(1)
 146b: 8d 03     mov   y,#$03
 146d: f7 c4     mov   a,($c4)+y
 146f: d5 3d 04  mov   $043d+x,a
 1472: 8d 06     mov   y,#$06
-1474: 3f 65 17  call  $1765
+1474: 3f 65 17  call  $1765             ; ADSR(2)
 1477: 28 e0     and   a,#$e0
 1479: 08 1d     or    a,#$1d
 147b: d5 fd 04  mov   $04fd+x,a
@@ -1703,7 +1703,7 @@
 1480: f7 c4     mov   a,($c4)+y
 1482: d5 25 04  mov   $0425+x,a
 1485: 8d 07     mov   y,#$07
-1487: 3f 65 17  call  $1765
+1487: 3f 65 17  call  $1765             ; GAIN
 148a: 8d 05     mov   y,#$05
 148c: f7 c4     mov   a,($c4)+y
 148e: d5 f6 03  mov   $03f6+x,a
@@ -1895,7 +1895,7 @@
 15bf: e4 cb     mov   a,$cb
 15c1: 20        clrp
 15c2: 8f 6c f2  mov   $f2,#$6c
-15c5: c4 f3     mov   $f3,a
+15c5: c4 f3     mov   $f3,a             ; FLG
 15c7: 20        clrp
 15c8: e4 ca     mov   a,$ca
 15ca: f0 1d     beq   $15e9
@@ -1904,13 +1904,13 @@
 15d0: 20        clrp
 15d1: 8f 2c f2  mov   $f2,#$2c
 15d4: e5 cd 00  mov   a,$00cd
-15d7: c4 f3     mov   $f3,a
+15d7: c4 f3     mov   $f3,a             ; EVOL(L)
 15d9: 8f 3c f2  mov   $f2,#$3c
 15dc: e5 cc 00  mov   a,$00cc
-15df: c4 f3     mov   $f3,a
+15df: c4 f3     mov   $f3,a             ; EVOL(R)
 15e1: 8f 0d f2  mov   $f2,#$0d
 15e4: e5 ce 00  mov   a,$00ce
-15e7: c4 f3     mov   $f3,a
+15e7: c4 f3     mov   $f3,a             ; EFB
 15e9: 20        clrp
 15ea: 6f        ret
 
@@ -1972,7 +1972,7 @@
 1640: d0 0a     bne   $164c
 1642: 8d 06     mov   y,#$06
 1644: f5 3d 04  mov   a,$043d+x
-1647: 3f 65 17  call  $1765
+1647: 3f 65 17  call  $1765             ; ADSR(2)
 164a: 2f 3e     bra   $168a
 164c: e8 02     mov   a,#$02
 164e: d4 60     mov   $60+x,a
@@ -1985,11 +1985,11 @@
 165e: f7 c0     mov   a,($c0)+y
 1660: d5 25 04  mov   $0425+x,a
 1663: 8d 07     mov   y,#$07
-1665: 3f 65 17  call  $1765
+1665: 3f 65 17  call  $1765             ; GAIN
 1668: 8d 05     mov   y,#$05
 166a: e8 00     mov   a,#$00
 166c: d5 26 04  mov   $0426+x,a
-166f: 3f 65 17  call  $1765
+166f: 3f 65 17  call  $1765             ; ADSR(1)
 1672: 8d 03     mov   y,#$03
 1674: f7 c0     mov   a,($c0)+y
 1676: d4 61     mov   $61+x,a
@@ -2008,7 +2008,7 @@
 1690: f6 f3 07  mov   a,$07f3+y
 1693: 20        clrp
 1694: 8f 4c f2  mov   $f2,#$4c
-1697: c4 f3     mov   $f3,a
+1697: c4 f3     mov   $f3,a             ; KON
 1699: 20        clrp
 169a: e8 02     mov   a,#$02
 169c: d4 91     mov   $91+x,a
@@ -2019,7 +2019,7 @@
 16a4: d0 1a     bne   $16c0
 16a6: f5 fd 04  mov   a,$04fd+x
 16a9: 8d 06     mov   y,#$06
-16ab: 3f 65 17  call  $1765
+16ab: 3f 65 17  call  $1765             ; ADSR(2)
 16ae: 6f        ret
 
 16af: f5 0d 04  mov   a,$040d+x
@@ -2046,71 +2046,75 @@
 16d7: f6 f3 07  mov   a,$07f3+y
 16da: 20        clrp
 16db: 8f 5c f2  mov   $f2,#$5c
-16de: c4 f3     mov   $f3,a
+16de: c4 f3     mov   $f3,a             ; KOF
 16e0: 20        clrp
 16e1: 6f        ret
 
-16e2: fb 30     mov   y,$30+x
-16e4: f4 31     mov   a,$31+x
-16e6: 3f 31 16  call  $1631
+; calculate final volume
+16e2: fb 30     mov   y,$30+x           ; channel master volume
+16e4: f4 31     mov   a,$31+x           ; channel volume
+16e6: 3f 31 16  call  $1631             ; y *= (a + 1) / 256;
 16e9: f5 a2 03  mov   a,$03a2+x
-16ec: 3f 31 16  call  $1631
+16ec: 3f 31 16  call  $1631             ; y *= (a + 1) / 256;
 16ef: f5 dd 03  mov   a,$03dd+x
 16f2: 4d        push  x
 16f3: 5d        mov   x,a
 16f4: f5 15 05  mov   a,$0515+x
 16f7: ce        pop   x
-16f8: 3f 31 16  call  $1631
+16f8: 3f 31 16  call  $1631             ; y *= (a + 1) / 256;
 16fb: cc 60 05  mov   $0560,y
-16fe: cc 61 05  mov   $0561,y
+16fe: cc 61 05  mov   $0561,y           ; set L/R volume
 1701: e5 5d 05  mov   a,$055d
 1704: f0 3f     beq   $1745
-1706: f4 48     mov   a,$48+x
-1708: f0 1b     beq   $1725
+1706: f4 48     mov   a,$48+x           ; panpot (signed)
+1708: f0 1b     beq   $1725             ; skip if center
 170a: 4d        push  x
-170b: cd 01     mov   x,#$01
+170b: cd 01     mov   x,#$01            ; target = right volume
 170d: 68 00     cmp   a,#$00
 170f: 10 08     bpl   $1719
-1711: 1d        dec   x
+; panpot < 0
+1711: 1d        dec   x                 ; target = left volume
 1712: 48 ff     eor   a,#$ff
 1714: bc        inc   a
 1715: 10 02     bpl   $1719
-1717: e8 7f     mov   a,#$7f
+1717: e8 7f     mov   a,#$7f            ; a = max(127, abs(a))
+; calculate volume balance
 1719: 1c        asl   a
 171a: 48 ff     eor   a,#$ff
-171c: 9c        dec   a
-171d: 3f 31 16  call  $1631
+171c: 9c        dec   a                 ; a = 255 - (a * 2 + 1)
+171d: 3f 31 16  call  $1631             ; y *= (a + 1) / 256;
 1720: dd        mov   a,y
-1721: d5 60 05  mov   $0560+x,a
+1721: d5 60 05  mov   $0560+x,a         ; decrease weak channel volume
 1724: ce        pop   x
 1725: f5 e6 04  mov   a,$04e6+x
 1728: 28 01     and   a,#$01
 172a: f0 09     beq   $1735
-172c: e5 60 05  mov   a,$0560
+172c: e5 60 05  mov   a,$0560           ; reverse-phase left channel
 172f: 48 ff     eor   a,#$ff
 1731: bc        inc   a
 1732: c5 60 05  mov   $0560,a
 1735: f5 e6 04  mov   a,$04e6+x
 1738: 28 02     and   a,#$02
 173a: f0 09     beq   $1745
-173c: e5 61 05  mov   a,$0561
+173c: e5 61 05  mov   a,$0561           ; reverse-phase right channel
 173f: 48 ff     eor   a,#$ff
 1741: bc        inc   a
 1742: c5 61 05  mov   $0561,a
 1745: e5 60 05  mov   a,$0560
 1748: 8d 01     mov   y,#$01
-174a: 3f 65 17  call  $1765
+174a: 3f 65 17  call  $1765             ; VOL(R)
 174d: e5 61 05  mov   a,$0561
 1750: 8d 00     mov   y,#$00
-1752: 3f 65 17  call  $1765
+1752: 3f 65 17  call  $1765             ; VOL(L)
 1755: f5 0d 04  mov   a,$040d+x
 1758: 28 04     and   a,#$04
 175a: f0 08     beq   $1764
 175c: f5 25 04  mov   a,$0425+x
 175f: 8d 07     mov   y,#$07
-1761: 3f 65 17  call  $1765
+1761: 3f 65 17  call  $1765             ; GAIN
 1764: 6f        ret
 
+; set a to dsp voice reg y
 1765: 2d        push  a
 1766: cc 62 05  mov   $0562,y
 1769: 3f 44 18  call  $1844
@@ -2140,17 +2144,17 @@
 1792: c4 cb     mov   $cb,a
 1794: 20        clrp
 1795: 8f 6c f2  mov   $f2,#$6c
-1798: c4 f3     mov   $f3,a
+1798: c4 f3     mov   $f3,a             ; FLG
 179a: 20        clrp
 179b: 6f        ret
 
 179c: 3f ae 17  call  $17ae
 179f: e4 c2     mov   a,$c2
 17a1: 8d 02     mov   y,#$02
-17a3: 3f 65 17  call  $1765
+17a3: 3f 65 17  call  $1765             ; P(L)
 17a6: e4 c3     mov   a,$c3
 17a8: 8d 03     mov   y,#$03
-17aa: 3f 65 17  call  $1765
+17aa: 3f 65 17  call  $1765             ; P(H)
 17ad: 6f        ret
 
 17ae: f5 72 03  mov   a,$0372+x
@@ -2697,7 +2701,7 @@
 1b93: 8d 3d     mov   y,#$3d
 1b95: 20        clrp
 1b96: cb f2     mov   $f2,y
-1b98: c4 f3     mov   $f3,a
+1b98: c4 f3     mov   $f3,a             ; NON
 1b9a: 20        clrp
 1b9b: 6f        ret
 
@@ -2714,7 +2718,7 @@
 1bb5: 8d 3d     mov   y,#$3d
 1bb7: 20        clrp
 1bb8: cb f2     mov   $f2,y
-1bba: c4 f3     mov   $f3,a
+1bba: c4 f3     mov   $f3,a             ; NON
 1bbc: 20        clrp
 1bbd: 6f        ret
 
@@ -2730,7 +2734,7 @@
 1bd5: 8d 4d     mov   y,#$4d
 1bd7: 20        clrp
 1bd8: cb f2     mov   $f2,y
-1bda: c4 f3     mov   $f3,a
+1bda: c4 f3     mov   $f3,a             ; EON
 1bdc: 20        clrp
 1bdd: 6f        ret
 
@@ -2747,7 +2751,7 @@
 1bf7: 8d 4d     mov   y,#$4d
 1bf9: 20        clrp
 1bfa: cb f2     mov   $f2,y
-1bfc: c4 f3     mov   $f3,a
+1bfc: c4 f3     mov   $f3,a             ; EON
 1bfe: 20        clrp
 1bff: 6f        ret
 
@@ -2782,31 +2786,31 @@
 1c2a: 20        clrp
 1c2b: 8f 00 c0  mov   $c0,#$00
 1c2e: 8f 0c f2  mov   $f2,#$0c
-1c31: e4 f3     mov   a,$f3
+1c31: e4 f3     mov   a,$f3             ; MVOL(L)
 1c33: f0 03     beq   $1c38
 1c35: 9c        dec   a
-1c36: c4 f3     mov   $f3,a
+1c36: c4 f3     mov   $f3,a             ; MVOL(L)
 1c38: 04 c0     or    a,$c0
 1c3a: c4 c0     mov   $c0,a
 1c3c: 8f 1c f2  mov   $f2,#$1c
-1c3f: e4 f3     mov   a,$f3
+1c3f: e4 f3     mov   a,$f3             ; MVOL(R)
 1c41: f0 03     beq   $1c46
 1c43: 9c        dec   a
-1c44: c4 f3     mov   $f3,a
+1c44: c4 f3     mov   $f3,a             ; MVOL(R)
 1c46: 04 c0     or    a,$c0
 1c48: c4 c0     mov   $c0,a
 1c4a: 8f 2c f2  mov   $f2,#$2c
-1c4d: e4 f3     mov   a,$f3
+1c4d: e4 f3     mov   a,$f3             ; EVOL(L)
 1c4f: f0 03     beq   $1c54
 1c51: 9c        dec   a
-1c52: c4 f3     mov   $f3,a
+1c52: c4 f3     mov   $f3,a             ; EVOL(L)
 1c54: 04 c0     or    a,$c0
 1c56: c4 c0     mov   $c0,a
 1c58: 8f 3c f2  mov   $f2,#$3c
-1c5b: e4 f3     mov   a,$f3
+1c5b: e4 f3     mov   a,$f3             ; EVOL(R)
 1c5d: f0 03     beq   $1c62
 1c5f: 9c        dec   a
-1c60: c4 f3     mov   $f3,a
+1c60: c4 f3     mov   $f3,a             ; EVOL(R)
 1c62: 04 c0     or    a,$c0
 1c64: 20        clrp
 1c65: f0 01     beq   $1c68
@@ -2848,6 +2852,7 @@
 1ca7: ce        pop   x
 1ca8: 6f        ret
 
+; set dsp reg from ...
 1ca9: 3f 56 1e  call  $1e56
 1cac: fd        mov   y,a
 1cad: 3f 56 1e  call  $1e56
@@ -2905,7 +2910,7 @@
 1d0a: 3f 56 1e  call  $1e56
 1d0d: 20        clrp
 1d0e: cb f2     mov   $f2,y
-1d10: c4 f3     mov   $f3,a
+1d10: c4 f3     mov   $f3,a             ; FIR
 1d12: 20        clrp
 1d13: dd        mov   a,y
 1d14: 60        clrc
@@ -2933,13 +2938,13 @@
 1d38: 8d 0c     mov   y,#$0c
 1d3a: 20        clrp
 1d3b: cb f2     mov   $f2,y
-1d3d: c4 f3     mov   $f3,a
+1d3d: c4 f3     mov   $f3,a             ; MVOL(L)
 1d3f: 20        clrp
 1d40: 3f 56 1e  call  $1e56
 1d43: 8d 1c     mov   y,#$1c
 1d45: 20        clrp
 1d46: cb f2     mov   $f2,y
-1d48: c4 f3     mov   $f3,a
+1d48: c4 f3     mov   $f3,a             ; MVOL(R)
 1d4a: 20        clrp
 1d4b: 6f        ret
 
@@ -2951,13 +2956,13 @@
 1d57: 8d 2c     mov   y,#$2c
 1d59: 20        clrp
 1d5a: cb f2     mov   $f2,y
-1d5c: c4 f3     mov   $f3,a
+1d5c: c4 f3     mov   $f3,a             ; EVOL(L)
 1d5e: 20        clrp
 1d5f: 3f 56 1e  call  $1e56
 1d62: 8d 3c     mov   y,#$3c
 1d64: 20        clrp
 1d65: cb f2     mov   $f2,y
-1d67: c4 f3     mov   $f3,a
+1d67: c4 f3     mov   $f3,a             ; EVOL(R)
 1d69: 20        clrp
 1d6a: 6f        ret
 
@@ -2977,7 +2982,7 @@
 1d85: c4 cb     mov   $cb,a
 1d87: 20        clrp
 1d88: 8f 6c f2  mov   $f2,#$6c
-1d8b: c4 f3     mov   $f3,a             ; DSP FLG
+1d8b: c4 f3     mov   $f3,a             ; FLG
 1d8d: 20        clrp
 1d8e: 6f        ret
 
@@ -2989,7 +2994,7 @@
 1d9a: 8d 0d     mov   y,#$0d
 1d9c: 20        clrp
 1d9d: cb f2     mov   $f2,y
-1d9f: c4 f3     mov   $f3,a
+1d9f: c4 f3     mov   $f3,a             ; EFB
 1da1: 20        clrp
 1da2: 6f        ret
 
@@ -3006,7 +3011,7 @@
 1db6: 8d 7d     mov   y,#$7d
 1db8: 20        clrp
 1db9: cb f2     mov   $f2,y
-1dbb: c4 f3     mov   $f3,a
+1dbb: c4 f3     mov   $f3,a             ; EDL
 1dbd: 20        clrp
 1dbe: 1c        asl   a
 1dbf: 1c        asl   a
@@ -3017,13 +3022,13 @@
 1dc8: e4 cb     mov   a,$cb
 1dca: 20        clrp
 1dcb: 8f 6c f2  mov   $f2,#$6c
-1dce: c4 f3     mov   $f3,a
+1dce: c4 f3     mov   $f3,a             ; FLG
 1dd0: 8f 2c f2  mov   $f2,#$2c
-1dd3: 8f 00 f3  mov   $f3,#$00
+1dd3: 8f 00 f3  mov   $f3,#$00          ; EVOL(L)
 1dd6: 8f 3c f2  mov   $f2,#$3c
-1dd9: 8f 00 f3  mov   $f3,#$00
+1dd9: 8f 00 f3  mov   $f3,#$00          ; EVOL(R)
 1ddc: 8f 0d f2  mov   $f2,#$0d
-1ddf: 8f 00 f3  mov   $f3,#$00
+1ddf: 8f 00 f3  mov   $f3,#$00          ; EFB
 1de2: 20        clrp
 1de3: 6f        ret
 
