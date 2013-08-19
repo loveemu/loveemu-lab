@@ -64,26 +64,24 @@
 0909: dw $1c74  ; fd
 090b: dw $1c78  ; fe
 
-; TODO: what
 090d: db $01,$02,$04,$08,$10,$20,$40,$80
 
-; TODO: unknown table
-0915: db $02,$1f ; 
-0917: db $da,$20 ; 
-0919: db $ce,$22 ; 
-091b: db $e0,$24 ; 
-091d: db $11,$27 ; 
-091f: db $64,$29 ; 
-0921: db $da,$2b ; 
-0923: db $76,$2e ; 
-0925: db $39,$31 ; 
-0927: db $26,$34 ; 
-0929: db $40,$37 ; 
-092b: db $89,$3a ; 
-092d: db $04,$3e ; 
-092f: db $b4,$41 ; 
+; pitch table
+0915: dw $1f02 ; 
+0917: dw $20da ; 
+0919: dw $22ce ; 
+091b: dw $24e0 ; 
+091d: dw $2711 ; 
+091f: dw $2964 ; 
+0921: dw $2bda ; 
+0923: dw $2e76 ; 
+0925: dw $3139 ; 
+0927: dw $3426 ; 
+0929: dw $3740 ; 
+092b: dw $3a89 ; 
+092d: dw $3e04 ; 
+092f: dw $41b4 ; 
 
-; TODO: unknown table
 0931: dw $097f  ; 00
 0933: dw $0982  ; 01
 0935: dw $0985  ; 02
@@ -2297,7 +2295,7 @@
 1af9: e5 46 2c  mov   a,$2c46
 1afc: c4 a4     mov   $a4,a
 1afe: e5 47 2c  mov   a,$2c47
-1b01: c4 a5     mov   $a5,a
+1b01: c4 a5     mov   $a5,a             ; $a4 = instrument table?
 1b03: cd 00     mov   x,#$00
 1b05: ad 00     cmp   y,#$00
 1b07: f0 0f     beq   $1b18

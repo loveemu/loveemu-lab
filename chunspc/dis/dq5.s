@@ -64,26 +64,24 @@
 07d9: dw $19ae  ; fd
 07db: dw $19b2  ; fe
 
-; TODO: what
 07dd: db $01,$02,$04,$08,$10,$20,$40,$80
 
-; TODO: unknown table
-07e5: db $de,$1e ; 
-07e7: db $b4,$20 ; 
-07e9: db $a6,$22 ; 
-07eb: db $b5,$24 ; 
-07ed: db $e4,$26 ; 
-07ef: db $34,$29 ; 
-07f1: db $a7,$2b ; 
-07f3: db $40,$2e ; 
-07f5: db $00,$31 ; 
-07f7: db $ea,$33 ; 
-07f9: db $00,$37 ; 
-07fb: db $45,$3a ; 
-07fd: db $bc,$3d ; 
-07ff: db $68,$41 ; 
+; pitch table
+07e5: dw $1ede ; 
+07e7: dw $20b4 ; 
+07e9: dw $22a6 ; 
+07eb: dw $24b5 ; 
+07ed: dw $26e4 ; 
+07ef: dw $2934 ; 
+07f1: dw $2ba7 ; 
+07f3: dw $2e40 ; 
+07f5: dw $3100 ; 
+07f7: dw $33ea ; 
+07f9: dw $3700 ; 
+07fb: dw $3a45 ; 
+07fd: dw $3dbc ; 
+07ff: dw $4168 ; 
 
-; TODO: unknown table
 0801: dw $0843  ; 00
 0803: dw $0846  ; 01
 0805: dw $0849  ; 02
@@ -118,7 +116,6 @@
 083f: dw $08d0  ; 1f
 0841: dw $08d2  ; 20
 
-; todo: unknown table
 0843: db $05,$00,$ff ; 00
 0846: db $05,$01,$ff ; 01
 0849: db $05,$02,$ff ; 02
