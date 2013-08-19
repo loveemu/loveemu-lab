@@ -143,7 +143,7 @@
 09b5: db $05,$12,$ff ; 12
 09b8: db $05,$13,$ff ; 13
 09bb: db $05,$14,$ff ; 14
-09be: db $13,$60,$60,$14,$00,$00,$ff,; 15
+09be: db $13,$60,$60,$14,$00,$00,$ff ; 15 - set MVOL, zero EVOL
 09c5: db $10,$ff,$0a,$1e,$32,$32,$1e,$0a,$ff,$16,$0e,$17,$05,$22,$32,$42,$52,$62,$72,$82,$92,$13,$78,$78,$14,$28,$d8,$ff ; 16
 09e1: db $10,$ff,$08,$17,$24,$24,$17,$08,$ff,$16,$0c,$17,$05,$22,$32,$42,$52,$62,$72,$82,$92,$13,$7f,$7f,$14,$14,$ec,$ff ; 17
 09fd: db $10,$ff,$08,$17,$24,$24,$17,$08,$ff,$16,$32,$17,$05,$22,$32,$42,$52,$62,$72,$82,$92,$13,$6e,$6e,$14,$40,$40,$ff ; 18,19
@@ -3467,6 +3467,7 @@
 234c: bc        inc   a
 234d: 6f        ret
 
+; dispatch minivcmds
 234e: 20        clrp
 234f: 1c        asl   a
 2350: 4d        push  x
@@ -3478,37 +3479,45 @@
 235c: ce        pop   x
 235d: 4d        push  x
 235e: 6d        push  y
-235f: 3f e9 25  call  $25e9
+235f: 3f e9 25  call  $25e9             ; read next byte from $a6
 2362: 68 10     cmp   a,#$10
 2364: b0 09     bcs   $236f
+; 00-0f
 2366: ad 08     cmp   y,#$08
 2368: b0 26     bcs   $2390
 236a: 3f a1 23  call  $23a1
 236d: 2f 1d     bra   $238c
+;
 236f: 68 20     cmp   a,#$20
 2371: b0 05     bcs   $2378
+; 10-1f
 2373: 3f 0c 24  call  $240c
 2376: 2f 14     bra   $238c
+;
 2378: 68 c0     cmp   a,#$c0
 237a: b0 09     bcs   $2385
+; 20-bf
 237c: ad 08     cmp   y,#$08
 237e: b0 10     bcs   $2390
 2380: 3f 6a 25  call  $256a
 2383: 2f 07     bra   $238c
+;
 2385: 68 fe     cmp   a,#$fe
 2387: d0 07     bne   $2390
+; fe
 2389: 3f 93 23  call  $2393
 238c: ee        pop   y
 238d: ce        pop   x
 238e: 2f cd     bra   $235d
+; otherwise - end
 2390: ee        pop   y
 2391: ce        pop   x
 2392: 6f        ret
 
-; set dsp reg from ...
-2393: 3f e9 25  call  $25e9
+; minivcmd fe - set ($a6)+1 to dsp reg ($a6)
+2393: 3f e9 25  call  $25e9             ; arg1 - dsp register
 2396: fd        mov   y,a
-2397: 3f e9 25  call  $25e9
+2397: 3f e9 25  call  $25e9             ; arg2 - value
 239a: 20        clrp
 239b: cb f2     mov   $f2,y
 239d: c4 f3     mov   $f3,a
@@ -3517,7 +3526,8 @@
 
 23a1: 68 00     cmp   a,#$00
 23a3: d0 0f     bne   $23b4
-23a5: 3f e9 25  call  $25e9
+; minivcmd 00
+23a5: 3f e9 25  call  $25e9             ; arg1
 23a8: d6 a7 03  mov   $03a7+y,a
 23ab: f6 e7 03  mov   a,$03e7+y
 23ae: 08 02     or    a,#$02
@@ -3526,11 +3536,12 @@
 
 23b4: 68 01     cmp   a,#$01
 23b6: d0 1a     bne   $23d2
-23b8: 3f e9 25  call  $25e9
+; minivcmd 01
+23b8: 3f e9 25  call  $25e9             ; arg1
 23bb: d6 d7 03  mov   $03d7+y,a
 23be: e8 80     mov   a,#$80
 23c0: d6 df 03  mov   $03df+y,a
-23c3: 3f e9 25  call  $25e9
+23c3: 3f e9 25  call  $25e9             ; arg2
 23c6: d6 af 03  mov   $03af+y,a
 23c9: f6 e7 03  mov   a,$03e7+y
 23cc: 08 04     or    a,#$04
@@ -3539,22 +3550,25 @@
 
 23d2: 68 02     cmp   a,#$02
 23d4: d0 0a     bne   $23e0
-23d6: 3f e9 25  call  $25e9
+; minivcmd 02
+23d6: 3f e9 25  call  $25e9             ; arg1
 23d9: d6 bf 03  mov   $03bf+y,a
 23dc: d6 c7 03  mov   $03c7+y,a
 23df: 6f        ret
 
 23e0: 68 03     cmp   a,#$03
 23e2: d0 04     bne   $23e8
+; minivcmd 03
 23e4: 3f ce 25  call  $25ce
 23e7: 6f        ret
 
 23e8: 68 04     cmp   a,#$04
 23ea: d0 14     bne   $2400
+; minivcmd 04
 23ec: f6 e7 03  mov   a,$03e7+y
 23ef: 08 01     or    a,#$01
 23f1: d6 e7 03  mov   $03e7+y,a
-23f4: 3f e9 25  call  $25e9
+23f4: 3f e9 25  call  $25e9             ; arg1
 23f7: d6 d7 03  mov   $03d7+y,a
 23fa: e8 80     mov   a,#$80
 23fc: d6 df 03  mov   $03df+y,a
@@ -3562,16 +3576,19 @@
 
 2400: 68 05     cmp   a,#$05
 2402: d0 07     bne   $240b
-2404: 3f e9 25  call  $25e9
+; minivcmd 05 - set CPU-conrtoled? variable
+2404: 3f e9 25  call  $25e9             ; arg1
 2407: d6 f7 03  mov   $03f7+y,a
 240a: 6f        ret
 
+; minivcmd 06-0f - nop
 240b: 6f        ret
 
 240c: 68 10     cmp   a,#$10
 240e: d0 15     bne   $2425
+; minivcmd 10 - set echo filter
 2410: 8d 0f     mov   y,#$0f
-2412: 3f e9 25  call  $25e9
+2412: 3f e9 25  call  $25e9             ; arg1...8
 2415: 20        clrp
 2416: cb f2     mov   $f2,y
 2418: c4 f3     mov   $f3,a             ; FIR
@@ -3586,6 +3603,7 @@
 
 2425: 68 11     cmp   a,#$11
 2427: d0 1b     bne   $2444
+; minivcmd 11
 2429: e8 00     mov   a,#$00
 242b: c5 ff 03  mov   $03ff,a
 242e: 20        clrp
@@ -3599,8 +3617,10 @@
 243f: c4 f3     mov   $f3,a             ; EVOL(R)
 2441: 20        clrp
 2442: 2f 1d     bra   $2461
+
 2444: 68 12     cmp   a,#$12
 2446: d0 29     bne   $2471
+; minivcmd 12
 2448: e8 01     mov   a,#$01
 244a: c5 ff 03  mov   $03ff,a
 244d: 20        clrp
@@ -3624,14 +3644,15 @@
 
 2471: 68 13     cmp   a,#$13
 2473: d0 26     bne   $249b
-2475: 3f e9 25  call  $25e9
+; minivcmd 13 - set MVOL
+2475: 3f e9 25  call  $25e9             ; arg1
 2478: c4 af     mov   $af,a
 247a: 8d 0c     mov   y,#$0c
 247c: 20        clrp
 247d: cb f2     mov   $f2,y
 247f: c4 f3     mov   $f3,a             ; MVOL(L)
 2481: 20        clrp
-2482: 3f e9 25  call  $25e9
+2482: 3f e9 25  call  $25e9             ; arg2
 2485: c4 ae     mov   $ae,a
 2487: e5 ff 03  mov   a,$03ff
 248a: f0 04     beq   $2490
@@ -3647,16 +3668,17 @@
 
 249b: 68 14     cmp   a,#$14
 249d: d0 35     bne   $24d4
+; minivcmd 14 - set EVOL
 249f: e4 a9     mov   a,$a9
 24a1: d0 26     bne   $24c9
-24a3: 3f e9 25  call  $25e9
+24a3: 3f e9 25  call  $25e9             ; arg1
 24a6: c4 ad     mov   $ad,a
 24a8: 8d 2c     mov   y,#$2c
 24aa: 20        clrp
 24ab: cb f2     mov   $f2,y
 24ad: c4 f3     mov   $f3,a             ; EVOL(L)
 24af: 20        clrp
-24b0: 3f e9 25  call  $25e9
+24b0: 3f e9 25  call  $25e9             ; arg2
 24b3: c4 ac     mov   $ac,a
 24b5: e5 ff 03  mov   a,$03ff
 24b8: f0 04     beq   $24be
@@ -3670,15 +3692,16 @@
 24c7: 20        clrp
 24c8: 6f        ret
 
-24c9: 3f e9 25  call  $25e9
+24c9: 3f e9 25  call  $25e9             ; arg1
 24cc: c4 ad     mov   $ad,a
-24ce: 3f e9 25  call  $25e9
+24ce: 3f e9 25  call  $25e9             ; arg2
 24d1: c4 ac     mov   $ac,a
 24d3: 6f        ret
 
 24d4: 68 15     cmp   a,#$15
 24d6: d0 15     bne   $24ed
-24d8: 3f e9 25  call  $25e9
+; minivcmd 15 - set noise clock
+24d8: 3f e9 25  call  $25e9             ; arg1
 24db: 20        clrp
 24dc: 28 1f     and   a,#$1f
 24de: 38 e0 ab  and   $ab,#$e0
@@ -3692,9 +3715,10 @@
 
 24ed: 68 16     cmp   a,#$16
 24ef: d0 18     bne   $2509
+; minivcmd 16 - set echo feedback
 24f1: e4 a9     mov   a,$a9
 24f3: d0 0e     bne   $2503
-24f5: 3f e9 25  call  $25e9
+24f5: 3f e9 25  call  $25e9             ; arg1
 24f8: c4 b0     mov   $b0,a
 24fa: 8d 0d     mov   y,#$0d
 24fc: 20        clrp
@@ -3703,13 +3727,14 @@
 2501: 20        clrp
 2502: 6f        ret
 
-2503: 3f e9 25  call  $25e9
+2503: 3f e9 25  call  $25e9             ; arg1
 2506: c4 b0     mov   $b0,a
 2508: 6f        ret
 
 2509: 68 17     cmp   a,#$17
 250b: d0 3d     bne   $254a
-250d: 3f e9 25  call  $25e9
+; minivcmd 17 - set echo delay
+250d: 3f e9 25  call  $25e9             ; arg1
 2510: 68 05     cmp   a,#$05
 2512: 90 02     bcc   $2516
 2514: e8 05     mov   a,#$05
@@ -3742,7 +3767,8 @@
 
 254a: 68 18     cmp   a,#$18
 254c: d0 1b     bne   $2569
-254e: 3f e9 25  call  $25e9
+; minivcmd 18
+254e: 3f e9 25  call  $25e9             ; arg1
 2551: ec 0a 04  mov   y,$040a
 2554: ad 08     cmp   y,#$08
 2556: b0 10     bcs   $2568
@@ -3754,8 +3780,10 @@
 2565: d6 e7 03  mov   $03e7+y,a
 2568: 6f        ret
 
+; minivcmd 19-1f - nop
 2569: 6f        ret
 
+; minivcmd 20-bf
 256a: 9f        xcn   a
 256b: 9c        dec   a
 256c: 9c        dec   a
@@ -3766,7 +3794,7 @@
 2573: 28 f0     and   a,#$f0
 2575: 68 00     cmp   a,#$00
 2577: d0 0c     bne   $2585
-2579: 3f e9 25  call  $25e9
+2579: 3f e9 25  call  $25e9             ; arg1
 257c: d5 53 02  mov   $0253+x,a
 257f: e8 80     mov   a,#$80
 2581: d5 2f 03  mov   $032f+x,a
@@ -3774,7 +3802,7 @@
 
 2585: 68 10     cmp   a,#$10
 2587: d0 0b     bne   $2594
-2589: 3f e9 25  call  $25e9
+2589: 3f e9 25  call  $25e9             ; arg1
 258c: d4 28     mov   $28+x,a
 258e: e8 01     mov   a,#$01
 2590: d5 94 03  mov   $0394+x,a
@@ -3835,6 +3863,7 @@
 25e7: ce        pop   x
 25e8: 6f        ret
 
+; get next byte from $a6
 25e9: 20        clrp
 25ea: 6d        push  y
 25eb: 8d 00     mov   y,#$00
