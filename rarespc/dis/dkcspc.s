@@ -839,15 +839,15 @@
 0c80: e8 00     mov   a,#$00
 0c82: d4 2c     mov   $2c+x,a
 0c84: f7 01     mov   a,($01)+y
-0c86: d5 00 02  mov   $0200+x,a
+0c86: d5 00 02  mov   $0200+x,a         ; arg1 - vibrato rate/depth (total steps, >= 2)
 0c89: fc        inc   y
 0c8a: f7 01     mov   a,($01)+y
-0c8c: d5 10 02  mov   $0210+x,a
+0c8c: d5 10 02  mov   $0210+x,a         ; arg2 - vibrato rate (ticks per step)
 0c8f: fc        inc   y
 0c90: f7 01     mov   a,($01)+y
-0c92: d5 34 02  mov   $0234+x,a
+0c92: d5 34 02  mov   $0234+x,a         ; arg3 - vibrato depth (pitch freq step)
 0c95: e8 00     mov   a,#$00
-0c97: d5 20 02  mov   $0220+x,a
+0c97: d5 20 02  mov   $0220+x,a         ; zero vibrato delay (ticks)
 0c9a: 8f 04 01  mov   $01,#$04
 0c9d: 5f ce 0a  jmp   $0ace
 
@@ -868,16 +868,16 @@
 0cb9: e8 00     mov   a,#$00
 0cbb: d4 2c     mov   $2c+x,a
 0cbd: f7 01     mov   a,($01)+y
-0cbf: d5 00 02  mov   $0200+x,a
+0cbf: d5 00 02  mov   $0200+x,a         ; arg1 - vibrato rate/depth (total steps, >= 2)
 0cc2: fc        inc   y
 0cc3: f7 01     mov   a,($01)+y
-0cc5: d5 10 02  mov   $0210+x,a
+0cc5: d5 10 02  mov   $0210+x,a         ; arg2 - vibrato rate (ticks per step)
 0cc8: fc        inc   y
 0cc9: f7 01     mov   a,($01)+y
-0ccb: d5 34 02  mov   $0234+x,a
+0ccb: d5 34 02  mov   $0234+x,a         ; arg3 - vibrato depth (pitch freq step)
 0cce: fc        inc   y
 0ccf: f7 01     mov   a,($01)+y
-0cd1: d5 20 02  mov   $0220+x,a
+0cd1: d5 20 02  mov   $0220+x,a         ; arg4 - vibrato delay (ticks)
 0cd4: 8f 05 01  mov   $01,#$05
 0cd7: 5f ce 0a  jmp   $0ace
 
@@ -1292,6 +1292,7 @@
 0fb6: 5f ce 0a  jmp   $0ace
 
 ; vcmd 2f - tremolo
+; note: tremolo will not reset the volume at the beginning of note
 0fb9: ce        pop   x
 0fba: f5 50 01  mov   a,$0150+x
 0fbd: 08 04     or    a,#$04
@@ -1301,16 +1302,16 @@
 0fc6: e8 00     mov   a,#$00
 0fc8: d4 2c     mov   $2c+x,a
 0fca: f7 01     mov   a,($01)+y
-0fcc: d5 f4 02  mov   $02f4+x,a
+0fcc: d5 f4 02  mov   $02f4+x,a         ; arg1 - tremolo rate/depth (total steps, >= 2)
 0fcf: fc        inc   y
 0fd0: f7 01     mov   a,($01)+y
-0fd2: d5 c4 02  mov   $02c4+x,a
+0fd2: d5 c4 02  mov   $02c4+x,a         ; arg2 - tremolo rate (ticks per step)
 0fd5: fc        inc   y
 0fd6: f7 01     mov   a,($01)+y
-0fd8: d5 d4 02  mov   $02d4+x,a
+0fd8: d5 d4 02  mov   $02d4+x,a         ; arg3 - tremolo depth (volume reg step)
 0fdb: fc        inc   y
 0fdc: f7 01     mov   a,($01)+y
-0fde: d5 04 03  mov   $0304+x,a
+0fde: d5 04 03  mov   $0304+x,a         ; arg4 - tremolo delay (ticks)
 0fe1: f5 54 02  mov   a,$0254+x
 0fe4: d5 14 03  mov   $0314+x,a
 0fe7: f5 64 02  mov   a,$0264+x

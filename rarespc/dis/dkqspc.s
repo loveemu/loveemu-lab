@@ -1089,19 +1089,19 @@
 0e1f: 3f 25 0e  call  $0e25
 0e22: 5f 76 0f  jmp   $0f76
 
-0e25: d5 20 02  mov   $0220+x,a
+0e25: d5 20 02  mov   $0220+x,a         ; arg4 - vibrato delay (ticks)
 0e28: f5 50 01  mov   a,$0150+x
 0e2b: 08 02     or    a,#$02
 0e2d: d5 50 01  mov   $0150+x,a
 0e30: 3f 69 0b  call  $0b69
 0e33: f7 00     mov   a,($00)+y
-0e35: d5 00 02  mov   $0200+x,a
+0e35: d5 00 02  mov   $0200+x,a         ; arg1 - vibrato rate/depth (total steps, >= 2)
 0e38: fc        inc   y
 0e39: f7 00     mov   a,($00)+y
-0e3b: d5 10 02  mov   $0210+x,a
+0e3b: d5 10 02  mov   $0210+x,a         ; arg2 - vibrato rate (ticks per step)
 0e3e: fc        inc   y
 0e3f: f7 00     mov   a,($00)+y
-0e41: d5 34 02  mov   $0234+x,a
+0e41: d5 34 02  mov   $0234+x,a         ; arg3 - vibrato depth (pitch freq step)
 0e44: 6f        ret
 
 ; vcmd 10 - set ADSR envelope
