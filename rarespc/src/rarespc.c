@@ -16,7 +16,7 @@
 
 #define APPNAME         "Rare SPC2MIDI"
 #define APPSHORTNAME    "rarespc"
-#define VERSION         "[2013-06-27]"
+#define VERSION         "[2013-08-22]"
 #define AUTHOR          "loveemu"
 #define WEBSITE         "http://loveemu.yh.land.to/"
 
@@ -30,11 +30,14 @@ static int rareSpcTextLoopMax = 1;        // maximum loop count of text output
 static double rareSpcTimeLimit = 2400;    // time limit of conversion (for safety)
 static bool rareSpcLessTextInSMF = false; // decreases amount of texts in SMF output
 
+static bool rareSpcVolIsLinear = false;   // assumes volume curve between SPC and MIDI is linear
+
 static int rareSpcPitchBendSens = 0;      // amount of pitch bend sensitivity (0=auto; <=SMF_PITCHBENDSENS_MAX)
 static bool rareSpcNoPatchChange = false; // XXX: hack, should be false for serious conversion
 
 static int rareSpcTimeBase = 32;
 static bool rareSpcDoFineTuning = false;
+static bool rareSpcDoCoarseTuning = false;
 static int rareSpcForceSongHeaderAddr = -1;
 
 static bool rareSpcPatchFixOverride = false;
@@ -89,12 +92,12 @@ typedef struct TagRareSpcNoteParam {
     int defDur;         // default length for note vcmd (tick)
     int dur;            // duration (tick)
     int vel;            // velocity
-    int durRate;        // duration rate (n/256)
     bool tied;          // if the note tied
     bool portamento;    // portamento flag
     int key;            // key
     int patch;          // instrument
-    int transpose;      // transpose
+    sbyte transpose;    // transpose (relative changes only)
+    sbyte transposeSpc; // transpose (SPC700 real transpose amount)
 } RareSpcNoteParam;
 
 struct TagRareSpcTrackStat {
@@ -109,9 +112,16 @@ struct TagRareSpcTrackStat {
     int loopCount[SPC_LOOPCOUNT_NUM]; // repeat count for loop command
     int retnAddr[SPC_LOOPCOUNT_NUM];  // return address for loop command
     int looped;         // how many times looped (internal)
-    byte volL;          // left volume
-    byte volR;          // right volume
+    sbyte volL;         // left volume
+    sbyte volR;         // right volume
+    sbyte tuning;       // microtuning
     bool longDur;       // duration byte/word
+    bool pitchSlide;    // pitch slide on/off
+    byte pitchSlideDelay;   // pitch slide - delay (clocks)
+    byte pitchSlideRate;    // pitch slide - step interval (clocks)
+    byte pitchSlideLen;     // pitch slide - length for regular direction (steps)
+    sbyte pitchSlideDepth;  // pitch slide - pitch register delta
+    byte pitchSlideLenInv;  // pitch slide - length for opposite direction (steps)
 };
 
 struct TagRareSpcSeqStat {
@@ -126,13 +136,11 @@ struct TagRareSpcSeqStat {
     int looped;                 // how many times the song looped (internal)
     bool active;                // if the seq is still active
     byte tempoScale;            // tempo scalar (DKC1=$27, DKC2=$1f)
-    byte a2a;
+    byte sfxTempo;
     byte altNoteByte1;
     byte altNoteByte2;
-    byte volPresetL1;
-    byte volPresetR1;
-    byte volPresetL2;
-    byte volPresetR2;
+    sbyte volPresetL[5];
+    sbyte volPresetR[5];
     byte jumpDestIndex;
     RareSpcVerInfo ver;         // game version info
     RareSpcTrackStat track[SPC_TRACK_MAX]; // status of each tracks
@@ -253,13 +261,14 @@ static void rareSpcResetTrackParam (RareSpcSeqStat *seq, int track)
     tr->volR = 0x7f;
     tr->note.vel = 127;
     tr->note.defDur = 0;
-    tr->note.durRate = 0xff; // FIXME
     tr->note.patch = 0; // just in case
     tr->note.transpose = 0;
+    tr->note.transposeSpc = 0;
     tr->note.portamento = false;
     tr->lastNote.active = false;
     tr->loopLevel = 0;
     tr->longDur = false;
+    tr->pitchSlide = false;
 }
 
 /** reset before play/convert song. */
@@ -413,7 +422,7 @@ static bool rareSpcDetectSeq (RareSpcSeqStat *seq)
         result = true;
     }
     seq->tempoScale = mget2l(&aRAM[seqHeaderAddr + 0x10]);
-    seq->a2a = mget2l(&aRAM[seqHeaderAddr + 0x11]);
+    seq->sfxTempo = mget2l(&aRAM[seqHeaderAddr + 0x11]);
     rareSpcResetParam(seq);
     return result;
 }
@@ -490,7 +499,8 @@ static void printHtmlInfoListMore (RareSpcSeqStat *seq)
         myprintf(" %d:$%04X", track + 1, seq->track[track].active ? seq->track[track].pos : 0x0000);
     }
     myprintf("</li>\n");
-    myprintf("          <li>More 2 Bytes: %02x %02x</li>\n", seq->tempoScale, seq->a2a);
+    myprintf("          <li>Initial Song Tempo: %d</li>\n", seq->tempoScale);
+    myprintf("          <li>Initial SFX Tempo: %d</li>\n", seq->sfxTempo);
 }
 
 /** output other seq detail for valid seq. */
@@ -559,26 +569,79 @@ static bool rareSpcInsertVolPan (RareSpcSeqStat *seq, int track)
 {
     RareSpcTrackStat *tr = &seq->track[track];
     bool result = true;
-    byte trVolL, trVolR;
-    byte volByte, panByte;
-    double vol, pan, panPI2;
+    double volL, volR;
+    double vol, pan;
+    byte midiVol, midiPan;
 
-    // GM2 vol => dB: pow(2) curve
-    // GM2 pan => dB: sin/cos curve
-    // SPC vol => linear
+    volL = abs(tr->volL) / 128.0;
+    volR = abs(tr->volR) / 128.0;
 
-    trVolL = tr->volL & 0x7f;
-    trVolR = tr->volR & 0x7f;
-    panPI2 = atan2(trVolR, trVolL);
-    pan = panPI2 / M_PI_2;
-    vol = ((double) trVolR / 0x7f) / sin(panPI2) * sin(M_PI_4);
-    vol = sqrt(vol);
+    // linear volume and panpot
+    vol = (volL + volR) / 2.0;
+    pan = volR / (volL + volR);
 
-    volByte = (byte) floor(vol * 127 + 0.5);
-    panByte = (byte) ((trVolL == trVolR) ? 64 : (pan * 127));
-    tr->note.vel = volByte;
-    //result &= smfInsertControl(seq->smf, tr->tick, track, track, SMF_CONTROL_VOLUME, volByte);
-    result &= smfInsertControl(seq->smf, tr->tick, track, track, SMF_CONTROL_PANPOT, panByte);
+    // make it GM2 compatible
+    if (!rareSpcVolIsLinear)
+    {
+        // GM2 vol => dB: pow(2) curve
+        // GM2 pan => dB: sin/cos curve
+        // SPC vol => linear
+
+        double linearVol = vol;
+        double linearPan = pan;
+        double panPI2 = atan2(linearPan, 1.0 - linearPan);
+
+        vol = sqrt(linearVol / (cos(panPI2) + sin(panPI2)));
+        pan = panPI2 / M_PI_2;
+    }
+
+    // calculate the final value
+    midiVol = (byte) (vol * 127 + 0.5);
+    if (vol != 0)
+    {
+        midiPan = (byte) (pan * 126 + 0.5);
+        if (midiPan != 0)
+            midiPan++;
+    }
+
+    tr->note.vel = midiVol;
+    //result &= smfInsertControl(seq->smf, tr->tick, track, track, SMF_CONTROL_VOLUME, midiVol);
+    if (vol != 0)
+        result &= smfInsertControl(seq->smf, tr->tick, track, track, SMF_CONTROL_PANPOT, midiPan);
+
+    return result;
+}
+
+/** calculate the tuning amount in cents. */
+static double rareSpcTuningInCents (sbyte tuning)
+{
+    return 1200 * log((1024 + tuning) / 1024.0) / log(2);
+}
+
+/** insert tuning event from current state. */
+static bool rareSpcInsertTuning (RareSpcSeqStat *seq, int track)
+{
+    RareSpcTrackStat *tr = &seq->track[track];
+    bool result = true;
+    double cents = rareSpcTuningInCents(tr->tuning);
+    double midiTuning = max(-8192, min(8191, cents / 100 * 8192));
+    int midiTuningMSB = (int) (midiTuning + 8192) / 128;
+    int midiTuningLSB = (int) (midiTuning + 8192) % 128;
+
+    if (rareSpcDoFineTuning)
+    {
+        result &= smfInsertControl(seq->smf, tr->tick, track, track, SMF_CONTROL_RPNM, 0);
+        result &= smfInsertControl(seq->smf, tr->tick, track, track, SMF_CONTROL_RPNL, 1);
+        result &= smfInsertControl(seq->smf, tr->tick, track, track, SMF_CONTROL_DATAENTRYM, midiTuningMSB);
+        result &= smfInsertControl(seq->smf, tr->tick, track, track, SMF_CONTROL_DATAENTRYM, midiTuningLSB);
+    }
+    else
+    {
+        char s[64];
+        sprintf(s, "Tuning, key = %d (%1.f cents)", tr->tuning, cents);
+        if (!rareSpcLessTextInSMF)
+            smfInsertMetaText(seq->smf, tr->tick, track, SMF_META_TEXT, s);
+    }
     return result;
 }
 
@@ -673,11 +736,7 @@ static bool rareSpcDequeueNote (RareSpcSeqStat *seq, int track)
         int key;
         int vel;
 
-        //if (lastNote->tied)
-            dur = (lastNote->dur * lastNote->durRate) >> 8;
-        //else
-        //    dur = (lastNote->dur - lastNote->lastDur)
-        //        + ((lastNote->lastDur * lastNote->durRate) >> 8);
+        dur = lastNote->dur;
         if (dur == 0)
             dur++;
 
@@ -909,9 +968,9 @@ static void rareSpcEventVolumeLR (RareSpcSeqStat *seq, SeqEventReport *ev)
     int *p = &tr->pos;
 
     ev->size += 2;
-    arg1 = seq->aRAM[*p];
+    arg1 = utos1(seq->aRAM[*p]);
     (*p)++;
-    arg2 = seq->aRAM[*p];
+    arg2 = utos1(seq->aRAM[*p]);
     (*p)++;
 
     sprintf(ev->note, "Volume, L = %d, R = %d", arg1, arg2);
@@ -1085,6 +1144,13 @@ static void rareSpcEventPitchSlideUp (RareSpcSeqStat *seq, SeqEventReport *ev)
     arg5 = seq->aRAM[*p];
     (*p)++;
 
+    tr->pitchSlide = true;
+    tr->pitchSlideDelay = arg1;
+    tr->pitchSlideRate = arg2;
+    tr->pitchSlideLen = arg3;
+    tr->pitchSlideDepth = arg4;
+    tr->pitchSlideLenInv = arg5;
+
     sprintf(ev->note, "Pitch Slide On (Up), delay = %d (%.1f ms), interval = %d (%.1f ms), times = %d, delta = %d, times-reverse = %d", arg1, arg1 * (0.125 * seq->timerFreq), arg2, arg2 * (0.125 * seq->timerFreq), arg3, arg4, arg5);
     strcat(ev->classStr, " ev-pitchslideup");
 
@@ -1111,6 +1177,13 @@ static void rareSpcEventPitchSlideDown (RareSpcSeqStat *seq, SeqEventReport *ev)
     arg5 = seq->aRAM[*p];
     (*p)++;
 
+    tr->pitchSlide = true;
+    tr->pitchSlideDelay = arg1;
+    tr->pitchSlideRate = arg2;
+    tr->pitchSlideLen = arg3;
+    tr->pitchSlideDepth = -arg4;
+    tr->pitchSlideLenInv = arg5;
+
     sprintf(ev->note, "Pitch Slide On (Down), delay = %d (%.1f ms), interval = %d (%.1f ms), times = %d, delta = %d, times-reverse = %d", arg1, arg1 * (0.125 * seq->timerFreq), arg2, arg2 * (0.125 * seq->timerFreq), arg3, arg4, arg5);
     strcat(ev->classStr, " ev-pitchslidedown");
 
@@ -1134,6 +1207,13 @@ static void rareSpcEventPitchSlideDownSimpler (RareSpcSeqStat *seq, SeqEventRepo
     (*p)++;
     arg4 = utos1(seq->aRAM[*p]);
     (*p)++;
+
+    tr->pitchSlide = true;
+    tr->pitchSlideDelay = arg1;
+    tr->pitchSlideRate = arg2;
+    tr->pitchSlideLen = arg3 * 2;
+    tr->pitchSlideDepth = -arg4;
+    tr->pitchSlideLenInv = arg3;
 
     sprintf(ev->note, "Pitch Slide On (Down), delay = %d (%.1f ms), interval = %d (%.1f ms), times = %d, delta = %d, times-reverse = %d", arg1, arg1 * (0.125 * seq->timerFreq), arg2, arg2 * (0.125 * seq->timerFreq), arg3 * 2, arg4, arg3);
     strcat(ev->classStr, " ev-pitchslidedown");
@@ -1159,6 +1239,13 @@ static void rareSpcEventPitchSlideUpSimpler (RareSpcSeqStat *seq, SeqEventReport
     arg4 = utos1(seq->aRAM[*p]);
     (*p)++;
 
+    tr->pitchSlide = true;
+    tr->pitchSlideDelay = arg1;
+    tr->pitchSlideRate = arg2;
+    tr->pitchSlideLen = arg3 * 2;
+    tr->pitchSlideDepth = arg4;
+    tr->pitchSlideLenInv = arg3;
+
     sprintf(ev->note, "Pitch Slide On (Up), delay = %d (%.1f ms), interval = %d (%.1f ms), times = %d, delta = %d, times-reverse = %d", arg1, arg1 * (0.125 * seq->timerFreq), arg2, arg2 * (0.125 * seq->timerFreq), arg3 * 2, arg4, arg3);
     strcat(ev->classStr, " ev-pitchslideup");
 
@@ -1170,6 +1257,8 @@ static void rareSpcEventPitchSlideUpSimpler (RareSpcSeqStat *seq, SeqEventReport
 static void rareSpcEventPitchSlideOff (RareSpcSeqStat *seq, SeqEventReport *ev)
 {
     RareSpcTrackStat *tr = &seq->track[ev->track];
+
+    tr->pitchSlide = false;
 
     sprintf(ev->note, "Pitch Slide Off");
     strcat(ev->classStr, " ev-pitchslideoff");
@@ -1234,7 +1323,7 @@ static void rareSpcEventVibratoShort (RareSpcSeqStat *seq, SeqEventReport *ev)
     arg3 = seq->aRAM[*p];
     (*p)++;
 
-    sprintf(ev->note, "Vibrato, arg1 = %d, arg2 = %d, arg3 = %d", arg1, arg2, arg3);
+    sprintf(ev->note, "Vibrato, length = %d steps, rate = %d ticks/step, depth (freq step) = %d", arg1, arg2, arg3);
     strcat(ev->classStr, " ev-vibrato");
 
     if (!rareSpcLessTextInSMF)
@@ -1270,7 +1359,7 @@ static void rareSpcEventVibrato (RareSpcSeqStat *seq, SeqEventReport *ev)
     arg4 = seq->aRAM[*p];
     (*p)++;
 
-    sprintf(ev->note, "Vibrato, arg1 = %d, arg2 = %d, arg3 = %d, arg4 = %d", arg1, arg2, arg3, arg4);
+    sprintf(ev->note, "Vibrato, length = %d steps, rate = %d ticks/step, depth (freq step) = %d, delay = %d ticks", arg1, arg2, arg3, arg4);
     strcat(ev->classStr, " ev-vibrato");
 
     if (!rareSpcLessTextInSMF)
@@ -1357,9 +1446,9 @@ static void rareSpcEventMasterVolumeLR (RareSpcSeqStat *seq, SeqEventReport *ev)
     int *p = &tr->pos;
 
     ev->size += 2;
-    arg1 = seq->aRAM[*p];
+    arg1 = utos1(seq->aRAM[*p]);
     (*p)++;
-    arg2 = seq->aRAM[*p];
+    arg2 = utos1(seq->aRAM[*p]);
     (*p)++;
 
     sprintf(ev->note, "Master Volume L/R, L = %d, R = %d", arg1, arg2);
@@ -1396,15 +1485,11 @@ static void rareSpcEventMicrotune (RareSpcSeqStat *seq, SeqEventReport *ev)
     arg1 = utos1(seq->aRAM[*p]);
     (*p)++;
 
-    sprintf(ev->note, "Detune, key = %d / 128", arg1);
+    tr->tuning = arg1;
+    rareSpcInsertTuning(seq, ev->track);
+
+    sprintf(ev->note, "Detune, key = %1.f cents", rareSpcTuningInCents(arg1));
     strcat(ev->classStr, " ev-detune");
-
-    //smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNM, 0);
-    //smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNL, 1);
-    //smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_DATAENTRYM, (arg1 / 2) + 64);
-
-    if (!rareSpcLessTextInSMF)
-        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmd 13: transpose (absolute). */
@@ -1421,15 +1506,11 @@ static void rareSpcEventTransposeAbs (RareSpcSeqStat *seq, SeqEventReport *ev)
     sprintf(ev->note, "Key Shift, key = %d", arg1);
     strcat(ev->classStr, " ev-keyshiftabs");
 
-    if (rareSpcDoFineTuning)
-        tr->note.transpose = arg1;
-    else {
-        //tr->note.transpose = (arg1 / 12) * 12;
-        tr->note.transpose = 0;
+    tr->note.transposeSpc = arg1;
+    tr->note.transpose = 0;
 
-        if (!rareSpcLessTextInSMF)
-            smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
-    }
+    if (!rareSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmd 14: transpose (relative) */
@@ -1446,6 +1527,7 @@ static void rareSpcEventTransposeRel (RareSpcSeqStat *seq, SeqEventReport *ev)
     sprintf(ev->note, "Key Shift, key += %d", arg1);
     strcat(ev->classStr, " ev-keyshiftrel");
 
+    tr->note.transposeSpc += arg1;
     tr->note.transpose += arg1;
 }
 
@@ -1557,12 +1639,15 @@ static void rareSpcEventSetVolADSRPreset (RareSpcSeqStat *seq, SeqEventReport *e
     int *p = &tr->pos;
 
     ev->size += 4;
-    volL = seq->aRAM[*p];
+    volL = utos1(seq->aRAM[*p]);
     (*p)++;
-    volR = seq->aRAM[*p];
+    volR = utos1(seq->aRAM[*p]);
     (*p)++;
     adsr = mget2l(&seq->aRAM[*p]);
     (*p) += 2;
+
+    seq->volPresetL[presetIndex] = volL;
+    seq->volPresetR[presetIndex] = volR;
 
     ar = (adsr & 0x0f00) >> 8;
     dr = (adsr & 0x7000) >> 12;
@@ -1588,6 +1673,10 @@ static void rareSpcEventGetVolADSRPreset (RareSpcSeqStat *seq, SeqEventReport *e
 
     sprintf(ev->note, "Volume/ADSR From Preset %d", presetIndex + 1);
     strcat(ev->classStr, " ev-voladsrpreset");
+
+    tr->volL = seq->volPresetL[presetIndex];
+    tr->volR = seq->volPresetR[presetIndex];
+    rareSpcInsertVolPan(seq, ev->track);
 
     if (!rareSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
@@ -1712,22 +1801,22 @@ static void rareSpcEventSetVolumePreset (RareSpcSeqStat *seq, SeqEventReport *ev
     int *p = &tr->pos;
 
     ev->size += 4;
-    arg1 = seq->aRAM[*p];
+    arg1 = utos1(seq->aRAM[*p]);
     (*p)++;
-    arg2 = seq->aRAM[*p];
+    arg2 = utos1(seq->aRAM[*p]);
     (*p)++;
-    arg3 = seq->aRAM[*p];
+    arg3 = utos1(seq->aRAM[*p]);
     (*p)++;
-    arg4 = seq->aRAM[*p];
+    arg4 = utos1(seq->aRAM[*p]);
     (*p)++;
 
     sprintf(ev->note, "Set Volume Preset, L1 = %d, R1 = %d, L2 = %d, R2 = %d", arg1, arg2, arg3, arg4);
     strcat(ev->classStr, " ev-volumepreset");
 
-    seq->volPresetL1 = arg1;
-    seq->volPresetR1 = arg2;
-    seq->volPresetL2 = arg3;
-    seq->volPresetR2 = arg4;
+    seq->volPresetL[0] = arg1;
+    seq->volPresetR[0] = arg2;
+    seq->volPresetL[1] = arg3;
+    seq->volPresetR[1] = arg4;
 
     if (!rareSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
@@ -1739,11 +1828,11 @@ static void rareSpcEventVolumeFromPreset1 (RareSpcSeqStat *seq, SeqEventReport *
     RareSpcTrackStat *tr = &seq->track[ev->track];
     int *p = &tr->pos;
 
-    sprintf(ev->note, "Volume From Preset 1, L = %d, R = %d", seq->volPresetL1, seq->volPresetR1);
+    sprintf(ev->note, "Volume From Preset 1, L = %d, R = %d", seq->volPresetL[0], seq->volPresetR[0]);
     strcat(ev->classStr, " ev-volumefrompreset");
 
-    tr->volL = seq->volPresetL1;
-    tr->volR = seq->volPresetR1;
+    tr->volL = seq->volPresetL[0];
+    tr->volR = seq->volPresetR[0];
     rareSpcInsertVolPan(seq, ev->track);
 
     //if (!rareSpcLessTextInSMF)
@@ -1756,11 +1845,11 @@ static void rareSpcEventVolumeFromPreset2 (RareSpcSeqStat *seq, SeqEventReport *
     RareSpcTrackStat *tr = &seq->track[ev->track];
     int *p = &tr->pos;
 
-    sprintf(ev->note, "Volume From Preset 2, L = %d, R = %d", seq->volPresetL2, seq->volPresetR2);
+    sprintf(ev->note, "Volume From Preset 2, L = %d, R = %d", seq->volPresetL[1], seq->volPresetR[1]);
     strcat(ev->classStr, " ev-volumefrompreset");
 
-    tr->volL = seq->volPresetL2;
-    tr->volR = seq->volPresetR2;
+    tr->volL = seq->volPresetL[1];
+    tr->volR = seq->volPresetR[1];
     rareSpcInsertVolPan(seq, ev->track);
 
     //if (!rareSpcLessTextInSMF)
@@ -1782,9 +1871,9 @@ static void rareSpcEventSetVoiceParams (RareSpcSeqStat *seq, SeqEventReport *ev)
     (*p)++;
     arg3 = utos1(seq->aRAM[*p]);
     (*p)++;
-    arg4 = seq->aRAM[*p];
+    arg4 = utos1(seq->aRAM[*p]);
     (*p)++;
-    arg5 = seq->aRAM[*p];
+    arg5 = utos1(seq->aRAM[*p]);
     (*p)++;
     adsr = mget2b(&seq->aRAM[*p]);
     (*p) += 2;
@@ -1794,7 +1883,7 @@ static void rareSpcEventSetVoiceParams (RareSpcSeqStat *seq, SeqEventReport *ev)
     sl = (adsr & 0x00e0) >> 5;
     sr = (adsr & 0x001f);
 
-    sprintf(ev->note, "Set Voice Params, patch = %d, transpose = %d, detune = %d / 128, L Vol = %d, R Vol = %d, ADSR1/2 = $%04X, AR = %d (%.1f%s), DR = %d (%.1f%s), SL = %d (%d/8), SR = %d (%.1f%s)", arg1, arg2, arg3, arg4, arg5, adsr,
+    sprintf(ev->note, "Set Voice Params, patch = %d, transpose = %d, detune = %1.f cents, L Vol = %d, R Vol = %d, ADSR1/2 = $%04X, AR = %d (%.1f%s), DR = %d (%.1f%s), SL = %d (%d/8), SR = %d (%.1f%s)", arg1, arg2, rareSpcTuningInCents(arg3), arg4, arg5, adsr,
         ar, (spcARTable[ar] >= 1) ? spcARTable[ar] : spcARTable[ar] * 1000, (spcARTable[ar] >= 1) ? "s" : "ms",
         dr, (spcARTable[dr] >= 1) ? spcDRTable[dr] : spcDRTable[dr] * 1000, (spcDRTable[dr] >= 1) ? "s" : "ms",
         sl, sl + 1,
@@ -1810,19 +1899,14 @@ static void rareSpcEventSetVoiceParams (RareSpcSeqStat *seq, SeqEventReport *ev)
     smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_BANKSELL, seq->ver.patchFix[arg1].bankSelL);
     smfInsertProgram(seq->smf, ev->tick, ev->track, ev->track, seq->ver.patchFix[arg1].patchNo);
     // transpose
-    if (rareSpcDoFineTuning)
-        tr->note.transpose = arg2;
-    else {
-        //tr->note.transpose = (arg1 / 12) * 12;
-        tr->note.transpose = 0;
-    }
+    tr->note.transposeSpc = arg2;
+    tr->note.transpose = 0;
     // detune
-    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNM, 0);
-    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNL, 1);
-    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_DATAENTRYM, (arg1 / 2) + 64);
+    tr->tuning = arg3;
+    rareSpcInsertTuning(seq, ev->track);
     // volume
-    tr->volL = arg1;
-    tr->volR = arg2;
+    tr->volL = arg4;
+    tr->volR = arg5;
     rareSpcInsertVolPan(seq, ev->track);
     // ADSR (nothing)
 }
@@ -1842,7 +1926,7 @@ static void rareSpcEventSetVoiceParamsShort (RareSpcSeqStat *seq, SeqEventReport
     arg3 = utos1(seq->aRAM[*p]);
     (*p)++;
 
-    sprintf(ev->note, "Set Voice Params, patch = %d, transpose = %d, detune = %d / 128", arg1, arg2, arg3);
+    sprintf(ev->note, "Set Voice Params, patch = %d, transpose = %d, detune = %.1f cents", arg1, arg2, rareSpcTuningInCents(arg3));
     strcat(ev->classStr, " ev-voiceparams");
 
     if (!rareSpcLessTextInSMF)
@@ -1854,22 +1938,19 @@ static void rareSpcEventSetVoiceParamsShort (RareSpcSeqStat *seq, SeqEventReport
     smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_BANKSELL, seq->ver.patchFix[arg1].bankSelL);
     smfInsertProgram(seq->smf, ev->tick, ev->track, ev->track, seq->ver.patchFix[arg1].patchNo);
     // transpose
-    if (rareSpcDoFineTuning)
-        tr->note.transpose = arg2;
-    else {
-        //tr->note.transpose = (arg1 / 12) * 12;
-        tr->note.transpose = 0;
-    }
+    tr->note.transposeSpc = arg2;
+    tr->note.transpose = 0;
     // detune
-    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNM, 0);
-    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNL, 1);
-    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_DATAENTRYM, (arg1 / 2) + 64);
+    tr->tuning = arg3;
+    rareSpcInsertTuning(seq, ev->track);
 }
 
 /** vcmd 24: pitch slide off, vibrato off, tremolo off. (Winning Run) */
 static void rareSpcEventLFOOff (RareSpcSeqStat *seq, SeqEventReport *ev)
 {
     RareSpcTrackStat *tr = &seq->track[ev->track];
+
+    tr->pitchSlide = false;
 
     sprintf(ev->note, "Pitch Slide/Vibrato/Tremolo Off");
     strcat(ev->classStr, " ev-pitchslideoff ev-vibratooff ev-tremolooff");
@@ -1888,9 +1969,9 @@ static void rareSpcEventInstVol (RareSpcSeqStat *seq, SeqEventReport *ev)
     ev->size += 3;
     arg1 = seq->aRAM[*p];
     (*p)++;
-    arg2 = seq->aRAM[*p];
+    arg2 = utos1(seq->aRAM[*p]);
     (*p)++;
-    arg3 = seq->aRAM[*p];
+    arg3 = utos1(seq->aRAM[*p]);
     (*p)++;
 
     sprintf(ev->note, "Instrument &amp; Volume, patch = %d, L = %d, R = %d", arg1, arg2, arg3);
@@ -1998,7 +2079,7 @@ static void rareSpcEventTremolo (RareSpcSeqStat *seq, SeqEventReport *ev)
     arg4 = seq->aRAM[*p];
     (*p)++;
 
-    sprintf(ev->note, "Tremolo, arg1 = %d, arg2 = %d, arg3 = %d, arg4 = %d", arg1, arg2, arg3, arg4);
+    sprintf(ev->note, "Tremolo, length = %d steps, rate = %d ticks/step, depth (freq step) = %d, delay = %d ticks", arg1, arg2, arg3, arg4);
     strcat(ev->classStr, " ev-tremolo");
 
     if (!rareSpcLessTextInSMF)
@@ -2025,6 +2106,7 @@ static void rareSpcEventNote (RareSpcSeqStat *seq, SeqEventReport *ev)
     byte noteByte = ev->code;
     int note;
     bool rest;
+    sbyte transpose = rareSpcDoCoarseTuning ? tr->note.transposeSpc : tr->note.transpose;
 
     rest = (noteByte == 0x80);
     if (seq->ver.id != SPC_VER_DKC1)
@@ -2062,7 +2144,7 @@ static void rareSpcEventNote (RareSpcSeqStat *seq, SeqEventReport *ev)
         strcat(ev->classStr, " ev-rest");
     }
     else {
-        getNoteName(ev->note, note + seq->transpose + tr->note.transpose
+        getNoteName(ev->note, note + seq->transpose + transpose
             + seq->ver.patchFix[tr->note.patch].key + SPC_NOTE_KEYSHIFT);
         sprintf(argDumpStr, ", len = %d", tr->note.dur);
         strcat(ev->note, argDumpStr);
@@ -2077,9 +2159,8 @@ static void rareSpcEventNote (RareSpcSeqStat *seq, SeqEventReport *ev)
         tr->lastNote.tick = ev->tick;
         tr->lastNote.dur = tr->note.dur;
         tr->lastNote.key = note;
-        tr->lastNote.durRate = tr->note.durRate;
         tr->lastNote.vel = tr->note.vel;
-        tr->lastNote.transpose = seq->transpose + tr->note.transpose;
+        tr->lastNote.transpose = seq->transpose + transpose;
         tr->lastNote.patch = tr->note.patch;
         tr->lastNote.tied = false;
         tr->lastNote.active = true;
@@ -2465,6 +2546,8 @@ static bool cmdOptXG (void);
 static bool cmdOptGM2 (void);
 static bool cmdOptTimeBase (void);
 static bool cmdOptFineTune (void);
+static bool cmdOptCoarseTune (void);
+static bool cmdOptLinear (void);
 
 static CmdOptDefs optDef[] = {
     { "help", '\0', 0, cmdOptHelp, "", "show usage" },
@@ -2474,7 +2557,9 @@ static CmdOptDefs optDef[] = {
     { "xg", '\0', 0, cmdOptXG, "", "Insert XG System On at beginning of seq" },
     { "gm2", '\0', 0, cmdOptGM2, "", "Insert GM2 System On at beginning of seq" },
     { "timebase", '\0', 0, cmdOptTimeBase, "", "Set SMF timebase (tick count for quarter note)" },
-    { "finetune", '\0', 0, cmdOptFineTune, "", "Emulate Fine Tuning accurately" },
+    { "finetune", '\0', 0, cmdOptFineTune, "", "Emulate the fine tuning" },
+    { "coarsetune", '\0', 0, cmdOptCoarseTune, "", "Emulate absolute transpose (not recommended)" },
+    { "linear", '\0', 0, cmdOptLinear, "", "Use linear volume/panpot (GM2 uses exp/sin curve)" },
 };
 
 //----
@@ -2578,10 +2663,24 @@ static bool cmdOptTimeBase (void)
     return true;
 }
 
-/** emulate fine tuning accurately. */
+/** write fine tuning to SMF. */
 static bool cmdOptFineTune (void)
 {
     rareSpcDoFineTuning = true;
+    return true;
+}
+
+/** write coarse tuning to SMF. */
+static bool cmdOptCoarseTune (void)
+{
+    rareSpcDoCoarseTuning = true;
+    return true;
+}
+
+/** set volume/panpot conversion mode. */
+static bool cmdOptLinear (void)
+{
+    rareSpcVolIsLinear = true;
     return true;
 }
 
