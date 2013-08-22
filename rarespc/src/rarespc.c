@@ -703,6 +703,7 @@ static Smf *rareSpcCreateSmf (RareSpcSeqStat *seq)
         smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_REVERB, 0);
         //smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_RELEASETIME, 64 + 6);
         //smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_MONO, 127);
+        smfInsertPitchBend(seq->smf, 0, tr, tr, 0);
         if (rareSpcPitchBendSens != 0) {
             smfInsertPitchBendSensitivity(smf, 0, tr, tr, seq->track[tr].pitchBendSensMax);
         }
