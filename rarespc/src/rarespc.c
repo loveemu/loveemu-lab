@@ -30,10 +30,8 @@ static int rareSpcTextLoopMax = 1;        // maximum loop count of text output
 static double rareSpcTimeLimit = 2400;    // time limit of conversion (for safety)
 static bool rareSpcLessTextInSMF = false; // decreases amount of texts in SMF output
 
-static bool rareSpcVolIsLinear = false;   // assumes volume curve between SPC and MIDI is linear
-
 static int rareSpcPitchBendSens = 0;      // amount of pitch bend sensitivity (0=auto; <=SMF_PITCHBENDSENS_MAX)
-static bool rareSpcNoPatchChange = false; // XXX: hack, should be false for serious conversion
+static bool rareSpcVolIsLinear = false;   // assumes volume curve between SPC and MIDI is linear
 
 static int rareSpcTimeBase = 32;
 static bool rareSpcDoFineTuning = false;
@@ -122,6 +120,8 @@ struct TagRareSpcTrackStat {
     byte pitchSlideLen;     // pitch slide - length for regular direction (steps)
     sbyte pitchSlideDepth;  // pitch slide - pitch register delta
     byte pitchSlideLenInv;  // pitch slide - length for opposite direction (steps)
+    int pitchBendSensMax;   // limit of pitch slide for MIDI output
+    int pitchSlideLastMidiPitch;
 };
 
 struct TagRareSpcSeqStat {
@@ -130,12 +130,11 @@ struct TagRareSpcSeqStat {
     int timebase;               // SMF division
     int tick;                   // timing (tick)
     double time;                // timing (s)
-    int tempo;                  // tempo (bpm)
     int timerFreq;              // timer0 freq
     int transpose;              // global transpose
     int looped;                 // how many times the song looped (internal)
     bool active;                // if the seq is still active
-    byte tempoScale;            // tempo scalar (DKC1=$27, DKC2=$1f)
+    byte tempo;                 // song tempo (DKC1=$27, DKC2=$1f)
     byte sfxTempo;
     byte altNoteByte1;
     byte altNoteByte2;
@@ -144,6 +143,22 @@ struct TagRareSpcSeqStat {
     byte jumpDestIndex;
     RareSpcVerInfo ver;         // game version info
     RareSpcTrackStat track[SPC_TRACK_MAX]; // status of each tracks
+};
+
+const int NOTE_PITCH_TABLE[] = {
+	0x0000, 0x0040, 0x0044, 0x0048, 0x004c, 0x0051, 0x0055, 0x005b,
+	0x0060, 0x0066, 0x006c, 0x0072, 0x0079, 0x0080, 0x0088, 0x0090,
+	0x0098, 0x00a1, 0x00ab, 0x00b5, 0x00c0, 0x00cb, 0x00d7, 0x00e4,
+	0x00f2, 0x0100, 0x010f, 0x011f, 0x0130, 0x0143, 0x0156, 0x016a,
+	0x0180, 0x0196, 0x01af, 0x01c8, 0x01e3, 0x0200, 0x021e, 0x023f,
+	0x0261, 0x0285, 0x02ab, 0x02d4, 0x02ff, 0x032d, 0x035d, 0x0390,
+	0x03c7, 0x0400, 0x043d, 0x047d, 0x04c2, 0x050a, 0x0557, 0x05a8,
+	0x05fe, 0x065a, 0x06ba, 0x0721, 0x078d, 0x0800, 0x087a, 0x08fb,
+	0x0984, 0x0a14, 0x0aae, 0x0b50, 0x0bfd, 0x0cb3, 0x0d74, 0x0e41,
+	0x0f1a, 0x1000, 0x10f4, 0x11f6, 0x1307, 0x1429, 0x155c, 0x16a1,
+	0x17f9, 0x1966, 0x1ae9, 0x1c82, 0x1e34, 0x2000, 0x21e7, 0x23eb,
+	0x260e, 0x2851, 0x2ab7, 0x2d41, 0x2ff2, 0x32cc, 0x35d1, 0x3904,
+	0x3c68, 0x3fff, 0xffff
 };
 
 static void rareSpcSetEventList (RareSpcSeqStat *seq);
@@ -269,6 +284,8 @@ static void rareSpcResetTrackParam (RareSpcSeqStat *seq, int track)
     tr->loopLevel = 0;
     tr->longDur = false;
     tr->pitchSlide = false;
+    tr->pitchBendSensMax = (rareSpcPitchBendSens == 0) ? SMF_PITCHBENDSENS_DEFAULT : rareSpcPitchBendSens;
+    tr->pitchSlideLastMidiPitch = INT_MAX; // make it invalid
 }
 
 /** reset before play/convert song. */
@@ -421,7 +438,7 @@ static bool rareSpcDetectSeq (RareSpcSeqStat *seq)
         seq->track[tr].active = true;
         result = true;
     }
-    seq->tempoScale = mget2l(&aRAM[seqHeaderAddr + 0x10]);
+    seq->tempo = mget2l(&aRAM[seqHeaderAddr + 0x10]);
     seq->sfxTempo = mget2l(&aRAM[seqHeaderAddr + 0x11]);
     rareSpcResetParam(seq);
     return result;
@@ -499,7 +516,7 @@ static void printHtmlInfoListMore (RareSpcSeqStat *seq)
         myprintf(" %d:$%04X", track + 1, seq->track[track].active ? seq->track[track].pos : 0x0000);
     }
     myprintf("</li>\n");
-    myprintf("          <li>Initial Song Tempo: %d</li>\n", seq->tempoScale);
+    myprintf("          <li>Initial Song Tempo: %d</li>\n", seq->tempo);
     myprintf("          <li>Initial SFX Tempo: %d</li>\n", seq->sfxTempo);
 }
 
@@ -560,7 +577,7 @@ static void printEventTableFooter (RareSpcSeqStat *seq)
 /** convert SPC tempo into bpm. */
 static double rareSpcTempo (RareSpcSeqStat *seq)
 {
-    return (double) 60000000 / (seq->timebase * (125 * seq->timerFreq)) * ((double) seq->tempoScale / 256); // 1tick = (timer0) (125*t) us
+    return (double) 60000000 / (seq->timebase * (125 * seq->timerFreq)) * ((double) seq->tempo / 256); // 1tick = (timer0) (125*t) us
 //  return (double) 60000000 / (seq->timebase * (125 * seq->timerFreq)); // 1tick = (timer0) (125*t) us
 }
 
@@ -684,8 +701,11 @@ static Smf *rareSpcCreateSmf (RareSpcSeqStat *seq)
 
         //smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_VOLUME, rareSpcMidiVolOf(seq->track[tr].volume));
         smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_REVERB, 0);
-        smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_RELEASETIME, 64 + 6);
-        smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_MONO, 127);
+        //smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_RELEASETIME, 64 + 6);
+        //smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_MONO, 127);
+        if (rareSpcPitchBendSens != 0) {
+            smfInsertPitchBendSensitivity(smf, 0, tr, tr, seq->track[tr].pitchBendSensMax);
+        }
 
         sprintf(songTitle, "Track %d - $%04X", tr + 1, seq->track[tr].pos);
         smfInsertMetaText(seq->smf, 0, tr, SMF_META_TRACKNAME, songTitle);
@@ -1259,6 +1279,8 @@ static void rareSpcEventPitchSlideOff (RareSpcSeqStat *seq, SeqEventReport *ev)
     RareSpcTrackStat *tr = &seq->track[ev->track];
 
     tr->pitchSlide = false;
+    tr->pitchSlideLastMidiPitch = 0;
+    smfInsertPitchBend(seq->smf, ev->tick, ev->track, ev->track, 0);
 
     sprintf(ev->note, "Pitch Slide Off");
     strcat(ev->classStr, " ev-pitchslideoff");
@@ -1283,7 +1305,7 @@ static void rareSpcEventSetTempo (RareSpcSeqStat *seq, SeqEventReport *ev)
     if (!rareSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 
-    seq->tempoScale = arg1;
+    seq->tempo = arg1;
     smfInsertTempoBPM(seq->smf, ev->tick, 0, rareSpcTempo(seq));
 }
 
@@ -1303,8 +1325,8 @@ static void rareSpcEventAddTempo (RareSpcSeqStat *seq, SeqEventReport *ev)
     if (!rareSpcLessTextInSMF)
         smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 
-    seq->tempoScale += arg1;
-    seq->tempoScale &= 0xff;
+    seq->tempo += arg1;
+    seq->tempo &= 0xff;
     smfInsertTempoBPM(seq->smf, ev->tick, 0, rareSpcTempo(seq));
 }
 
@@ -1951,6 +1973,8 @@ static void rareSpcEventLFOOff (RareSpcSeqStat *seq, SeqEventReport *ev)
     RareSpcTrackStat *tr = &seq->track[ev->track];
 
     tr->pitchSlide = false;
+    tr->pitchSlideLastMidiPitch = 0;
+    smfInsertPitchBend(seq->smf, ev->tick, ev->track, ev->track, 0);
 
     sprintf(ev->note, "Pitch Slide/Vibrato/Tremolo Off");
     strcat(ev->classStr, " ev-pitchslideoff ev-vibratooff ev-tremolooff");
@@ -2153,6 +2177,193 @@ static void rareSpcEventNote (RareSpcSeqStat *seq, SeqEventReport *ev)
 
     // outputput old note first
     rareSpcDequeueNote(seq, ev->track);
+
+    // apply pitch slider
+    // TODO: adjusting tempo during the pitch slide is not supported
+    if (tr->pitchSlide && !rest)
+    {
+        int spcNoteIndex;
+        int baseSpcPitch;
+        int currSpcPitch = 0x1000;
+        int peakSpcPitchRgl;
+        int peakSpcPitchInv;
+        int pitchSensRequiredRgl;
+        int pitchSensRequiredInv;
+        int pitchSensRequired;
+        int pitchSlideClock;
+        int pitchSlideTick = 0;
+        double currMidiPitchCent = 0.0;
+        int currMidiPitchValue = 0;
+        int lastMidiPitchValue;
+        byte tickCounter = 0xff;
+        bool tickCarry;
+        bool hasWrittenLastPitch = false;
+        int pitchSlideDelay = tr->pitchSlideDelay;
+        int pitchSlideRate = max(1, tr->pitchSlideRate);
+        int pitchSlideLenInv = tr->pitchSlideLenInv;
+        int pitchSlideLen = max(0, tr->pitchSlideLen - tr->pitchSlideLenInv);
+        int pitchSlideIntervalCnt = pitchSlideRate;
+        int pitchSlideMaxClock;
+        char argDumpStr[256];
+
+        // calc base note pitch
+        spcNoteIndex = note + 1 + 36 + tr->note.transposeSpc;
+        if (spcNoteIndex >= 0 && spcNoteIndex < countof(NOTE_PITCH_TABLE))
+        {
+            currSpcPitch = NOTE_PITCH_TABLE[note + 1 + 36 + tr->note.transposeSpc];
+        }
+        else
+        {
+            // some songs uses an illegal note actually o_O
+            fprintf(stderr, "Warning: Unable to calculate the pitch for the note %02X (%d) [Track %d]\n", ev->code, spcNoteIndex, ev->track + 1);
+            if (spcNoteIndex < 0)
+                currSpcPitch = NOTE_PITCH_TABLE[0];
+            else
+                currSpcPitch = NOTE_PITCH_TABLE[countof(NOTE_PITCH_TABLE) - 1];
+        }
+        // apply fine tuning
+        currSpcPitch = (currSpcPitch * (1024 + tr->tuning) + (tr->tuning < 0 ? 1023 : 0)) / 1024;
+        // save the final value
+        baseSpcPitch = currSpcPitch;
+
+        // limit the fade length by note length
+        // (this might be required for the bend range detection)
+        pitchSlideMaxClock = (256 * tr->note.dur + (seq->tempo - 1)) / seq->tempo;
+        if (pitchSlideDelay + pitchSlideLenInv * pitchSlideRate + pitchSlideLen * pitchSlideRate <= pitchSlideMaxClock)
+        {
+            pitchSlideMaxClock = pitchSlideDelay + pitchSlideLenInv * pitchSlideRate + pitchSlideLen * pitchSlideRate;
+        }
+        else
+        {
+            pitchSlideLen = (pitchSlideMaxClock - (pitchSlideDelay + pitchSlideLenInv * pitchSlideRate) + (pitchSlideRate - 1)) / pitchSlideRate;
+
+            if (pitchSlideDelay + pitchSlideLenInv * pitchSlideRate > pitchSlideMaxClock)
+            {
+                pitchSlideLenInv = (pitchSlideMaxClock - pitchSlideDelay + (pitchSlideRate - 1)) / pitchSlideRate;
+
+                if (pitchSlideDelay > pitchSlideMaxClock)
+                {
+                    pitchSlideDelay = pitchSlideMaxClock;
+                }
+            }
+        }
+
+        // check the key range of pitch slide
+        peakSpcPitchInv = baseSpcPitch - (tr->pitchSlideDepth * pitchSlideLenInv);
+        peakSpcPitchRgl = baseSpcPitch + (tr->pitchSlideDepth * pitchSlideLen);
+        pitchSensRequiredInv = (int)ceil(fabs(log((double) peakSpcPitchInv / baseSpcPitch) / log(2) * 12));
+        pitchSensRequiredRgl = (int)ceil(fabs(log((double) peakSpcPitchRgl / baseSpcPitch) / log(2) * 12));
+        pitchSensRequired = max(pitchSensRequiredInv, pitchSensRequiredRgl);
+
+        // update pitch bend sensitivity, if needed
+        if (rareSpcPitchBendSens == 0) {
+            // try updating pitch bend range
+            int lastPitchBendSens = tr->pitchBendSensMax;
+            tr->pitchBendSensMax = min(pitchSensRequired, SMF_PITCHBENDSENS_MAX);
+            if (tr->pitchBendSensMax != lastPitchBendSens) {
+                smfInsertPitchBendSensitivity(seq->smf, ev->tick, ev->track, ev->track, tr->pitchBendSensMax);
+            }
+        }
+        // MIDI bend range check
+        if (pitchSensRequired > tr->pitchBendSensMax) {
+            fprintf(stderr, "Warning: Pitch Slide out of range (%d) at $%04X, track %d, tick %d\n", pitchSensRequired, ev->addr, ev->track + 1, ev->tick);
+        }
+
+        // make the last result invalid
+        lastMidiPitchValue = tr->pitchSlideLastMidiPitch;
+
+        // repeat, step by step
+        for (pitchSlideClock = 0; pitchSlideClock < pitchSlideMaxClock; pitchSlideClock++)
+        {
+            hasWrittenLastPitch = false;
+            if (pitchSlideClock < pitchSlideDelay)
+            {
+                // delay
+            }
+            else if (pitchSlideClock < pitchSlideDelay + pitchSlideLenInv * pitchSlideRate)
+            {
+                // opposite direction
+                if (pitchSlideIntervalCnt == 0)
+                {
+                    pitchSlideIntervalCnt = pitchSlideRate;
+                    currSpcPitch -= tr->pitchSlideDepth;
+                    currMidiPitchCent = 1200 * log((double) currSpcPitch / baseSpcPitch) / log(2);
+                    currMidiPitchValue = (int)(currMidiPitchCent / 100 / tr->pitchBendSensMax * 8192);
+                    if (currMidiPitchValue == 8192)
+                        currMidiPitchValue = 8191;
+                }
+                pitchSlideIntervalCnt--;
+            }
+            else
+            {
+                // regular direction
+                if (pitchSlideIntervalCnt == 0)
+                {
+                    pitchSlideIntervalCnt = pitchSlideRate;
+                    currSpcPitch += tr->pitchSlideDepth;
+                    currMidiPitchCent = 1200 * log((double) currSpcPitch / baseSpcPitch) / log(2);
+                    currMidiPitchValue = (int)(currMidiPitchCent / 100 / tr->pitchBendSensMax * 8192);
+                    if (currMidiPitchValue == 8192)
+                        currMidiPitchValue = 8191;
+                }
+                pitchSlideIntervalCnt--;
+            }
+
+            tickCarry = (tickCounter + seq->tempo > 0xff);
+            tickCounter += seq->tempo;
+            if (tickCarry)
+            {
+                pitchSlideTick++;
+                hasWrittenLastPitch = true;
+
+                if (pitchSlideTick < tr->note.dur)
+                {
+                    if (currMidiPitchValue != lastMidiPitchValue)
+                    {
+                        if (currMidiPitchValue >= -8192 && currMidiPitchValue <= 8191)
+                        {
+                            smfInsertPitchBend(seq->smf, ev->tick + pitchSlideTick, ev->track, ev->track, currMidiPitchValue);
+                        }
+                        else if (!rareSpcLessTextInSMF)
+                        {
+                            sprintf(argDumpStr, "Pitch $%04X (%.1f cents)", currSpcPitch, currMidiPitchCent);
+                            smfInsertMetaText(seq->smf, ev->tick + pitchSlideTick, ev->track, SMF_META_TEXT, argDumpStr);
+                        }
+                        lastMidiPitchValue = currMidiPitchValue;
+                    }
+                }
+                else
+                {
+                    // pitch slide must not affects to the next note
+                    break;
+                }
+            }
+        }
+
+        if (!hasWrittenLastPitch)
+        {
+            pitchSlideTick++;
+            hasWrittenLastPitch = true;
+
+            if (pitchSlideTick < tr->note.dur)
+            {
+                if (currMidiPitchValue != lastMidiPitchValue)
+                {
+                    if (currMidiPitchValue >= -8192 && currMidiPitchValue <= 8191)
+                    {
+                        smfInsertPitchBend(seq->smf, ev->tick + pitchSlideTick, ev->track, ev->track, currMidiPitchValue);
+                    }
+                    else if (!rareSpcLessTextInSMF)
+                    {
+                        sprintf(argDumpStr, "Pitch $%04X (%.1f cents)", currSpcPitch, currMidiPitchCent);
+                        smfInsertMetaText(seq->smf, ev->tick + pitchSlideTick, ev->track, SMF_META_TEXT, argDumpStr);
+                    }
+                    lastMidiPitchValue = currMidiPitchValue;
+                }
+            }
+        }
+        tr->pitchSlideLastMidiPitch = currMidiPitchValue;
+    }
 
     // set new note
     if (!rest) {
@@ -2548,6 +2759,7 @@ static bool cmdOptTimeBase (void);
 static bool cmdOptFineTune (void);
 static bool cmdOptCoarseTune (void);
 static bool cmdOptLinear (void);
+static bool cmdOptBendRange (void);
 
 static CmdOptDefs optDef[] = {
     { "help", '\0', 0, cmdOptHelp, "", "show usage" },
@@ -2560,6 +2772,7 @@ static CmdOptDefs optDef[] = {
     { "finetune", '\0', 0, cmdOptFineTune, "", "Emulate the fine tuning" },
     { "coarsetune", '\0', 0, cmdOptCoarseTune, "", "Emulate absolute transpose (not recommended)" },
     { "linear", '\0', 0, cmdOptLinear, "", "Use linear volume/panpot (GM2 uses exp/sin curve)" },
+    { "bendrange", '\0', 0, cmdOptBendRange, "<range>", "set pitch bend sensitivity (0:auto)" },
 };
 
 //----
@@ -2681,6 +2894,14 @@ static bool cmdOptCoarseTune (void)
 static bool cmdOptLinear (void)
 {
     rareSpcVolIsLinear = true;
+    return true;
+}
+
+/** set pitchbend range. */
+static bool cmdOptBendRange (void)
+{
+    int range = strtol(gArgv[0], NULL, 0);
+    rareSpcPitchBendSens = range;
     return true;
 }
 
