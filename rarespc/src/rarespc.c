@@ -16,7 +16,7 @@
 
 #define APPNAME         "Rare SPC2MIDI"
 #define APPSHORTNAME    "rarespc"
-#define VERSION         "[2013-08-22]"
+#define VERSION         "[2013-08-23]"
 #define AUTHOR          "loveemu"
 #define WEBSITE         "http://loveemu.yh.land.to/"
 
@@ -122,6 +122,8 @@ struct TagRareSpcTrackStat {
     byte pitchSlideLenInv;  // pitch slide - length for opposite direction (steps)
     int pitchBendSensMax;   // limit of pitch slide for MIDI output
     int pitchSlideLastMidiPitch;
+    byte altNoteByte1;
+    byte altNoteByte2;
 };
 
 struct TagRareSpcSeqStat {
@@ -136,8 +138,6 @@ struct TagRareSpcSeqStat {
     bool active;                // if the seq is still active
     byte tempo;                 // song tempo (DKC1=$27, DKC2=$1f)
     byte sfxTempo;
-    byte altNoteByte1;
-    byte altNoteByte2;
     sbyte volPresetL[5];
     sbyte volPresetR[5];
     byte jumpDestIndex;
@@ -1552,6 +1552,9 @@ static void rareSpcEventTransposeRel (RareSpcSeqStat *seq, SeqEventReport *ev)
 
     tr->note.transposeSpc += arg1;
     tr->note.transpose += arg1;
+
+    if (!rareSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 }
 
 /** vcmd 15: set echo param. */
@@ -1779,7 +1782,7 @@ static void rareSpcEventSetAltNote1 (RareSpcSeqStat *seq, SeqEventReport *ev)
     sprintf(ev->note, "Set Alt Note, note = $%02X", arg1);
     strcat(ev->classStr, " ev-altnote1");
 
-    seq->altNoteByte1 = (byte) arg1;
+    tr->altNoteByte1 = (byte) arg1;
 }
 
 /** vcmd 1d: set alt note 2. (DKC2) */
@@ -1796,7 +1799,7 @@ static void rareSpcEventSetAltNote2 (RareSpcSeqStat *seq, SeqEventReport *ev)
     sprintf(ev->note, "Set Alt Note 2, note = $%02X", arg1);
     strcat(ev->classStr, " ev-altnote2");
 
-    seq->altNoteByte2 = (byte) arg1;
+    tr->altNoteByte2 = (byte) arg1;
 }
 
 /** vcmd 1f: set echo delay. (DKC2) */
@@ -2138,12 +2141,12 @@ static void rareSpcEventNote (RareSpcSeqStat *seq, SeqEventReport *ev)
     {
         if (ev->code == 0xe1)
         {
-            noteByte = seq->altNoteByte2;
+            noteByte = tr->altNoteByte2;
             //rest = false;
         }
         else if (ev->code >= 0xe0)
         {
-            noteByte = seq->altNoteByte1;
+            noteByte = tr->altNoteByte1;
             //rest = false;
         }
     }
