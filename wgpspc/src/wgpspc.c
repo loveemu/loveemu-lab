@@ -446,7 +446,7 @@ static void printHtmlEventDump (WgpSpcSeqStat *seq, SeqEventReport *ev)
         return;
 
     myprintf("            <tr class=\"%s\">", ev->classStr); // track%d is removed, because it is useless in this driver
-    myprintf("<td class=\"track\">%d</td>", ev->track + 1);
+    //myprintf("<td class=\"track\">%d</td>", ev->track + 1);
     myprintf("<td class=\"tick\">%d</td>", ev->tick);
     myprintf("<td class=\"address\">$%04X</td>", ev->addr);
     myprintf("<td class=\"hex\">");
@@ -471,7 +471,7 @@ static void printEventTableHeader (WgpSpcSeqStat *seq)
     myprintf("        <h3>Sequence</h3>\n");
     myprintf("        <div class=\"section\">\n");
     myprintf("          <table class=\"dump\">\n");
-    myprintf("            <tr><th class=\"track\">#</th><th class=\"tick\">Tick</th><th class=\"address\">Address</th><th class=\"hex\">Hex Dump</th><th class=\"note\">Note</th></tr>\n");
+    myprintf("            <tr><th class=\"tick\">Tick</th><th class=\"address\">Address</th><th class=\"hex\">Hex Dump</th><th class=\"note\">Note</th></tr>\n"); // "<th class=\"track\">#</th>"
 }
 
 /** output event table footer. */
