@@ -1,6 +1,6 @@
 0550: 20        clrp
 0551: 8f 30 f1  mov   $f1,#$30
-0554: 8f 86 fa  mov   $fa,#$86
+0554: 8f 86 fa  mov   $fa,#$86          ; timer 0 = 1.675 ms
 0557: 8f 01 f1  mov   $f1,#$01
 055a: e8 00     mov   a,#$00
 055c: 5d        mov   x,a
@@ -61,22 +61,23 @@
 05c7: c4 f7     mov   $f7,a
 05c9: 5f 81 05  jmp   $0581
 
+; get song list and item index
 05cc: 68 60     cmp   a,#$60
 05ce: b0 0a     bcs   $05da
 05d0: cd 18     mov   x,#$18
 05d2: d8 3c     mov   $3c,x
 05d4: cd dc     mov   x,#$dc
-05d6: d8 3d     mov   $3d,x
+05d6: d8 3d     mov   $3d,x             ; $dc18 - song list
 05d8: 2f 0a     bra   $05e4
 05da: cd 00     mov   x,#$00
 05dc: d8 3c     mov   $3c,x
 05de: cd f4     mov   x,#$f4
-05e0: d8 3d     mov   $3d,x
+05e0: d8 3d     mov   $3d,x             ; $f400 - song list (sfx?)
 05e2: 28 1f     and   a,#$1f
 05e4: 8d 03     mov   y,#$03
 05e6: cf        mul   ya
 05e7: fd        mov   y,a
-05e8: f7 3c     mov   a,($3c)+y
+05e8: f7 3c     mov   a,($3c)+y         ; read slot index (priority?)
 05ea: 1c        asl   a
 05eb: 5d        mov   x,a
 05ec: 6f        ret
@@ -116,13 +117,13 @@
 0631: e4 38     mov   a,$38
 0633: 3f cc 05  call  $05cc
 0636: e4 38     mov   a,$38
-0638: d4 49     mov   $49+x,a
+0638: d4 49     mov   $49+x,a           ; song number
 063a: fc        inc   y
 063b: f7 3c     mov   a,($3c)+y
 063d: d4 00     mov   $00+x,a
 063f: fc        inc   y
 0640: f7 3c     mov   a,($3c)+y
-0642: d4 01     mov   $01+x,a
+0642: d4 01     mov   $01+x,a           ; set vcmd read ptr
 0644: e8 00     mov   a,#$00
 0646: d4 19     mov   $19+x,a
 0648: d4 20     mov   $20+x,a
@@ -220,8 +221,8 @@
 070b: d8 dc     mov   $dc,x
 ;
 070d: f4 49     mov   a,$49+x
-070f: c4 d6     mov   $d6,a
-0711: d8 de     mov   $de,x
+070f: c4 d6     mov   $d6,a             ; song number
+0711: d8 de     mov   $de,x             ; slot index (0~3?)
 0713: f0 05     beq   $071a
 0715: 10 4a     bpl   $0761
 0717: 5f 0a 09  jmp   $090a
@@ -270,7 +271,18 @@
 0769: 5d        mov   x,a
 076a: 1f 8c 07  jmp   ($078c+x)
 
-; vcmd 20-ff
+; vcmd 20-2a (18-1f, 2b-ff unused)
+; 20 - set SRCN ($0200+x)
+; 21 - set volume ($0220+x)
+; 22 - set volume balance ($0240+x)
+; 23 - ($0260+x)
+; 24 - ($0280+x)
+; 25 - ($02a0+x)
+; 26 - ($02c0+x)
+; 27 - ($02e0+x)
+; 28 - ($0300+x)
+; 29 - ($0320+x)
+; 2a - set ADSR pattern ($0340+x)
 076d: c4 39     mov   $39,a             ; save vcmd to $39
 076f: 28 0f     and   a,#$0f
 0771: f8 df     mov   x,$df
@@ -278,32 +290,32 @@
 0776: 8f 03 3b  mov   $3b,#$03
 0779: 8d 20     mov   y,#$20
 077b: cf        mul   ya
-077c: 7a 3a     addw  ya,$3a            ; YA = 0x0360 + (vcmd & 0x0f) * 32
+077c: 7a 3a     addw  ya,$3a            ; YA = $0360 + (vcmd & 0x0f) * 32
 077e: 3f 82 0f  call  $0f82
 0781: 2f de     bra   $0761
 
 ; vcmd 0b
 0783: e8 e0     mov   a,#$e0
-0785: 8d 04     mov   y,#$04            ; YA = 0x0360 + (12 * 0x20)
+0785: 8d 04     mov   y,#$04            ; YA = $04e0
 0787: 3f 82 0f  call  $0f82
 078a: 2f d5     bra   $0761
 
 ; vcmd dispatch table
-078c: dw $07b6  ; 00 - unknown.1
-078e: dw $07be  ; 01 - unknown.1
+078c: dw $07b6  ; 00 - set delta time
+078e: dw $07be  ; 01 - set active voices
 0790: dw $07dc  ; 02 - call subroutine
-0792: dw $0fd7  ; 03 - unknown.0
-0794: dw $085b  ; 04 - unknown.1
-0796: dw $0863  ; 05 - unknown.1
+0792: dw $0fd7  ; 03 - end subroutine
+0794: dw $085b  ; 04 - set timebase
+0796: dw $0863  ; 05 - set master volume
 0798: dw $0809  ; 06 - repeat until
 079a: dw $0839  ; 07 - repeat break
 079c: dw $07f9  ; 08 - goto
-079e: dw $08ed  ; 09
+079e: dw $08ed  ; 09 - note (with wait)
 07a0: dw $086b  ; 0a - set echo delay
 07a2: dw $0783  ; 0b
 07a4: dw $0876  ; 0c - unknown.1
 07a6: dw $087e  ; 0d - set echo enable bit (not per-channel on/off)
-07a8: dw $091e  ; 0e
+07a8: dw $091e  ; 0e - wait
 07aa: dw $081a  ; 0f - repeat until (alternate)
 07ac: dw $084a  ; 10 - repeat break (alternate)
 07ae: dw $089f  ; 11 - set echo feedback
@@ -312,19 +324,19 @@
 07b4: dw $08aa  ; 14 - set echo start address
                 ; 15-17 - undefined
 
-; vcmd 00
+; vcmd 00 - set delta time
 07b6: 3f eb 09  call  $09eb             ; arg1
 07b9: d4 08     mov   $08+x,a
 07bb: 5f 61 07  jmp   $0761
 
-; vcmd 01
+; vcmd 01 - set active voices
 07be: f8 de     mov   x,$de
 07c0: e4 da     mov   a,$da
 07c2: 48 ff     eor   a,#$ff
 07c4: c4 3c     mov   $3c,a
 07c6: 34 09     and   a,$09+x
 07c8: c4 41     mov   $41,a
-07ca: 3f ee 09  call  $09ee             ; arg1
+07ca: 3f ee 09  call  $09ee             ; arg1 ($80 for channel 0, $01 for channel 7)
 07cd: d4 09     mov   $09+x,a
 07cf: 24 3c     and   a,$3c
 07d1: 04 41     or    a,$41
@@ -404,12 +416,12 @@
 0857: d4 21     mov   $21+x,a
 0859: 2f 9e     bra   $07f9
 
-; vcmd 04
+; vcmd 04 - set timebase
 085b: 3f eb 09  call  $09eb             ; arg1
 085e: d4 10     mov   $10+x,a
 0860: 5f 61 07  jmp   $0761
 
-; vcmd 05
+; vcmd 05 - set master volume
 0863: 3f eb 09  call  $09eb             ; arg1
 0866: d4 11     mov   $11+x,a
 0868: 5f 61 07  jmp   $0761
@@ -488,20 +500,21 @@
 08e8: f8 de     mov   x,$de
 08ea: 5f 61 07  jmp   $0761
 
-; vcmd 09
+; vcmd 09 - note (with wait)
 08ed: 3f eb 09  call  $09eb             ; arg1
 08f0: eb df     mov   y,$df
 08f2: c4 38     mov   $38,a             ; do {
-08f4: 0b 38     asl   $38
-08f6: 90 0b     bcc   $0903
+08f4: 0b 38     asl   $38               ;   $38 <<= 1;
+08f6: 90 0b     bcc   $0903             ;   if carry == 0 then continue
 08f8: 3f ee 09  call  $09ee             ;   read next byte
 08fb: d6 c0 04  mov   $04c0+y,a
 08fe: e8 00     mov   a,#$00
 0900: d6 70 00  mov   $0070+y,a
 0903: fc        inc   y
 0904: e4 38     mov   a,$38
-0906: d0 ec     bne   $08f4             ; } while
-0908: 2f 16     bra   $0920
+0906: d0 ec     bne   $08f4             ; } while ($38 != 0);
+0908: 2f 16     bra   $0920             ; wait
+
 090a: f8 de     mov   x,$de
 090c: f4 08     mov   a,$08+x
 090e: fb 10     mov   y,$10+x
@@ -513,8 +526,9 @@
 0919: d4 28     mov   $28+x,a
 091b: 5f 61 07  jmp   $0761
 
-; vcmd 0e
+; vcmd 0e - wait
 091e: f8 de     mov   x,$de
+; prepare for waiting for the next timer clock
 0920: f4 09     mov   a,$09+x
 0922: c4 38     mov   $38,a
 0924: e4 da     mov   a,$da
@@ -548,22 +562,22 @@
 0961: 68 ff     cmp   a,#$ff
 0963: f0 3d     beq   $09a2
 0965: 8f 20 3c  mov   $3c,#$20
-0968: 8f 00 3d  mov   $3d,#$00
+0968: 8f 00 3d  mov   $3d,#$00          ; step = $0020
 096b: 8f 60 3e  mov   $3e,#$60
-096e: 8f 03 3f  mov   $3f,#$03
+096e: 8f 03 3f  mov   $3f,#$03          ; src = $0360
 0971: 8f 00 40  mov   $40,#$00
-0974: 8f 02 41  mov   $41,#$02
+0974: 8f 02 41  mov   $41,#$02          ; dst = $0200
 0977: 8f 0b 3b  mov   $3b,#$0b
 097a: eb df     mov   y,$df
 097c: f7 3e     mov   a,($3e)+y
-097e: d7 40     mov   ($40)+y,a
+097e: d7 40     mov   ($40)+y,a         ; *(dst + y) = *(src + y)
 0980: ba 3c     movw  ya,$3c
 0982: 7a 3e     addw  ya,$3e
-0984: da 3e     movw  $3e,ya
+0984: da 3e     movw  $3e,ya            ; src += step
 0986: ba 3c     movw  ya,$3c
 0988: 7a 40     addw  ya,$40
-098a: da 40     movw  $40,ya
-098c: 6e 3b eb  dbnz  $3b,$097a
+098a: da 40     movw  $40,ya            ; dst += step
+098c: 6e 3b eb  dbnz  $3b,$097a         ; do above for 11 times
 098f: 3f 05 0a  call  $0a05
 0992: 3f a9 0d  call  $0da9
 0995: e8 ff     mov   a,#$ff
@@ -679,13 +693,13 @@
 0a6f: e8 7f     mov   a,#$7f
 0a71: 5f 9d 0e  jmp   $0e9d
 
+; set ADSR/GAIN
 0a74: 3f 50 0e  call  $0e50
 0a77: cd 00     mov   x,#$00
 0a79: e7 3a     mov   a,($3a+x)
 0a7b: 10 03     bpl   $0a80
-0a7d: 5f 69 0e  jmp   $0e69
-
-0a80: 5f 87 0e  jmp   $0e87
+0a7d: 5f 69 0e  jmp   $0e69             ; ADSR mode
+0a80: 5f 87 0e  jmp   $0e87             ; GAIN mode
 
 0a83: f0 47     beq   $0acc
 0a85: 68 80     cmp   a,#$80
@@ -721,7 +735,7 @@
 0ac1: e4 d2     mov   a,$d2
 0ac3: 08 04     or    a,#$04
 0ac5: fd        mov   y,a
-0ac6: 3f 47 0e  call  $0e47
+0ac6: 3f 47 0e  call  $0e47             ; set SRCN from $0200+x
 0ac9: 5f 6a 0a  jmp   $0a6a
 
 0acc: f8 df     mov   x,$df
@@ -1116,14 +1130,16 @@
 0da6: da 40     movw  $40,ya
 0da8: 6f        ret
 
+; update voice volume regs
 0da9: f8 de     mov   x,$de
-0dab: f4 11     mov   a,$11+x
+0dab: f4 11     mov   a,$11+x           ; master volume
 0dad: fd        mov   y,a
 0dae: f8 df     mov   x,$df
-0db0: f5 20 02  mov   a,$0220+x
+0db0: f5 20 02  mov   a,$0220+x         ; voice volume
 0db3: cf        mul   ya
 0db4: e4 d4     mov   a,$d4
 0db6: f0 1a     beq   $0dd2
+; mono
 0db8: f5 40 02  mov   a,$0240+x
 0dbb: 28 0f     and   a,#$0f
 0dbd: c4 42     mov   $42,a
@@ -1139,37 +1155,40 @@
 0dcc: cb 3d     mov   $3d,y
 0dce: cb 3c     mov   $3c,y
 0dd0: 2f 15     bra   $0de7
+; stereo
 0dd2: cb 3c     mov   $3c,y
 0dd4: f5 40 02  mov   a,$0240+x
 0dd7: 28 f0     and   a,#$f0
 0dd9: cf        mul   ya
-0dda: cb 3d     mov   $3d,y
+0dda: cb 3d     mov   $3d,y             ; volL = y * ($0240+x & 0xf0)
 0ddc: f5 40 02  mov   a,$0240+x
 0ddf: 28 0f     and   a,#$0f
 0de1: 9f        xcn   a
 0de2: eb 3c     mov   y,$3c
 0de4: cf        mul   ya
-0de5: cb 3c     mov   $3c,y
+0de5: cb 3c     mov   $3c,y             ; volR = y * ($0240+x << 4)
+;
 0de7: eb d2     mov   y,$d2
 0de9: e4 3d     mov   a,$3d
-0deb: 5c        lsr   a
+0deb: 5c        lsr   a                 ; 8 bits -> 7 bits
 0dec: f8 de     mov   x,$de
 0dee: 80        setc
-0def: b5 49 05  sbc   a,$0549+x
+0def: b5 49 05  sbc   a,$0549+x         ; apply linear fader
 0df2: b0 02     bcs   $0df6
 0df4: e8 00     mov   a,#$00
-0df6: 3f f7 09  call  $09f7             ; set DSP reg
+0df6: 3f f7 09  call  $09f7             ; set VOL(L)
 0df9: c4 47     mov   $47,a
 0dfb: fc        inc   y
 0dfc: e4 3c     mov   a,$3c
-0dfe: 5c        lsr   a
+0dfe: 5c        lsr   a                 ; 8 bits -> 7 bits
 0dff: 80        setc
-0e00: b5 49 05  sbc   a,$0549+x
+0e00: b5 49 05  sbc   a,$0549+x         ; apply linear fader
 0e03: b0 02     bcs   $0e07
 0e05: e8 00     mov   a,#$00
-0e07: 3f f7 09  call  $09f7             ; set DSP reg
+0e07: 3f f7 09  call  $09f7             ; set VOL(R)
 0e0a: 6f        ret
 
+; set dsp reg base for channel $df to $d2
 0e0b: e4 df     mov   a,$df
 0e0d: 28 07     and   a,#$07
 0e0f: 9f        xcn   a
@@ -1215,15 +1234,15 @@
 0e50: e5 10 dc  mov   a,$dc10
 0e53: c4 42     mov   $42,a
 0e55: e5 11 dc  mov   a,$dc11
-0e58: c4 43     mov   $43,a
-0e5a: f5 40 03  mov   a,$0340+x
+0e58: c4 43     mov   $43,a             ; ADSR envelope pointer table 
+0e5a: f5 40 03  mov   a,$0340+x         ; envelope index
 0e5d: 1c        asl   a
 0e5e: fd        mov   y,a
 0e5f: f7 42     mov   a,($42)+y
 0e61: c4 3a     mov   $3a,a
 0e63: fc        inc   y
 0e64: f7 42     mov   a,($42)+y
-0e66: c4 3b     mov   $3b,a
+0e66: c4 3b     mov   $3b,a             ; set envelope pointer
 0e68: 6f        ret
 
 0e69: c4 39     mov   $39,a
@@ -1422,17 +1441,18 @@
 0fd4: d0 ca     bne   $0fa0
 0fd6: 6f        ret
 
-; vcmd 03
+; vcmd 03 - end subroutine
 0fd7: f8 de     mov   x,$de
-0fd9: f4 19     mov   a,$19+x
+0fd9: f4 19     mov   a,$19+x           ; check the higher byte of return address
 0fdb: f0 0d     beq   $0fea
+; if return address is set, return from subroutine
 0fdd: d4 01     mov   $01+x,a
 0fdf: f4 18     mov   a,$18+x
 0fe1: d4 00     mov   $00+x,a
 0fe3: e8 00     mov   a,#$00
 0fe5: d4 19     mov   $19+x,a
 0fe7: 5f 61 07  jmp   $0761
-
+; if return address is not set, end of track
 0fea: 3f f8 0f  call  $0ff8
 0fed: e8 00     mov   a,#$00
 0fef: d4 09     mov   $09+x,a
@@ -1510,3 +1530,5 @@
 107b: dw $1dbc  ; a#
 107d: dw $1f80  ; b
 107f: dw $2160  ; c'
+
+dc10: dw $dd17
