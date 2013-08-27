@@ -35,6 +35,7 @@ static bool wgpSpcVolIsLinear = false;   // assumes volume curve between SPC and
 
 static int wgpSpcTimeBase = 32;
 static int wgpSpcForceSongIndex = -1;
+static int wgpSpcForceSongSlotIndex = -1;
 static int wgpSpcForceSongListAddr = -1;
 
 static bool wgpSpcPatchFixOverride = false;
@@ -62,6 +63,7 @@ enum {
 #define SMF_PITCHBENDSENS_MAX       24
 
 // any changes are not needed normally
+#define SPC_SONG_MAX        0x60
 #define SPC_TRACK_MAX       8
 #define SPC_NOTE_KEYSHIFT   24
 #define SPC_ARAM_SIZE       0x10000
@@ -93,6 +95,8 @@ typedef struct TagWgpSpcNoteParam {
 struct TagWgpSpcTrackStat {
     WgpSpcNoteParam note;     // current note param
     WgpSpcNoteParam lastNote; // note params for last note
+    byte volume;              // voice volume (8 bits)
+    byte volBalance;          // volume balance (L/R 4 bits for each channel)
 };
 
 struct TagWgpSpcSeqStat {
@@ -224,6 +228,8 @@ static void wgpSpcResetTrackParam (WgpSpcSeqStat *seq, int track)
     tr->note.patch = 0; // just in case
     tr->note.transpose = 0;
     tr->lastNote.active = false;
+    tr->volume = 0x88;
+    tr->volBalance = 0x88;
 }
 
 /** reset before play/convert song. */
@@ -311,22 +317,59 @@ static int wgpSpcCheckVer (WgpSpcSeqStat *seq)
         version = SPC_VER_WGP;
     }
 
-    // search song index
+    // song search
     if (seq->ver.seqListAddr != -1)
     {
-        int songIndex = 0;
-        pos1 = seq->ver.seqListAddr;
-        while (pos1 + 3 < SPC_ARAM_SIZE)
+        int songSlotOffset = (wgpSpcForceSongSlotIndex != -1) ? (wgpSpcForceSongSlotIndex * 2) : aRAM[0xde];
+        int songIndex = aRAM[0x49 + songSlotOffset] & 0x7f;
+        int songHeaderAddr = seq->ver.seqListAddr + (songIndex * 3);
+        if (songIndex < SPC_SONG_MAX &&
+                songHeaderAddr + 3 <= SPC_ARAM_SIZE &&
+                aRAM[songHeaderAddr] >= 0 && aRAM[songHeaderAddr] <= 3 &&
+                aRAM[songHeaderAddr + 2] != 0x00)
         {
-            int ptr = mget2l(&aRAM[pos1 + 1]);
-            if (ptr != 0)
-            {
-                seq->ver.songIndex = songIndex;
-                break;
-            }
-            songIndex++;
-            pos1 += 3;
+            seq->ver.songIndex = songIndex;
         }
+        else
+            seq->ver.songIndex = 1;
+
+        //int songIndex;
+        //int songAddrDist = SPC_ARAM_SIZE;
+        //int songSlot = wgpSpcForceSongSlotIndex;
+        //int spcVcmdPtr = mget2l(&aRAM[0x00 + songSlot * 2]);
+        //
+        //seq->ver.songIndex = -1;
+        //do
+        //{
+        //    int songHeaderAddr;
+        //    for (songIndex = 0; songIndex < SPC_SONG_MAX; songIndex++)
+        //    {
+        //        int seqStartAddr;
+        //    
+        //        songHeaderAddr = seq->ver.seqListAddr + (songIndex * 3);
+        //        if (songHeaderAddr + 3 > SPC_ARAM_SIZE)
+        //            break;
+        //    
+        //        // check the song slot
+        //        if (aRAM[songHeaderAddr] != songSlot)
+        //            continue;
+        //    
+        //        seqStartAddr = mget2l(&aRAM[songHeaderAddr + 1]);
+        //        //if (seqStartAddr <= spcVcmdPtr)
+        //        {
+        //            if (songAddrDist > abs(spcVcmdPtr - seqStartAddr))
+        //            {
+        //                songAddrDist = abs(spcVcmdPtr - seqStartAddr);
+        //                seq->ver.songIndex = songIndex;
+        //            }
+        //        }
+        //    }
+        //    if (songHeaderAddr + 3 > SPC_ARAM_SIZE)
+        //        break;
+        //} while (false);
+        //
+        //if (seq->ver.songIndex == -1)
+        //    seq->ver.songIndex = 1;
     }
 
     // overwrite song index
@@ -422,7 +465,7 @@ static void printHtmlInfoList (WgpSpcSeqStat *seq)
 
     myprintf("          <li>Version: %s</li>\n", wgpSpcVerToStrHtml(seq));
     myprintf("          <li>Song List: $%04X</li>\n", seq->ver.seqListAddr);
-    myprintf("          <li>Song Entry: $%04X (song %d)", seq->ver.seqHeaderAddr, seq->ver.songIndex);
+    myprintf("          <li>Song Entry: $%04X (song %d)</li>", seq->ver.seqHeaderAddr, seq->ver.songIndex);
 }
 
 /** output seq info list detail for valid seq. */
@@ -489,8 +532,64 @@ static void printEventTableFooter (WgpSpcSeqStat *seq)
 /** convert SPC tempo into bpm. */
 static double wgpSpcTempo (WgpSpcSeqStat *seq)
 {
-    return 120.0; // TODO
-//    return (double) 60000000 / (seq->timebase * (125 * seq->timerFreq)) * ((double) seq->tempo / 256); // 1tick = (timer0) (125*t) us
+    return (double) 60000000 / (16750 * wgpSpcTimeBase);
+}
+
+/** convert SPC channel volume into MIDI one. */
+static int wgpSpcMidiVolOf (int value)
+{
+    if (wgpSpcVolIsLinear)
+        return value/2; // linear
+    else
+        return (int) floor(sqrt((double) value/255) * 127 + 0.5); // more similar with MIDI?
+}
+
+/** convert SPC volume balance into MIDI one. */
+static int wgpSpcMidiVolBalance (int value, int *pVolRate)
+{
+    byte volL = (value & 0xf0) >> 4;
+    byte volR = (value & 0x0f);
+    byte midiVol, midiPan;
+    double vol, pan;
+
+    if (volL == 0 && volR == 0)
+    {
+        if (pVolRate != NULL)
+            *pVolRate = 0;
+        return -1; // NaN
+    }
+
+    // linear volume/panpot
+    vol = (double) (volL + volR) / (16 + 16);
+    pan = (double) volR / (volL + volR);
+
+    // make it GM2 compatible
+    if (!wgpSpcVolIsLinear)
+    {
+        // GM2 vol => dB: pow(2) curve
+        // GM2 pan => dB: sin/cos curve
+        // SPC vol => linear
+
+        double linearVol = vol;
+        double linearPan = pan;
+        double panPI2 = atan2(linearPan, 1.0 - linearPan);
+
+        vol = sqrt(linearVol / (cos(panPI2) + sin(panPI2)));
+        pan = panPI2 / M_PI_2;
+    }
+
+    // calculate the final value
+    midiVol = (byte) (vol * 127 + 0.5);
+    if (vol != 0)
+    {
+        midiPan = (byte) (pan * 126 + 0.5);
+        if (midiPan != 0)
+            midiPan++;
+    }
+
+    if (pVolRate != NULL)
+        *pVolRate = midiVol;
+    return midiPan;
 }
 
 /** create new smf object and link to spc seq. */
@@ -527,10 +626,18 @@ static Smf *wgpSpcCreateSmf (WgpSpcSeqStat *seq)
 
     // put initial info for each track
     for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
+        int midiVol, midiPan;
+
         //if (!seq->track[tr].active)
         //    continue;
 
-        //smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_VOLUME, wgpSpcMidiVolOf(seq->track[tr].volume));
+        smfInsertControl(seq->smf, 0, tr, tr, SMF_CONTROL_VOLUME, wgpSpcMidiVolOf(seq->track[tr].volume));
+        midiPan = wgpSpcMidiVolBalance(seq->track[tr].volBalance, &midiVol);
+        if (midiVol != 0)
+        {
+            smfInsertControl(seq->smf, 0, tr, tr, SMF_CONTROL_PANPOT, midiPan);
+        }
+        smfInsertControl(seq->smf, 0, tr, tr, SMF_CONTROL_EXPRESSION, midiVol);
         smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_REVERB, 0);
         //smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_RELEASETIME, 64 + 6);
         //smfInsertControl(smf, 0, tr, tr, SMF_CONTROL_MONO, 127);
@@ -624,16 +731,6 @@ static void wgpSpcAddTrackLoopCount(WgpSpcSeqStat *seq, int track, int count)
     }
 }
 
-#if 0
-/** advance seq tick. */
-static void wgpSpcSeqAdvTick(WgpSpcSeqStat *seq)
-{
-    int minTickStep = 1;
-    seq->tick += minTickStep;
-    seq->time += (double) 60 / wgpSpcTempo(seq) * minTickStep / seq->timebase;
-}
-#endif
-
 /** vcmds: unknown event (without status change). */
 static void wgpSpcEventUnknownInline (WgpSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -641,9 +738,9 @@ static void wgpSpcEventUnknownInline (WgpSpcSeqStat *seq, SeqEventReport *ev)
     strcat(ev->classStr, " unknown");
 
     if (ev->unidentified)
-        fprintf(stderr, "Error: Encountered unidentified event %02X [Track %d]\n", ev->code, ev->track + 1);
+        fprintf(stderr, "Error: Encountered unidentified event %02X at $%04X\n", ev->code, ev->addr);
     else
-        fprintf(stderr, "Warning: Skipped unknown event %02X [Track %d]\n", ev->code, ev->track + 1);
+        fprintf(stderr, "Warning: Skipped unknown event %02X at $%04X\n", ev->code, ev->addr);
 }
 
 /** vcmds: unidentified event. */
@@ -812,8 +909,8 @@ static void wgpSpcEventEndSubroutine (WgpSpcSeqStat *seq, SeqEventReport *ev)
     }
 }
 
-/** vcmd 04: set timebase. */
-static void wgpSpcEventSetTimebase (WgpSpcSeqStat *seq, SeqEventReport *ev)
+/** vcmd 04: set delta time multiplier. */
+static void wgpSpcEventSetDeltaScale (WgpSpcSeqStat *seq, SeqEventReport *ev)
 {
     int arg1;
     int *p = &seq->pos;
@@ -822,7 +919,7 @@ static void wgpSpcEventSetTimebase (WgpSpcSeqStat *seq, SeqEventReport *ev)
     arg1 = seq->aRAM[*p];
     (*p)++;
 
-    sprintf(ev->note, "Set Timebase, scale = %d", arg1);
+    sprintf(ev->note, "Set Delta Multiplier, scale = %d", arg1);
     strcat(ev->classStr, " ev-deltascale");
 
     seq->deltaScale = arg1;
@@ -983,12 +1080,16 @@ static void wgpSpcEventJump (WgpSpcSeqStat *seq, SeqEventReport *ev)
     strcat(ev->classStr, " ev-jump");
 }
 
+#define WGP_NOTE_REST   0x54
+#define WGP_NOTE_PERC   0x80
+
 /** vcmd 09: note (with wait). */
 static void wgpSpcEventNote (WgpSpcSeqStat *seq, SeqEventReport *ev)
 {
     int *p = &seq->pos;
     int vbits;
     int channel;
+    int waitAmount;
 
     ev->size++;
     vbits = seq->aRAM[*p];
@@ -1003,6 +1104,7 @@ static void wgpSpcEventNote (WgpSpcSeqStat *seq, SeqEventReport *ev)
             char noteName[64];
             char s[64];
             int key;
+            int midiKey;
 
             ev->size++;
             key = seq->aRAM[*p];
@@ -1011,21 +1113,56 @@ static void wgpSpcEventNote (WgpSpcSeqStat *seq, SeqEventReport *ev)
             if (argDumpStr[0] != '\0')
                 strcat(argDumpStr, ", ");
 
-            getNoteName(noteName, key + seq->transpose + tr->note.transpose
-                + seq->ver.patchFix[tr->note.patch].key
-                + SPC_NOTE_KEYSHIFT);
+            if (key == WGP_NOTE_REST) {
+                midiKey = 0;
+                strcpy(noteName, "Rest");
+            } else if (key >= WGP_NOTE_PERC) {
+                midiKey = key - WGP_NOTE_PERC;
+                sprintf(noteName, "P%d", key - WGP_NOTE_PERC);
+            } else if (key > WGP_NOTE_REST) {
+                midiKey = 96 + (key & 0x1f);
+                sprintf(noteName, "N%d", key & 0x1f);
+            } else {
+                midiKey = key + seq->transpose + tr->note.transpose
+                    + seq->ver.patchFix[tr->note.patch].key
+                    + SPC_NOTE_KEYSHIFT;
+                getNoteName(noteName, midiKey);
+            }
 
             sprintf(s, "[%d] = %s", channel, noteName);
             strcat(argDumpStr, s);
+
+            // output old note first
+            wgpSpcDequeueNote(seq, channel);
+
+            // set new note
+            if (key != WGP_NOTE_REST) {
+                tr->lastNote.tick = ev->tick;
+                tr->lastNote.dur = 0; // set later
+                tr->lastNote.key = key;
+                tr->lastNote.vel = 127;
+                tr->lastNote.transpose = seq->transpose + tr->note.transpose;
+                tr->lastNote.patch = tr->note.patch;
+                tr->lastNote.tied = false;
+                tr->lastNote.active = true;
+            }
         }
     }
 
-    strcpy(ev->note, "Note");
-    strcat(ev->note, ", ");
-    strcat(ev->note, argDumpStr);
+    waitAmount = (seq->deltaTime * seq->deltaScale);
+
+    sprintf(ev->note, "Note, tick = %d, %s", waitAmount, argDumpStr);
     strcat(ev->classStr, " ev-note");
 
-    seq->tick += (seq->deltaTime * seq->deltaScale);
+    for (channel = 0; channel < SPC_TRACK_MAX; channel++)
+    {
+        WgpSpcTrackStat *tr = &seq->track[channel];
+        if (tr->lastNote.active)
+        {
+            tr->lastNote.dur += waitAmount;
+        }
+    }
+    seq->tick += waitAmount;
 }
 
 /** vcmd 0a: set echo delay. */
@@ -1062,6 +1199,7 @@ static void wgpSpcEvent0B (WgpSpcSeqStat *seq, SeqEventReport *ev)
         WgpSpcTrackStat *tr = &seq->track[channel];
         if ((vbits & (0x80 >> channel)) != 0)
         {
+            char midiText[256];
             char s[64];
             int val;
 
@@ -1073,6 +1211,10 @@ static void wgpSpcEvent0B (WgpSpcSeqStat *seq, SeqEventReport *ev)
                 strcat(argDumpStr, ", ");
             sprintf(s, "[%d] = %d", channel, val);
             strcat(argDumpStr, s);
+
+            sprintf(midiText, "Unknown Event %02X, value = %d (0x%02x)", ev->code, val, val);
+            if (!wgpSpcLessTextInSMF)
+                smfInsertMetaText(seq->smf, ev->tick, channel, SMF_META_TEXT, midiText);
         }
     }
 
@@ -1103,10 +1245,19 @@ static void wgpSpcEventEchoWrite (WgpSpcSeqStat *seq, SeqEventReport *ev)
 static void wgpSpcEventWait (WgpSpcSeqStat *seq, SeqEventReport *ev)
 {
     int waitAmount = (seq->deltaTime * seq->deltaScale);
+    int channel;
 
     sprintf(ev->note, "Wait, tick = %d", waitAmount);
     strcat(ev->classStr, " ev-wait");
 
+    for (channel = 0; channel < SPC_TRACK_MAX; channel++)
+    {
+        WgpSpcTrackStat *tr = &seq->track[channel];
+        if (tr->lastNote.active)
+        {
+            tr->lastNote.dur += waitAmount;
+        }
+    }
     seq->tick += waitAmount;
 }
 
@@ -1239,7 +1390,6 @@ static void wgpSpcEventSetVoiceParam (WgpSpcSeqStat *seq, SeqEventReport *ev)
         WgpSpcTrackStat *tr = &seq->track[channel];
         if ((vbits & (0x80 >> channel)) != 0)
         {
-
             char s[64];
             int val;
 
@@ -1255,12 +1405,46 @@ static void wgpSpcEventSetVoiceParam (WgpSpcSeqStat *seq, SeqEventReport *ev)
             switch(code)
             {
             case EV_VOICE_PATCH:
+                tr->note.patch = val;
+                smfInsertControl(seq->smf, ev->tick, channel, channel, SMF_CONTROL_BANKSELM, seq->ver.patchFix[val].bankSelM);
+                smfInsertControl(seq->smf, ev->tick, channel, channel, SMF_CONTROL_BANKSELL, seq->ver.patchFix[val].bankSelL);
+                smfInsertProgram(seq->smf, ev->tick, channel, channel, seq->ver.patchFix[val].patchNo);
                 break;
 
             case EV_VOICE_VOLUME:
+                tr->volume = val;
+                smfInsertControl(seq->smf, ev->tick, channel, channel, SMF_CONTROL_VOLUME, wgpSpcMidiVolOf(tr->volume));
                 break;
 
             case EV_VOICE_VOLBALANCE:
+                {
+                    int midiVol, midiPan;
+                    tr->volBalance = val;
+                    midiPan = wgpSpcMidiVolBalance(tr->volBalance, &midiVol);
+                    if (midiVol != 0)
+                    {
+                        smfInsertControl(seq->smf, ev->tick, channel, channel, SMF_CONTROL_PANPOT, midiPan);
+                    }
+                    smfInsertControl(seq->smf, ev->tick, channel, channel, SMF_CONTROL_EXPRESSION, midiVol);
+                }
+                break;
+
+            default:
+                {
+                    char midiText[256];
+
+                    if (strcmp(eventName[code], "Unknown") == 0 || strcmp(eventName[code], "Undefined") == 0)
+                    {
+                        sprintf(midiText, "%s Event %02X, value = %d (0x%02x)", eventName[code], ev->code, val, val);
+                    }
+                    else
+                    {
+                        sprintf(midiText, "%s, value = %d", eventName[code], val);
+                    }
+
+                    if (!wgpSpcLessTextInSMF)
+                        smfInsertMetaText(seq->smf, ev->tick, channel, SMF_META_TEXT, midiText);
+                }
                 break;
             }
         }
@@ -1276,10 +1460,12 @@ static void wgpSpcEventSetVoiceParam (WgpSpcSeqStat *seq, SeqEventReport *ev)
     if (strcmp(eventName[code], "Unknown") == 0)
     {
         strcat(ev->classStr, " unknown");
+        fprintf(stderr, "Warning: Skipped unknown event %02X at $%04X\n", ev->code, ev->addr);
     }
     else if (strcmp(eventName[code], "Undefined") == 0)
     {
         ev->unidentified = true;
+        fprintf(stderr, "Error: Encountered unidentified event %02X at $%04X\n", ev->code, ev->addr);
     }
 }
 
@@ -1299,7 +1485,7 @@ static void wgpSpcSetEventList (WgpSpcSeqStat *seq)
     event[0x01] = (WgpSpcEvent) wgpSpcEventSetActiveVoices;
     event[0x02] = (WgpSpcEvent) wgpSpcEventSubroutine;
     event[0x03] = (WgpSpcEvent) wgpSpcEventEndSubroutine;
-    event[0x04] = (WgpSpcEvent) wgpSpcEventSetTimebase;
+    event[0x04] = (WgpSpcEvent) wgpSpcEventSetDeltaScale;
     event[0x05] = (WgpSpcEvent) wgpSpcEventMasterVolume;
     event[0x06] = (WgpSpcEvent) wgpSpcEventRepeatUntil;
     event[0x07] = (WgpSpcEvent) wgpSpcEventRepeatBreak;
@@ -1407,8 +1593,6 @@ Smf* wgpSpcARAMToMidi (const byte *aRAM)
             // rewind tracks to end point (removed)
         }
         else {
-            //wgpSpcSeqAdvTick(seq);
-
             // check time limit
             if (seq->time >= wgpSpcTimeLimit) {
                 seq->active = false;
@@ -1531,7 +1715,9 @@ static bool cmdOptPatchFix (void);
 static bool cmdOptGS (void);
 static bool cmdOptXG (void);
 static bool cmdOptGM2 (void);
+static bool cmdOptTimeBase (void);
 static bool cmdOptSong (void);
+static bool cmdOptSongSlot (void);
 static bool cmdOptSongList (void);
 static bool cmdOptLinear (void);
 static bool cmdOptBendRange (void);
@@ -1543,7 +1729,9 @@ static CmdOptDefs optDef[] = {
     { "gs", '\0', 0, cmdOptGS, "", "Insert GS Reset at beginning of seq" },
     { "xg", '\0', 0, cmdOptXG, "", "Insert XG System On at beginning of seq" },
     { "gm2", '\0', 0, cmdOptGM2, "", "Insert GM2 System On at beginning of seq" },
+    { "timebase", '\0', 0, cmdOptTimeBase, "", "Set SMF timebase (tick count for quarter note)" },
     { "song", '\0', 1, cmdOptSong, "<index>", "force set song index" },
+    { "songslot", '\0', 1, cmdOptSongSlot, "<index>", "force set song slot index for auto song search (0~3)" },
     { "songlist", '\0', 1, cmdOptSongList, "<addr>", "force set song (list) address" },
     { "linear", '\0', 0, cmdOptLinear, "", "Use linear volume/panpot (GM2 uses exp/sin curve)" },
     { "bendrange", '\0', 0, cmdOptBendRange, "<range>", "set pitch bend sensitivity (0:auto)" },
@@ -1642,11 +1830,27 @@ static bool cmdOptGM2 (void)
     return true;
 }
 
+/** set SMF division. */
+static bool cmdOptTimeBase (void)
+{
+    int timebase = strtol(gArgv[0], NULL, 0);
+    wgpSpcTimeBase = timebase;
+    return true;
+}
+
 /** set song index. */
 static bool cmdOptSong (void)
 {
     int songIndex = strtol(gArgv[0], NULL, 0);
     wgpSpcForceSongIndex = songIndex;
+    return true;
+}
+
+/** set song slot index. */
+static bool cmdOptSongSlot (void)
+{
+    int songSlotIndex = strtol(gArgv[0], NULL, 0);
+    wgpSpcForceSongSlotIndex = songSlotIndex;
     return true;
 }
 
