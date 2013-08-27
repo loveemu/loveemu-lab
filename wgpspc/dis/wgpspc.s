@@ -649,6 +649,7 @@
 0a0c: 90 03     bcc   $0a11
 0a0e: 5f 83 0a  jmp   $0a83
 
+; normal note (00-53)
 0a11: c4 39     mov   $39,a
 0a13: 3f 32 0b  call  $0b32
 0a16: 3f 80 0c  call  $0c80
@@ -701,9 +702,11 @@
 0a7d: 5f 69 0e  jmp   $0e69             ; ADSR mode
 0a80: 5f 87 0e  jmp   $0e87             ; GAIN mode
 
-0a83: f0 47     beq   $0acc
+0a83: f0 47     beq   $0acc             ; rest
 0a85: 68 80     cmp   a,#$80
 0a87: b0 51     bcs   $0ada
+
+; noise note (60-7f, 59-5f unused mirror)
 0a89: f8 df     mov   x,$df
 0a8b: 28 1f     and   a,#$1f
 0a8d: d4 50     mov   $50+x,a
@@ -738,12 +741,14 @@
 0ac6: 3f 47 0e  call  $0e47             ; set SRCN from $0200+x
 0ac9: 5f 6a 0a  jmp   $0a6a
 
+; rest (54)
 0acc: f8 df     mov   x,$df
 0ace: 3f 80 0c  call  $0c80
 0ad1: 3f 42 0b  call  $0b42
 0ad4: f5 40 03  mov   a,$0340+x
 0ad7: 5f 3e 0f  jmp   $0f3e
 
+; percussion note (80-ff)
 0ada: 28 7f     and   a,#$7f
 0adc: 8d 05     mov   y,#$05
 0ade: cf        mul   ya
