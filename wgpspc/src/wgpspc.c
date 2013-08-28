@@ -699,9 +699,9 @@ static bool wgpSpcDequeueNote (WgpSpcSeqStat *seq, int track)
         if (dur == 0)
             dur++;
 
-        key = lastNote->key + lastNote->transpose
+        key = lastNote->key/* + lastNote->transpose
             + seq->ver.patchFix[tr->lastNote.patch].key
-            + SPC_NOTE_KEYSHIFT;
+            + SPC_NOTE_KEYSHIFT*/;
         vel = lastNote->vel;
         if (vel == 0)
             vel++;
@@ -723,9 +723,9 @@ static void wgpSpcDequeueNoteAll (WgpSpcSeqStat *seq)
 }
 
 /** increment loop count. */
-static void wgpSpcAddTrackLoopCount(WgpSpcSeqStat *seq, int track, int count)
+static void wgpSpcAddLoopCount(WgpSpcSeqStat *seq, int count)
 {
-    seq->looped++;
+    seq->looped += count;
     if (seq->looped >= wgpSpcLoopMax) {
         seq->active = false;
     }
@@ -1071,8 +1071,9 @@ static void wgpSpcEventJump (WgpSpcSeqStat *seq, SeqEventReport *ev)
     (*p) += 2;
 
     // assumes backjump = loop
-    if (arg1 < *p) {
-        wgpSpcAddTrackLoopCount(seq, ev->track, 1);
+    // check repeat count for Csikos Post
+    if (arg1 < *p && seq->rptCount == 0) {
+        wgpSpcAddLoopCount(seq, 1);
     }
     *p = arg1;
 
@@ -1139,7 +1140,7 @@ static void wgpSpcEventNote (WgpSpcSeqStat *seq, SeqEventReport *ev)
             if (key != WGP_NOTE_REST) {
                 tr->lastNote.tick = ev->tick;
                 tr->lastNote.dur = 0; // set later
-                tr->lastNote.key = key;
+                tr->lastNote.key = midiKey;
                 tr->lastNote.vel = 127;
                 tr->lastNote.transpose = seq->transpose + tr->note.transpose;
                 tr->lastNote.patch = tr->note.patch;
@@ -1163,6 +1164,7 @@ static void wgpSpcEventNote (WgpSpcSeqStat *seq, SeqEventReport *ev)
         }
     }
     seq->tick += waitAmount;
+    seq->time += (double) 60 / wgpSpcTempo(seq) * waitAmount / seq->timebase;
 }
 
 /** vcmd 0a: set echo delay. */
@@ -1259,6 +1261,7 @@ static void wgpSpcEventWait (WgpSpcSeqStat *seq, SeqEventReport *ev)
         }
     }
     seq->tick += waitAmount;
+    seq->time += (double) 60 / wgpSpcTempo(seq) * waitAmount / seq->timebase;
 }
 
 /** vcmd 11: set echo feedback. */
@@ -1558,6 +1561,7 @@ Smf* wgpSpcARAMToMidi (const byte *aRAM)
 
         SeqEventReport ev;
         bool inSub;
+        int oldLooped = seq->looped;
 
         // init event report
         ev.tick = seq->tick;
@@ -1580,7 +1584,7 @@ Smf* wgpSpcARAMToMidi (const byte *aRAM)
         seq->ver.event[ev.code](seq, &ev);
 
         // dump event report
-        if (wgpSpcTextLoopMax == 0 || seq->looped < wgpSpcTextLoopMax)
+        if (wgpSpcTextLoopMax == 0 || oldLooped < wgpSpcTextLoopMax)
             printHtmlEventDump(seq, &ev);
 
         if (ev.unidentified) {
