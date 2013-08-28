@@ -104,6 +104,7 @@ public class Midi2MML {
 		// scan MIDI notes
 		int trackCount = seq.getTracks().length;
 		List<List<MidiNote>> midiTrackNotes = new ArrayList<List<MidiNote>>(trackCount);
+		long[] midiTracksEndTick = new long[trackCount];
 		for (int trackIndex = 0; trackIndex < trackCount; trackIndex++)
 		{
 			Track track = seq.getTracks()[trackIndex];
@@ -112,6 +113,7 @@ public class Midi2MML {
 			for (int midiEventIndex = 0; midiEventIndex < track.size(); midiEventIndex++)
 			{
 				MidiEvent event = track.get(midiEventIndex);
+				midiTracksEndTick[trackIndex] = event.getTick();
 				if (event.getMessage() instanceof ShortMessage)
 				{
 					ShortMessage message = (ShortMessage)event.getMessage();
@@ -166,6 +168,8 @@ public class Midi2MML {
 		int measure = 0;
 		long measureLength = seq.getResolution() * 4;
 		long nextMeasureTick = measureLength;
+		int noteIndex = 0;
+		int currNoteIndex = 0;
 		boolean mmlFinished = false;
 		while (!mmlFinished)
 		{
@@ -173,6 +177,7 @@ public class Midi2MML {
 			{
 				Midi2MMLTrack mmlTrack = mmlTracks[trackIndex];
 				Track track = seq.getTracks()[trackIndex];
+				List<MidiNote> midiNotes = midiTrackNotes.get(trackIndex);
 
 				while (!mmlTrack.isFinished())
 				{
@@ -205,7 +210,11 @@ public class Midi2MML {
 						{
 							if (message.getData1() == mmlTrack.getNoteNumber())
 							{
-								mmlTrack.setTick(tick);
+								MidiNote midiNextNote = (currNoteIndex + 1 < midiNotes.size()) ? midiNotes.get(currNoteIndex + 1) : null;
+								long minLength = tick - mmlLastTick;
+								long maxLength = ((midiNextNote != null) ? midiNextNote.getTime() : midiTracksEndTick[trackIndex]) - mmlLastTick;
+
+								mmlTrack.setTick(mmlLastTick + minLength);
 								mmlTrack.setNoteNumber(MMLNoteConverter.KEY_REST);
 								mmlKeepCurrentNote = false;
 							}
@@ -230,6 +239,9 @@ public class Midi2MML {
 							mmlTrack.setOctave(noteOctave);
 							mmlTrack.setNoteNumber(noteNumber);
 							mmlKeepCurrentNote = false;
+
+							currNoteIndex = noteIndex;
+							noteIndex++;
 						}
 						else
 						{
@@ -237,7 +249,8 @@ public class Midi2MML {
 							if (newMML.size() != 0)
 							{
 								mmlEvents.addAll(newMML);
-								mmlTrack.setTick(tick);
+								if (tick >= mmlLastTick)
+									mmlTrack.setTick(tick);
 							}
 						}
 					}
@@ -269,7 +282,8 @@ public class Midi2MML {
 							if (newMML.size() != 0)
 							{
 								mmlEvents.addAll(newMML);
-								mmlTrack.setTick(tick);
+								if (tick >= mmlLastTick)
+									mmlTrack.setTick(tick);
 							}
 							break;
 						}
@@ -280,22 +294,23 @@ public class Midi2MML {
 						if (newMML.size() != 0)
 						{
 							mmlEvents.addAll(newMML);
-							mmlTrack.setTick(tick);
+							if (tick >= mmlLastTick)
+								mmlTrack.setTick(tick);
 						}
 					}
 
 					// final event,
 					// seek to the last whether the last event has been dispatched.
-					if (mmlTrack.getMidiEventIndex() == track.size())
-					{
-						if (!mmlTrack.isEmpty())
-						{
-							if (mmlTrack.getTick() < tick)
-							{
-								mmlTrack.setTick(tick);
-							}
-						}
-					}
+					//if (mmlTrack.getMidiEventIndex() == track.size())
+					//{
+					//	if (!mmlTrack.isEmpty())
+					//	{
+					//		if (mmlTrack.getTick() < tick)
+					//		{
+					//			mmlTrack.setTick(tick);
+					//		}
+					//	}
+					//}
 
 					// timing changed,
 					// write the last note/rest and finish the seek
