@@ -2,13 +2,16 @@ package com.googlecode.loveemu.PetiteMM;
 
 import java.io.IOException;
 import java.io.Writer;
+import java.util.Collection;
+import java.util.LinkedList;
+import java.util.List;
 
 class Midi2MMLTrack {
 
 	/**
 	 * Output MML text.
 	 */
-	private StringBuffer mml = new StringBuffer();
+	private List<MMLEvent> mmlEventList = new LinkedList<MMLEvent>();
 
 	/**
 	 * Current position of conversion in tick.
@@ -44,6 +47,11 @@ class Midi2MMLTrack {
 	 * True if conversion is already finished.
 	 */
 	private boolean finished = false;
+
+	/**
+	 * True if use triplet syntax for some simple triplets.
+	 */
+	private boolean useTriplet = false;
 
 	/**
 	 * Construct new MML track conversion object.
@@ -147,11 +155,27 @@ class Midi2MMLTrack {
 	}
 
 	/**
+	 * Get if triplet is preferred.
+	 * @return true if triplet is preferred.
+	 */
+	public boolean getUseTriplet() {
+		return useTriplet;
+	}
+
+	/**
+	 * Set if triplet is preferred.
+	 * @param useTriplet true if triplet is preferred.
+	 */
+	public void setUseTriplet(boolean useTriplet) {
+		this.useTriplet = useTriplet;
+	}
+
+	/**
 	 * Clear the current MML text.
 	 */
 	void clear()
 	{
-		mml.setLength(0);
+		mmlEventList.clear();
 	}
 
 	/**
@@ -187,12 +211,21 @@ class Midi2MMLTrack {
 	}
 
 	/**
-	 * Appends the specified MML text.
-	 * @param str MML text.
+	 * Appends the specified MML event.
+	 * @param str MML event.
 	 */
-	public void appendMML(String str)
+	public void add(MMLEvent event)
 	{
-		mml.append(str);
+		mmlEventList.add(event);
+	}
+
+	/**
+	 * Appends the specified MML events.
+	 * @param str Collection of MML events.
+	 */
+	public void addAll(Collection<MMLEvent> events)
+	{
+		mmlEventList.addAll(events);
 	}
 
 	/**
@@ -201,24 +234,7 @@ class Midi2MMLTrack {
 	 */
 	public boolean isEmpty()
 	{
-		return mml.length() == 0;
-	}
-
-	/**
-	 * Use triplet rather than a simple note.
-	 */
-	public void convertToTriplet()
-	{
-		String mmlString = mml.toString();
-		for (int i = 0; i < 8; i++)
-		{
-			int noteLenTo = 1 << i;
-			int noteLenFrom = noteLenTo * 3;
-			mmlString = mmlString.replaceAll("([abcdefgr\\^][\\+\\-]*)" + noteLenFrom + "(\\s*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom + "(\\s*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom, "\\" + MMLSymbol.TRIPLET_START + "$1\\" + noteLenTo + "$2\\" + noteLenTo + "$3\\" + noteLenTo + "\\" + MMLSymbol.TRIPLET_END);
-		}
-
-		mml.setLength(0);
-		mml.append(mmlString);
+		return mmlEventList.size() == 0;
 	}
 
 	/**
@@ -228,9 +244,17 @@ class Midi2MMLTrack {
 	 */
 	void writeMML(Writer writer) throws IOException
 	{
-		if (mml.length() != 0)
+		if (mmlEventList.size() != 0)
 		{
-			String mmlString = mml.toString();
+			StringBuffer mmlBuffer = new StringBuffer();
+			for (MMLEvent event : mmlEventList)
+			{
+				mmlBuffer.append(event.toString());
+			}
+
+			String mmlString = mmlBuffer.toString();
+			if (useTriplet)
+				mmlString = convertToTriplet(mmlString);
 			writer.write(mmlString);
 
 			if (!mmlString.endsWith(System.getProperty("line.separator")))
@@ -238,5 +262,19 @@ class Midi2MMLTrack {
 				writer.write(System.getProperty("line.separator"));
 			}
 		}
+	}
+
+	/**
+	 * Use triplet rather than a simple note.
+	 */
+	private String convertToTriplet(String mmlString)
+	{
+		for (int i = 0; i < 8; i++)
+		{
+			int noteLenTo = 1 << i;
+			int noteLenFrom = noteLenTo * 3;
+			mmlString = mmlString.replaceAll("([abcdefgr\\^][\\+\\-]*)" + noteLenFrom + "(\\s*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom + "(\\s*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom, "\\" + MMLSymbol.TRIPLET_START + "$1\\" + noteLenTo + "$2\\" + noteLenTo + "$3\\" + noteLenTo + "\\" + MMLSymbol.TRIPLET_END);
+		}
+		return mmlString;
 	}
 }

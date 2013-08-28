@@ -2,6 +2,8 @@ package com.googlecode.loveemu.PetiteMM;
 
 import java.io.IOException;
 import java.io.Writer;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.sound.midi.InvalidMidiDataException;
 import javax.sound.midi.MetaMessage;
@@ -104,6 +106,7 @@ public class Midi2MML {
 		for (int trackIndex = 0; trackIndex < trackCount; trackIndex++)
 		{
 			mmlTracks[trackIndex] = new Midi2MMLTrack();
+			mmlTracks[trackIndex].setUseTriplet(useTriplet);
 		}
 		// reset subsystems
 		MMLNoteConverter noteConv = new MMLNoteConverter(seq.getResolution(), mmlMaxDotCount);
@@ -141,7 +144,7 @@ public class Midi2MML {
 					mmlTrack.setMidiEventIndex(mmlTrack.getMidiEventIndex() + 1);
 
 					// branch by event type for more detailed access
-					String mml = "";
+					List<MMLEvent> mmlEvents = new ArrayList<MMLEvent>();
 					long mmlLastTick = mmlTrack.getTick();
 					int mmlLastNoteNumber = mmlTrack.getNoteNumber();
 					boolean mmlKeepCurrentNote = (mmlLastNoteNumber != MMLNoteConverter.KEY_REST);
@@ -169,10 +172,10 @@ public class Midi2MML {
 							{
 								mmlTrack.setOctave(noteOctave);
 								mmlTrack.setFirstNote(false);
-								mml = String.format("%s%d", MMLSymbol.OCTAVE, noteOctave);
+								mmlEvents.add(new MMLEvent(MMLSymbol.OCTAVE, new String[] { String.format("%d", noteOctave) }));
 							}
 
-							mml += convertMidiEventToMML(event, mmlTrack);
+							mmlEvents.addAll(convertMidiEventToMML(event, mmlTrack));
 
 							// remember new note
 							mmlTrack.setTick(tick);
@@ -182,10 +185,10 @@ public class Midi2MML {
 						}
 						else
 						{
-							String newMML = convertMidiEventToMML(event, mmlTrack);
-							if (newMML != null)
+							List<MMLEvent> newMML = convertMidiEventToMML(event, mmlTrack);
+							if (newMML.size() != 0)
 							{
-								mml = newMML;
+								mmlEvents.addAll(newMML);
 								mmlTrack.setTick(tick);
 							}
 						}
@@ -214,10 +217,10 @@ public class Midi2MML {
 							break;
 
 						default:
-							String newMML = convertMidiEventToMML(event, mmlTrack);
-							if (newMML != null)
+							List<MMLEvent> newMML = convertMidiEventToMML(event, mmlTrack);
+							if (newMML.size() != 0)
 							{
-								mml = newMML;
+								mmlEvents.addAll(newMML);
 								mmlTrack.setTick(tick);
 							}
 							break;
@@ -225,10 +228,10 @@ public class Midi2MML {
 					}
 					else
 					{
-						String newMML = convertMidiEventToMML(event, mmlTrack);
-						if (newMML != null)
+						List<MMLEvent> newMML = convertMidiEventToMML(event, mmlTrack);
+						if (newMML.size() != 0)
 						{
-							mml = newMML;
+							mmlEvents.addAll(newMML);
 							mmlTrack.setTick(tick);
 						}
 					}
@@ -250,24 +253,24 @@ public class Midi2MML {
 					// write the last note/rest and finish the seek
 					if (mmlTrack.getTick() != mmlLastTick)
 					{
-						mmlTrack.appendMML(noteConv.getNote((int)(mmlTrack.getTick() - mmlLastTick), mmlLastNoteNumber));
+						mmlTrack.add(new MMLEvent(noteConv.getNote((int)(mmlTrack.getTick() - mmlLastTick), mmlLastNoteNumber)));
 						if (mmlKeepCurrentNote)
 						{
-							mmlTrack.appendMML(MMLSymbol.TIE);
+							mmlTrack.add(new MMLEvent(MMLSymbol.TIE));
 						}
 
 						if (mmlTrack.getMeasure() != measure)
 						{
-							mmlTrack.appendMML(System.getProperty("line.separator"));
+							mmlTrack.add(new MMLEvent(System.getProperty("line.separator")));
 							mmlTrack.setMeasure(measure);
 						}
 					}
 
 					// event is dispatched,
 					// write the new MML command
-					if (mml.length() != 0)
+					if (mmlEvents.size() != 0)
 					{
-						mmlTrack.appendMML(mml);
+						mmlTrack.addAll(mmlEvents);
 					}
 				}
 			}
@@ -302,9 +305,6 @@ public class Midi2MML {
 					writer.write(MMLSymbol.TRACK_END);
 					writer.write(System.getProperty("line.separator"));
 				}
-
-				if (useTriplet)
-					mmlTrack.convertToTriplet();
 				mmlTrack.writeMML(writer);
 			}
 		}
@@ -318,9 +318,9 @@ public class Midi2MML {
 	 * @return Converted text, null if event is ignored.
 	 * @throws InvalidMidiDataException throws if unexpected MIDI event is appeared.
 	 */
-	private String convertMidiEventToMML(MidiEvent event, Midi2MMLTrack mmlTrack) throws InvalidMidiDataException
+	private List<MMLEvent> convertMidiEventToMML(MidiEvent event, Midi2MMLTrack mmlTrack) throws InvalidMidiDataException
 	{
-		String mml = null;
+		List<MMLEvent> mmlEvents = new ArrayList<MMLEvent>();
 		if (event.getMessage() instanceof ShortMessage)
 		{
 			ShortMessage message = (ShortMessage)event.getMessage();
@@ -332,15 +332,14 @@ public class Midi2MML {
 				int mmlOctave = mmlTrack.getOctave();
 
 				// adjust octave
-				mml = "";
 				while (mmlOctave < noteOctave)
 				{
-					mml += !octaveReversed ? MMLSymbol.OCTAVE_UP : MMLSymbol.OCTAVE_DOWN;
+					mmlEvents.add(new MMLEvent(!octaveReversed ? MMLSymbol.OCTAVE_UP : MMLSymbol.OCTAVE_DOWN));
 					mmlOctave++;
 				}
 				while (mmlOctave > noteOctave)
 				{
-					mml += !octaveReversed ? MMLSymbol.OCTAVE_DOWN : MMLSymbol.OCTAVE_UP;
+					mmlEvents.add(new MMLEvent(!octaveReversed ? MMLSymbol.OCTAVE_DOWN : MMLSymbol.OCTAVE_UP));
 					mmlOctave--;
 				}
 
@@ -348,7 +347,7 @@ public class Midi2MML {
 			}
 			else if (message.getCommand() == ShortMessage.PROGRAM_CHANGE)
 			{
-				//mml = String.format("%s%d", MMLSymbol.INSTRUMENT, message.getData1());
+				//mmlEvents.add(new MMLEvent(MMLSymbol.INSTRUMENT, new String[] { String.format("%d", message.getData1()) }));
 			}
 		}
 		else if (event.getMessage() instanceof MetaMessage)
@@ -366,11 +365,11 @@ public class Midi2MML {
 
 				int usLenOfQN = ((data[0] & 0xff) << 16) | ((data[1] & 0xff) << 8) | (data[2] & 0xff);
 				double bpm = 60000000.0 / usLenOfQN;
-				mml = String.format("%s%.0f", MMLSymbol.TEMPO, bpm);
+				mmlEvents.add(new MMLEvent(MMLSymbol.TEMPO, new String[] { String.format("%.0f", bpm) }));
 				break;
 			}
 		}
-		return mml;
+		return mmlEvents;
 	}
 
 	/**
