@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.Writer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.ListIterator;
 
 import javax.sound.midi.InvalidMidiDataException;
 import javax.sound.midi.MetaMessage;
@@ -100,8 +101,55 @@ public class Midi2MML {
 		// when the input file is SMF format 0 or something like that, it requires preprocessing.
 		seq = MidiUtil.SeparateMixedChannel(seq);
 
-		// reset track parameters
+		// scan MIDI notes
 		int trackCount = seq.getTracks().length;
+		List<List<MidiNote>> midiTrackNotes = new ArrayList<List<MidiNote>>(trackCount);
+		for (int trackIndex = 0; trackIndex < trackCount; trackIndex++)
+		{
+			Track track = seq.getTracks()[trackIndex];
+
+			List<MidiNote> midiNotes = new ArrayList<MidiNote>();
+			for (int midiEventIndex = 0; midiEventIndex < track.size(); midiEventIndex++)
+			{
+				MidiEvent event = track.get(midiEventIndex);
+				if (event.getMessage() instanceof ShortMessage)
+				{
+					ShortMessage message = (ShortMessage)event.getMessage();
+
+					if (message.getCommand() == ShortMessage.NOTE_OFF ||
+							(message.getCommand() == ShortMessage.NOTE_ON && message.getData2() == 0))
+					{
+						// search from head, for overlapping notes
+						ListIterator<MidiNote> iter = midiNotes.listIterator();
+						while (iter.hasNext())
+						{
+							MidiNote note = iter.next();
+							int noteNumber = message.getData1();
+							if (note.getLength() == -1 && note.getNoteNumber() == noteNumber)
+							{
+								note.setLength(event.getTick() - note.getTime());
+								break;
+							}
+						}
+					}
+					else if (message.getCommand() == ShortMessage.NOTE_ON)
+					{
+						midiNotes.add(new MidiNote(message.getChannel(), event.getTick(), -1, message.getData1(), message.getData2()));
+					}
+				}
+			}
+			for (MidiNote note : midiNotes)
+			{
+				if (note.getLength() <= 0) {
+					throw new InvalidMidiDataException("Sequence contains an unfinished or zero-length note.");
+				}
+				// dump for debug
+				//System.out.format("[ch%d/%d] Note (%d) len=%d vel=%d\n", note.getChannel(), note.getTime(), note.getNoteNumber(), note.getLength(), note.getVelocity());
+			}
+			midiTrackNotes.add(midiNotes);
+		}
+
+		// reset track parameters
 		Midi2MMLTrack[] mmlTracks = new Midi2MMLTrack[trackCount];
 		for (int trackIndex = 0; trackIndex < trackCount; trackIndex++)
 		{

@@ -70,7 +70,7 @@ public class PetiteMM {
 
 		int argi = 0;
 
-		args = new String[] { "--dots", "2", "--use-triplet", "test.mid" };
+		//args = new String[] { "--dots", "2", "--use-triplet", "test.mid" };
 
 		// dispatch option switches
 		while (argi < args.length && args[argi].startsWith("-"))
