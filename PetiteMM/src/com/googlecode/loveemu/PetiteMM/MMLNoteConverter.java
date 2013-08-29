@@ -211,7 +211,7 @@ public class MMLNoteConverter {
 			int dot = 1;
 			int baseNoteTick = tick;
 			String mml = notes[tick].getText();
-			while (tick % (1 << dot) == 0)
+			while (baseNoteTick % (1 << dot) == 0)
 			{
 				// limit the maximum dot count
 				if (maxDotCount >= 0 && dot > maxDotCount)
@@ -229,6 +229,7 @@ public class MMLNoteConverter {
 				// skip existing definitions
 				if (notes[tick] != null)
 				{
+					dot++;
 					continue;
 				}
 
@@ -298,6 +299,11 @@ public class MMLNoteConverter {
 					break;
 				}
 			}
+		}
+
+		for (tick = 1; tick < tpqn * 8; tick++)
+		{
+			System.out.println("" + tick + "\t" + notes[tick]);
 		}
 	}
 }

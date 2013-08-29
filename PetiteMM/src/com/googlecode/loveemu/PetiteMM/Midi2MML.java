@@ -132,7 +132,6 @@ public class Midi2MML {
 		Midi2MMLTrack[] mmlTracks = new Midi2MMLTrack[trackCount];
 		int[] noteIndex = new int[trackCount];
 		int[] currNoteIndex = new int[trackCount];
-		int[] nextOctave = new int[trackCount];
 		for (int trackIndex = 0; trackIndex < trackCount; trackIndex++)
 		{
 			mmlTracks[trackIndex] = new Midi2MMLTrack();
