@@ -54,10 +54,17 @@ class Midi2MMLTrack {
 	private boolean useTriplet = false;
 
 	/**
-	 * Construct new MML track conversion object.
+	 * MML symbol set.
 	 */
-	Midi2MMLTrack()
+	private MMLSymbol mmlSymbol;
+
+	/**
+	 * Construct new MML track conversion object.
+	 * @param mmlSymbol MML symbol set.
+	 */
+	Midi2MMLTrack(MMLSymbol mmlSymbol)
 	{
+		this.mmlSymbol = mmlSymbol;
 	}
 
 	/**
@@ -273,9 +280,17 @@ class Midi2MMLTrack {
 		{
 			int noteLenTo = 1 << i;
 			int noteLenFrom = noteLenTo * 3;
-			mmlString = mmlString.replaceAll("([<>]*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom + "(\\s*[<>]*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom + "(\\s*[<>]*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom, "\\" + MMLSymbol.TRIPLET_START + "$1\\" + noteLenTo + "$2\\" + noteLenTo + "$3\\" + noteLenTo + "\\" + MMLSymbol.TRIPLET_END); // c12c12c12 -> {c4c4c4}
-			mmlString = mmlString.replaceAll("([<>]*[abcdefgr\\^][\\+\\-]*)" + (noteLenFrom * 2) + "(\\s*[<>]*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom, "\\" + MMLSymbol.TRIPLET_START + "$1\\" + (noteLenTo * 2) + "$2\\" + noteLenTo + "\\" + MMLSymbol.TRIPLET_END); // c6c12 -> {c2c4}
-			mmlString = mmlString.replaceAll("([<>]*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom + "(\\s*[<>]*[abcdefgr\\^][\\+\\-]*)" + (noteLenFrom * 2), "\\" + MMLSymbol.TRIPLET_START + "$1\\" + noteLenTo + "$2\\" + (noteLenTo * 2) + "\\" + MMLSymbol.TRIPLET_END); // c12c6 -> {c4c2}
+			mmlString = mmlString.replaceAll("([<>]*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom + "(\\s*[<>]*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom + "(\\s*[<>]*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom, "\\" + mmlSymbol.getTripletStart(noteLenTo) + "$1" + (mmlSymbol.shouldTripletHaveLengthInBracket() ? "\\" + noteLenTo : "") + "$2" + (mmlSymbol.shouldTripletHaveLengthInBracket() ? "\\" + noteLenTo : "") + "$3" + (mmlSymbol.shouldTripletHaveLengthInBracket() ? "\\" + noteLenTo : "") + "\\" + mmlSymbol.getTripletEnd(noteLenTo)); // c12c12c12 -> {c4c4c4}
+			if (mmlSymbol.shouldTripletHaveLengthInBracket())
+			{
+				mmlString = mmlString.replaceAll("([<>]*[abcdefgr\\^][\\+\\-]*)" + (noteLenFrom * 2) + "(\\s*[<>]*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom, "\\" + mmlSymbol.getTripletStart(noteLenTo) + "$1\\" + (noteLenTo * 2) + "$2\\" + noteLenTo + "\\" + mmlSymbol.getTripletEnd(noteLenTo)); // c6c12 -> {c2c4}
+				mmlString = mmlString.replaceAll("([<>]*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom + "(\\s*[<>]*[abcdefgr\\^][\\+\\-]*)" + (noteLenFrom * 2), "\\" + mmlSymbol.getTripletStart(noteLenTo) + "$1\\" + noteLenTo + "$2\\" + (noteLenTo * 2) + "\\" + mmlSymbol.getTripletEnd(noteLenTo)); // c12c6 -> {c4c2}
+			}
+			else
+			{
+				mmlString = mmlString.replaceAll("([<>]*[abcdefgr\\^][\\+\\-]*)" + (noteLenFrom * 2) + "(\\s*[<>]*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom, "\\" + mmlSymbol.getTripletStart(noteLenTo) + "$1\\" + mmlSymbol.getTie() + "$2\\" + mmlSymbol.getTripletEnd(noteLenTo)); // c6c12 -> {cc^}
+				mmlString = mmlString.replaceAll("([<>]*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom + "(\\s*[<>]*[abcdefgr\\^][\\+\\-]*)" + (noteLenFrom * 2), "\\" + mmlSymbol.getTripletStart(noteLenTo) + "$1$2\\" + mmlSymbol.getTie() + "\\" + mmlSymbol.getTripletEnd(noteLenTo)); // c12c6 -> {c^c}
+			}
 		}
 		return mmlString;
 	}

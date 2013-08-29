@@ -13,24 +13,35 @@ public class MMLNoteInfo {
 	private String text;
 
 	/**
-	 * Construct a new note info.
+	 * MML symbol set.
 	 */
-	public MMLNoteInfo() {
+	private MMLSymbol mmlSymbol;
+
+	/**
+	 * Construct a new note info.
+	 * @param mmlSymbol MML symbol set.
+	 */
+	public MMLNoteInfo(MMLSymbol mmlSymbol) {
+		this.mmlSymbol = mmlSymbol;
 	}
 
 	/**
 	 * Construct a new note info.
+	 * @param mmlSymbol MML symbol set.
 	 * @param text MML for the note, $N will be replaced to a requested key at getText().
 	 */
-	public MMLNoteInfo(String text) {
+	public MMLNoteInfo(MMLSymbol mmlSymbol, String text) {
+		this.mmlSymbol = mmlSymbol;
 		setText(text);
 	}
 
 	/**
 	 * Construct a new note info.
+	 * @param mmlSymbol MML symbol set.
 	 * @param note Source note info.
 	 */
-	public MMLNoteInfo(MMLNoteInfo note) {
+	public MMLNoteInfo(MMLSymbol mmlSymbol, MMLNoteInfo note) {
+		this.mmlSymbol = mmlSymbol;
 		setText(note.getText());
 	}
 
@@ -53,24 +64,24 @@ public class MMLNoteInfo {
 		}
 		else if (key == KEY_REST)
 		{
-			return text.replaceAll("\\$N", MMLSymbol.REST).replaceAll("\\" + MMLSymbol.TIE, "");
+			return text.replaceAll("\\$N", mmlSymbol.getRest()).replaceAll("\\" + mmlSymbol.getTie(), "");
 		}
 		else
 		{
 			int keyIndex;
 			if (key >= 0)
 			{
-				keyIndex = key % MMLSymbol.NOTES.length;
+				keyIndex = key % mmlSymbol.getNotes().length;
 			}
 			else
 			{
-				keyIndex = -(-key % MMLSymbol.NOTES.length);
+				keyIndex = -(-key % mmlSymbol.getNotes().length);
 				if (keyIndex < 0)
 				{
-					keyIndex += MMLSymbol.NOTES.length;
+					keyIndex += mmlSymbol.getNotes().length;
 				}
 			}
-			return text.replaceAll("\\$N", MMLSymbol.NOTES[keyIndex]);
+			return text.replaceAll("\\$N", mmlSymbol.getNote(keyIndex));
 		}
 	}
 

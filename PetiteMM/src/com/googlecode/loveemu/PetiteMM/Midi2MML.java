@@ -48,6 +48,11 @@ public class Midi2MML {
 	public final static int DEFAULT_MAX_DOT_COUNT = -1;
 
 	/**
+	 * MML symbol set.
+	 */
+	private MMLSymbol mmlSymbol;
+
+	/**
 	 * Ticks per quarter note of target MML.
 	 */
 	private int targetResolution;
@@ -77,15 +82,26 @@ public class Midi2MML {
 	 */
 	public Midi2MML()
 	{
-		this(DEFAULT_RESOLUTION);
+		this(new MMLSymbol(), DEFAULT_RESOLUTION);
 	}
 
 	/**
 	 * Construct a new MIDI to MML converter.
+	 * @param mmlSymbol MML symbol set.
+	 */
+	public Midi2MML(MMLSymbol mmlSymbol)
+	{
+		this(mmlSymbol, DEFAULT_RESOLUTION);
+	}
+
+	/**
+	 * Construct a new MIDI to MML converter.
+	 * @param mmlSymbol MML symbol set.
 	 * @param targetResolution Ticks per quarter note of target MML.
 	 */
-	public Midi2MML(int targetResolution)
+	public Midi2MML(MMLSymbol mmlSymbol, int targetResolution)
 	{
+		this.mmlSymbol = mmlSymbol;
 		this.setTargetResolution(targetResolution);
 	}
 
@@ -95,10 +111,27 @@ public class Midi2MML {
 	 */
 	public Midi2MML(Midi2MML obj)
 	{
+		mmlSymbol = new MMLSymbol(obj.mmlSymbol);
 		mmlMaxDotCount = obj.mmlMaxDotCount;
 		octaveReversed = obj.octaveReversed;
 		useTriplet = obj.useTriplet;
 		targetResolution = obj.targetResolution;
+	}
+
+	/**
+	 * Get MML symbol set.
+	 * @return MML symbol set.
+	 */
+	public MMLSymbol getMmlSymbol() {
+		return mmlSymbol;
+	}
+
+	/**
+	 * Set MML symbol set.
+	 * @param mmlSymbol
+	 */
+	public void setMmlSymbol(MMLSymbol mmlSymbol) {
+		this.mmlSymbol = mmlSymbol;
 	}
 
 	/**
@@ -207,11 +240,11 @@ public class Midi2MML {
 		int[] currNoteIndex = new int[trackCount];
 		for (int trackIndex = 0; trackIndex < trackCount; trackIndex++)
 		{
-			mmlTracks[trackIndex] = new Midi2MMLTrack();
+			mmlTracks[trackIndex] = new Midi2MMLTrack(mmlSymbol);
 			mmlTracks[trackIndex].setUseTriplet(useTriplet);
 		}
 		// reset subsystems
-		MMLNoteConverter noteConv = new MMLNoteConverter(seq.getResolution(), mmlMaxDotCount);
+		MMLNoteConverter noteConv = new MMLNoteConverter(mmlSymbol, seq.getResolution(), mmlMaxDotCount);
 
 		// convert tracks at the same time
 		// reading tracks one by one would be simpler than the tick-based loop,
@@ -340,7 +373,7 @@ public class Midi2MML {
 							{
 								mmlTrack.setOctave(noteOctave);
 								mmlTrack.setFirstNote(false);
-								mmlEvents.add(new MMLEvent(MMLSymbol.OCTAVE, new String[] { String.format("%d", noteOctave) }));
+								mmlEvents.add(new MMLEvent(mmlSymbol.getOctave(), new String[] { String.format("%d", noteOctave) }));
 							}
 
 							// remember new note
@@ -417,12 +450,12 @@ public class Midi2MML {
 							int noteOctave = mmlLastNoteNumber / 12;
 							while (mmlOctave < noteOctave)
 							{
-								mmlTrack.add(new MMLEvent(!octaveReversed ? MMLSymbol.OCTAVE_UP : MMLSymbol.OCTAVE_DOWN));
+								mmlTrack.add(new MMLEvent(!octaveReversed ? mmlSymbol.getOctaveUp() : mmlSymbol.getOctaveDown()));
 								mmlOctave++;
 							}
 							while (mmlOctave > noteOctave)
 							{
-								mmlTrack.add(new MMLEvent(!octaveReversed ? MMLSymbol.OCTAVE_DOWN : MMLSymbol.OCTAVE_UP));
+								mmlTrack.add(new MMLEvent(!octaveReversed ? mmlSymbol.getOctaveDown() : mmlSymbol.getOctaveUp()));
 								mmlOctave--;
 							}
 							mmlTrack.setOctave(noteOctave);
@@ -430,7 +463,7 @@ public class Midi2MML {
 							mmlTrack.add(new MMLEvent(noteConv.getNote((int)(mmlTrack.getTick() - mmlLastTick), mmlLastNoteNumber)));
 							if (mmlKeepCurrentNote)
 							{
-								mmlTrack.add(new MMLEvent(MMLSymbol.TIE));
+								mmlTrack.add(new MMLEvent(mmlSymbol.getTie()));
 							}
 
 							int lastMeasure = MidiTimeSignature.getMeasureByTick(mmlLastTick, timeSignatures, seq.getResolution());
@@ -474,7 +507,7 @@ public class Midi2MML {
 					firstTrackWrite = false;
 				else
 				{
-					writer.write(MMLSymbol.TRACK_END);
+					writer.write(mmlSymbol.getTrackEnd());
 					writer.write(System.getProperty("line.separator"));
 				}
 				mmlTrack.writeMML(writer);
@@ -684,7 +717,7 @@ public class Midi2MML {
 
 				int usLenOfQN = ((data[0] & 0xff) << 16) | ((data[1] & 0xff) << 8) | (data[2] & 0xff);
 				double bpm = 60000000.0 / usLenOfQN;
-				mmlEvents.add(new MMLEvent(MMLSymbol.TEMPO, new String[] { String.format("%.0f", bpm) }));
+				mmlEvents.add(new MMLEvent(mmlSymbol.getTempo(), new String[] { String.format("%.0f", bpm) }));
 				break;
 			}
 		}

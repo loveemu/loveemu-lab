@@ -32,12 +32,16 @@ public class MMLNoteConverter {
 	private int maxDotCount;
 
 	/**
+	 * MML symbol set.
+	 */
+	private MMLSymbol mmlSymbol;
+
+	/**
 	 * Construct new MML note converter.
 	 * @param tpqn Tick per quarter note of MML.
 	 */
-	public MMLNoteConverter(int tpqn) {
-		setTPQN(tpqn);
-		InitNoteTable(tpqn, -1);
+	public MMLNoteConverter(MMLSymbol mmlSymbol, int tpqn) {
+		this(mmlSymbol, tpqn, -1);
 	}
 
 	/**
@@ -45,7 +49,8 @@ public class MMLNoteConverter {
 	 * @param tpqn Tick per quarter note of MML.
 	 * @param maxDotCount Maximum count of dots of dotted-note allowed.
 	 */
-	public MMLNoteConverter(int tpqn, int maxDotCount) {
+	public MMLNoteConverter(MMLSymbol mmlSymbol, int tpqn, int maxDotCount) {
+		this.mmlSymbol = mmlSymbol;
 		setTPQN(tpqn);
 		InitNoteTable(tpqn, maxDotCount);
 	}
@@ -66,7 +71,7 @@ public class MMLNoteConverter {
 		while (length > (tpqn * 8))
 		{
 			sb.append(notes[tpqn * 8].getText());
-			sb.append(MMLSymbol.TIE);
+			sb.append(mmlSymbol.getTie());
 			length -= tpqn * 8;
 		}
 		sb.append(notes[length].getText());
@@ -92,7 +97,7 @@ public class MMLNoteConverter {
 			sb.append(notes[tpqn * 8].getText(key));
 			if (key != MMLNoteConverter.KEY_REST)
 			{
-				sb.append(MMLSymbol.TIE);
+				sb.append(mmlSymbol.getTie());
 			}
 			length -= tpqn * 8;
 		}
@@ -195,7 +200,7 @@ public class MMLNoteConverter {
 
 		// construct the note table
 		notes = new MMLNoteInfo[tpqn * 8 + 1];
-		notes[0] = new MMLNoteInfo("");
+		notes[0] = new MMLNoteInfo(mmlSymbol, "");
 
 		// initialize length table
 		List<List<Integer>> singleNoteLengths = new ArrayList<List<Integer>>(tpqn * 8 + 1);
@@ -224,7 +229,7 @@ public class MMLNoteConverter {
 			simpleNoteLength.add(tick);
 
 			// add new note
-			notes[tick] = new MMLNoteInfo("$N" + mmlNoteLen);
+			notes[tick] = new MMLNoteInfo(mmlSymbol, "$N" + mmlNoteLen);
 			noteLengths.set(tick, simpleNoteLength);
 			singleNotes[tick] = notes[tick];
 			singleNoteLengths.set(tick, simpleNoteLength);
@@ -261,7 +266,7 @@ public class MMLNoteConverter {
 
 				// add new note
 				mml = mml + ".";
-				notes[tick] = new MMLNoteInfo(mml);
+				notes[tick] = new MMLNoteInfo(mmlSymbol, mml);
 				noteLengths.set(tick, dottedNoteLength);
 				singleNotes[tick] = notes[tick];
 				singleNoteLengths.set(tick, dottedNoteLength);
@@ -296,7 +301,7 @@ public class MMLNoteConverter {
 				{
 					if (prevNotes[tickSub] != null && singleNotes[tick - tickSub] != null)
 					{
-						String newMML = prevNotes[tickSub].getText() + MMLSymbol.TIE + singleNotes[tick - tickSub].getText();
+						String newMML = prevNotes[tickSub].getText() + mmlSymbol.getTie() + singleNotes[tick - tickSub].getText();
 						if (mml == null || mml.length() > newMML.length())
 						{
 							mml = newMML;
@@ -308,7 +313,7 @@ public class MMLNoteConverter {
 				// add new note if available
 				if (mml != null)
 				{
-					notes[tick] = new MMLNoteInfo(mml);
+					notes[tick] = new MMLNoteInfo(mmlSymbol, mml);
 					noteLengths.set(tick, multipleNoteLengths);
 				}
 			}
