@@ -563,8 +563,8 @@ public class Midi2MML {
 			}
 			for (MidiNote note : midiNotes)
 			{
-				if (note.getLength() <= 0) {
-					throw new InvalidMidiDataException("Sequence contains an unfinished or zero-length note.");
+				if (note.getLength() == -1) {
+					throw new InvalidMidiDataException("Sequence contains an unfinished note.");
 				}
 				// dump for debug
 				if (debugDump)
