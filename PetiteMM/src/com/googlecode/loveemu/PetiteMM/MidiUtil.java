@@ -108,4 +108,49 @@ public class MidiUtil {
 		}
 		return seq;
 	}
+
+	/**
+	 * Change resolution (TPQN) and retiming events.
+	 * @param seq Sequence to be processed.
+	 * @param resolution Ticks per quarter note of new sequence.
+	 * @return New sequence with new resolution.
+	 * @throws InvalidMidiDataException throw if MIDI data is invalid.
+	 */
+	public static Sequence ChangeResolution(Sequence sourceSeq, int resolution) throws InvalidMidiDataException
+	{
+		// sequence must be tick-based
+		if (sourceSeq.getDivisionType() != Sequence.PPQ)
+		{
+			throw new UnsupportedOperationException("SMPTE is not supported.");
+		}
+
+		Sequence seq = new Sequence(sourceSeq.getDivisionType(), resolution);
+
+		// process all input tracks
+		for (int trackIndex = 0; trackIndex < sourceSeq.getTracks().length; trackIndex++)
+		{
+			Track sourceTrack = sourceSeq.getTracks()[trackIndex];
+			Track track = seq.createTrack();
+
+			// process all events
+			double timingRate = (double) resolution / sourceSeq.getResolution();
+			for (int eventIndex = 0; eventIndex < sourceTrack.size(); eventIndex++)
+			{
+				MidiEvent sourceEvent = sourceTrack.get(eventIndex);
+				MidiEvent event = new MidiEvent(sourceEvent.getMessage(), (long) (sourceEvent.getTick() * timingRate + 0.5));
+				track.add(event);
+			}
+		}
+
+		// if the target resolution is shorter than source resolution,
+		// events at different timing might be located at the same timing.
+		// As a result, there might be zero-length note and/or
+		// same control changes at the same timing.
+		// 
+		// Probably, they should be removed for better conversion.
+		// I do not remove them anyway at the moment,
+		// because it does not cause any major problems.
+
+		return seq;
+	}
 }

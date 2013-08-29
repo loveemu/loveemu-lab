@@ -25,7 +25,7 @@ public class Midi2MML {
 	/**
 	 * Version of the tool.
 	 */
-	public final static String VERSION = "2013-08-28";
+	public final static String VERSION = "2013-08-29";
 
 	/**
 	 * Author of the tool.
@@ -38,9 +38,24 @@ public class Midi2MML {
 	public final static String WEBSITE = "http://loveemu.googlecode.com/";
 
 	/**
+	 * Default ticks per quarter note of target MML.
+	 */
+	public final static int DEFAULT_RESOLUTION = 24;
+
+	/**
+	 * Default maximum dot count for dotted note.
+	 */
+	public final static int DEFAULT_MAX_DOT_COUNT = -1;
+
+	/**
+	 * Ticks per quarter note of target MML.
+	 */
+	private int targetResolution;
+
+	/**
 	 * Maximum dot counts allowed for dotted-note.
 	 */
-	private int mmlMaxDotCount = -1;
+	private int mmlMaxDotCount = DEFAULT_MAX_DOT_COUNT;
 
 	/**
 	 * true if reverse the octave up/down effect.
@@ -62,6 +77,16 @@ public class Midi2MML {
 	 */
 	public Midi2MML()
 	{
+		this(DEFAULT_RESOLUTION);
+	}
+
+	/**
+	 * Construct a new MIDI to MML converter.
+	 * @param targetResolution Ticks per quarter note of target MML.
+	 */
+	public Midi2MML(int targetResolution)
+	{
+		this.setTargetResolution(targetResolution);
 	}
 
 	/**
@@ -73,6 +98,7 @@ public class Midi2MML {
 		mmlMaxDotCount = obj.mmlMaxDotCount;
 		octaveReversed = obj.octaveReversed;
 		useTriplet = obj.useTriplet;
+		targetResolution = obj.targetResolution;
 	}
 
 	/**
@@ -88,6 +114,8 @@ public class Midi2MML {
 	 * @param mmlMaxDotCount Maximum dot counts allowed for dotted-note.
 	 */
 	public void setMmlMaxDotCount(int mmlMaxDotCount) {
+		if (mmlMaxDotCount < -1)
+			throw new IllegalArgumentException("Maximum dot count must be a positive number or -1.");
 		this.mmlMaxDotCount = mmlMaxDotCount;
 	}
 
@@ -105,6 +133,26 @@ public class Midi2MML {
 	 */
 	public void setOctaveReversed(boolean octaveReversed) {
 		this.octaveReversed = octaveReversed;
+	}
+
+	/**
+	 * Get TPQN of target MML.
+	 * @return Ticks per quarter note of target MML.
+	 */
+	public int getTargetResolution() {
+		return targetResolution;
+	}
+
+	/**
+	 * Set TPQN of target MML.
+	 * @param targetResolution Ticks per quarter note of target MML.
+	 */
+	public void setTargetResolution(int targetResolution) {
+		if (targetResolution == 0)
+			targetResolution = DEFAULT_RESOLUTION;
+		if (targetResolution % 4 != 0)
+			throw new IllegalArgumentException("TPQN must be multiple of 4.");
+		this.targetResolution = targetResolution;
 	}
 
 	/**
@@ -127,6 +175,9 @@ public class Midi2MML {
 		// the converter assumes that all events in a track are for a single channel,
 		// when the input file is SMF format 0 or something like that, it requires preprocessing.
 		seq = MidiUtil.SeparateMixedChannel(seq);
+		// adjust resolution for MML conversion
+		if (targetResolution != 0)
+			seq = MidiUtil.ChangeResolution(seq, targetResolution);
 
 		// get track count (this must be after the preprocess)
 		int trackCount = seq.getTracks().length;
@@ -228,7 +279,7 @@ public class Midi2MML {
 									nearPow2 /= 2;
 
 								List<Double> rateCandidates = new ArrayList<Double>(Arrays.asList(0.5, 1.0));
-								int maxDotCount = (mmlMaxDotCount != -1) ? mmlMaxDotCount : 2;
+								int maxDotCount = (mmlMaxDotCount != -1) ? mmlMaxDotCount : Integer.MAX_VALUE;
 								double dottedNoteRate = 0.5;
 								for (int dot = 1; dot <= maxDotCount; dot++)
 								{
