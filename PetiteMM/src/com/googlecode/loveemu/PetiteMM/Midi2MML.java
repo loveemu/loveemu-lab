@@ -33,7 +33,7 @@ public class Midi2MML {
 	/**
 	 * true if write debug informations to stdout.
 	 */
-	private boolean debugDump = false;
+	final static private boolean debugDump = true;
 
 	/**
 	 * Construct a new MIDI to MML converter.
@@ -106,55 +106,26 @@ public class Midi2MML {
 		// when the input file is SMF format 0 or something like that, it requires preprocessing.
 		seq = MidiUtil.SeparateMixedChannel(seq);
 
-		// scan MIDI notes
+		// get track count (this must be after the preprocess)
 		int trackCount = seq.getTracks().length;
-		List<List<MidiNote>> midiTrackNotes = new ArrayList<List<MidiNote>>(trackCount);
+
+		// scan end timing for each tracks
 		long[] midiTracksEndTick = new long[trackCount];
 		for (int trackIndex = 0; trackIndex < trackCount; trackIndex++)
 		{
 			Track track = seq.getTracks()[trackIndex];
+			midiTracksEndTick[trackIndex] = track.get(track.size() - 1).getTick();
+		}
 
-			List<MidiNote> midiNotes = new ArrayList<MidiNote>();
-			for (int midiEventIndex = 0; midiEventIndex < track.size(); midiEventIndex++)
-			{
-				MidiEvent event = track.get(midiEventIndex);
-				midiTracksEndTick[trackIndex] = event.getTick();
-				if (event.getMessage() instanceof ShortMessage)
-				{
-					ShortMessage message = (ShortMessage)event.getMessage();
+		// scan MIDI notes
+		List<List<MidiNote>> midiTrackNotes = getMidiNotes(seq);
 
-					if (message.getCommand() == ShortMessage.NOTE_OFF ||
-							(message.getCommand() == ShortMessage.NOTE_ON && message.getData2() == 0))
-					{
-						// search from head, for overlapping notes
-						ListIterator<MidiNote> iter = midiNotes.listIterator();
-						while (iter.hasNext())
-						{
-							MidiNote note = iter.next();
-							int noteNumber = message.getData1();
-							if (note.getLength() == -1 && note.getNoteNumber() == noteNumber)
-							{
-								note.setLength(event.getTick() - note.getTime());
-								break;
-							}
-						}
-					}
-					else if (message.getCommand() == ShortMessage.NOTE_ON)
-					{
-						midiNotes.add(new MidiNote(message.getChannel(), event.getTick(), -1, message.getData1(), message.getData2()));
-					}
-				}
-			}
-			for (MidiNote note : midiNotes)
-			{
-				if (note.getLength() <= 0) {
-					throw new InvalidMidiDataException("Sequence contains an unfinished or zero-length note.");
-				}
-				// dump for debug
-				if (debugDump)
-					System.out.format("[ch%d/%d] Note (%d) len=%d vel=%d\n", note.getChannel(), note.getTime(), note.getNoteNumber(), note.getLength(), note.getVelocity());
-			}
-			midiTrackNotes.add(midiNotes);
+		// scan time signatures
+		List<MidiTimeSignature> timeSignatures = getMidiTimeSignatures(seq);
+		if (debugDump)
+		{
+			for (MidiTimeSignature timeSignature : timeSignatures)
+				System.out.println(timeSignature);
 		}
 
 		// reset track parameters
@@ -171,9 +142,6 @@ public class Midi2MML {
 		// reading tracks one by one would be simpler than the tick-based loop,
 		// but it would limit handling a global event such as time signature.
 		long tick = 0;
-		int measure = 0;
-		long measureLength = seq.getResolution() * 4;
-		long nextMeasureTick = measureLength;
 		int[] noteIndex = new int[trackCount];
 		int[] currNoteIndex = new int[trackCount];
 		boolean mmlFinished = false;
@@ -276,40 +244,6 @@ public class Midi2MML {
 							}
 						}
 					}
-					else if (event.getMessage() instanceof MetaMessage)
-					{
-						MetaMessage message = (MetaMessage)event.getMessage();
-						byte[] data = message.getData();
-
-						switch (message.getType())
-						{
-						case MidiUtil.META_TIME_SIGNATURE:
-							if (data.length != 4)
-							{
-								throw new InvalidMidiDataException("Illegal time signature event.");
-							}
-
-							if (nextMeasureTick - measureLength != tick)
-							{
-								throw new InvalidMidiDataException("Time signature event is not located at the measure boundary.");
-							}
-
-							int newMeasureLength = ((seq.getResolution() * 4) * (data[0] & 0xff)) >> (data[1] & 0xff);
-							nextMeasureTick = (nextMeasureTick - measureLength) + newMeasureLength;
-							measureLength = newMeasureLength;
-							break;
-
-						default:
-							List<MMLEvent> newMML = convertMidiEventToMML(event, mmlTrack);
-							if (newMML.size() != 0)
-							{
-								mmlEvents.addAll(newMML);
-								if (tick >= mmlLastTick)
-									mmlTrack.setTick(tick);
-							}
-							break;
-						}
-					}
 					else
 					{
 						List<MMLEvent> newMML = convertMidiEventToMML(event, mmlTrack);
@@ -347,10 +281,15 @@ public class Midi2MML {
 							mmlTrack.add(new MMLEvent(MMLSymbol.TIE));
 						}
 
-						if (mmlTrack.getMeasure() != measure)
+						int lastMeasure = MidiTimeSignature.getMeasureByTick(mmlLastTick, timeSignatures, seq.getResolution());
+						int currentMeasure = MidiTimeSignature.getMeasureByTick(mmlTrack.getTick(), timeSignatures, seq.getResolution());
+						if (currentMeasure != lastMeasure)
 						{
+							if (debugDump)
+								System.out.println("Measure: " + lastMeasure + " -> " + currentMeasure);
+
 							mmlTrack.add(new MMLEvent(System.getProperty("line.separator")));
-							mmlTrack.setMeasure(measure);
+							mmlTrack.setMeasure(currentMeasure);
 						}
 					}
 
@@ -374,11 +313,6 @@ public class Midi2MML {
 			}
 
 			tick++;
-			if (tick >= nextMeasureTick)
-			{
-				measure++;
-				nextMeasureTick += measureLength;
-			}
 		}
 
 		boolean firstTrackWrite = true;
@@ -397,6 +331,169 @@ public class Midi2MML {
 			}
 		}
 		writer.flush();
+	}
+
+	/**
+	 * Get MIDI notes from sequence.
+	 * @param seq Input MIDI sequence.
+	 * @return List of MIDI notes.
+	 * @throws InvalidMidiDataException throws if unexpected MIDI event is appeared.
+	 */
+	private List<List<MidiNote>> getMidiNotes(Sequence seq) throws InvalidMidiDataException
+	{
+		final int trackCount = seq.getTracks().length;
+
+		List<List<MidiNote>> midiTrackNotes = new ArrayList<List<MidiNote>>(trackCount);
+		for (int trackIndex = 0; trackIndex < trackCount; trackIndex++)
+		{
+			Track track = seq.getTracks()[trackIndex];
+
+			List<MidiNote> midiNotes = new ArrayList<MidiNote>();
+			for (int midiEventIndex = 0; midiEventIndex < track.size(); midiEventIndex++)
+			{
+				MidiEvent event = track.get(midiEventIndex);
+				if (event.getMessage() instanceof ShortMessage)
+				{
+					ShortMessage message = (ShortMessage)event.getMessage();
+
+					if (message.getCommand() == ShortMessage.NOTE_OFF ||
+							(message.getCommand() == ShortMessage.NOTE_ON && message.getData2() == 0))
+					{
+						// search from head, for overlapping notes
+						ListIterator<MidiNote> iter = midiNotes.listIterator();
+						while (iter.hasNext())
+						{
+							MidiNote note = iter.next();
+							int noteNumber = message.getData1();
+							if (note.getLength() == -1 && note.getNoteNumber() == noteNumber)
+							{
+								note.setLength(event.getTick() - note.getTime());
+								break;
+							}
+						}
+					}
+					else if (message.getCommand() == ShortMessage.NOTE_ON)
+					{
+						midiNotes.add(new MidiNote(message.getChannel(), event.getTick(), -1, message.getData1(), message.getData2()));
+					}
+				}
+			}
+			for (MidiNote note : midiNotes)
+			{
+				if (note.getLength() <= 0) {
+					throw new InvalidMidiDataException("Sequence contains an unfinished or zero-length note.");
+				}
+				// dump for debug
+				if (debugDump)
+					System.out.format("[ch%d/%d] Note (%d) len=%d vel=%d\n", note.getChannel(), note.getTime(), note.getNoteNumber(), note.getLength(), note.getVelocity());
+			}
+			midiTrackNotes.add(midiNotes);
+		}
+		return midiTrackNotes;
+	}
+
+	/**
+	 * Get MIDI time signatures from sequence.
+	 * @param seq Input MIDI sequence.
+	 * @return List of MIDI time signatures.
+	 * @throws InvalidMidiDataException throws if unexpected MIDI event is appeared.
+	 */
+	private List<MidiTimeSignature> getMidiTimeSignatures(Sequence seq) throws InvalidMidiDataException
+	{
+		List<MidiTimeSignature> timeSignatures = new ArrayList<MidiTimeSignature>();
+
+		final int trackCount = seq.getTracks().length;
+		final int defaultNumerator = 4;
+		final int defaultDenominator = 2;
+
+		int numerator = defaultNumerator;
+		int denominator = defaultDenominator;
+		long measureLength = ((seq.getResolution() * 4 * numerator) >> denominator);
+		long nextMeasureTick = measureLength;
+
+		long tick = 0;
+		int measure = 0;
+		int measureOfLastSignature = -1;
+		boolean finished = false;
+		int[] eventIndex = new int[trackCount];
+		while (!finished)
+		{
+			if (tick == nextMeasureTick)
+			{
+				nextMeasureTick += measureLength;
+				measure++;
+			}
+
+			for (int trackIndex = 0; trackIndex < trackCount; trackIndex++)
+			{
+				Track track = seq.getTracks()[trackIndex];
+				while (eventIndex[trackIndex] < track.size())
+				{
+					MidiEvent event = track.get(eventIndex[trackIndex]);
+					if (event.getTick() != tick)
+						break;
+					eventIndex[trackIndex]++;
+
+					if (event.getMessage() instanceof MetaMessage)
+					{
+						MetaMessage message = (MetaMessage)event.getMessage();
+						byte[] data = message.getData();
+
+						switch (message.getType())
+						{
+						case MidiUtil.META_TIME_SIGNATURE:
+							if (data.length != 4)
+							{
+								throw new InvalidMidiDataException("Illegal time signature event.");
+							}
+
+							if (nextMeasureTick - measureLength != tick)
+							{
+								throw new InvalidMidiDataException("Time signature event is not located at the measure boundary.");
+							}
+
+							if (measure == measureOfLastSignature)
+							{
+								throw new InvalidMidiDataException("Two or more time signature event are located at the same time.");
+							}
+
+							if (timeSignatures.isEmpty() && measure != 0)
+							{
+								throw new InvalidMidiDataException("First time signature is not located at the first measure.");
+							}
+
+							MidiTimeSignature newTimeSignature = new MidiTimeSignature(data[0] & 0xff, data[1] & 0xff, measure);
+							int newMeasureLength = newTimeSignature.getLength(seq.getResolution());
+							nextMeasureTick = (nextMeasureTick - measureLength) + newMeasureLength;
+							measureLength = newMeasureLength;
+							measureOfLastSignature = measure;
+							timeSignatures.add(newTimeSignature);
+							break;
+						}
+					}
+				}
+			}
+
+			finished = true;
+			for (int trackIndex = 0; trackIndex < trackCount; trackIndex++)
+			{
+				Track track = seq.getTracks()[trackIndex];
+				if (eventIndex[trackIndex] < track.size())
+				{
+					finished = false;
+					break;
+				}
+			}
+
+			tick++;
+		}
+		
+		if (timeSignatures.isEmpty())
+		{
+			timeSignatures.add(new MidiTimeSignature(defaultNumerator, defaultDenominator));
+		}
+
+		return timeSignatures;
 	}
 
 	/**
