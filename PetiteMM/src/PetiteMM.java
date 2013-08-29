@@ -1,5 +1,6 @@
 import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileWriter;
 import java.io.IOException;
 
@@ -121,6 +122,9 @@ public class PetiteMM {
 			Midi2MML converter = new Midi2MML(opt);
 			BufferedWriter writer = null;
 			try {
+				if (!midiFile.exists())
+					throw new FileNotFoundException(midiFile.getName() + " (The system cannot find the file specified)");
+
 				writer = new BufferedWriter(new FileWriter(mmlFile));
 				converter.writeMML(MidiSystem.getSequence(midiFile), writer);
 				writer.flush();
