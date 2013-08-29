@@ -18,12 +18,12 @@ public class PetiteMM {
 	/**
 	 * Version of the tool.
 	 */
-	public final static String VERSION = "2013-08-12";
+	public final static String VERSION = "2013-08-28";
 
 	/**
 	 * Author of the tool.
 	 */
-	public final static String AUTHOR = "loveemu";
+	public final static String AUTHOR = "loveemu, gocha";
 
 	/**
 	 * Website of the tool.
@@ -70,7 +70,7 @@ public class PetiteMM {
 
 		int argi = 0;
 
-		//args = new String[] { "--dots", "2", "--use-triplet", "test.mid" };
+		//args = new String[] { "--dots", "2", "--use-triplet", "test.mid", "test2.mid", "test3.mid" };
 
 		// dispatch option switches
 		while (argi < args.length && args[argi].startsWith("-"))
@@ -119,14 +119,24 @@ public class PetiteMM {
 			File mmlFile = new File(PetiteMM.removeExtension(args[argi]) + ".txt");
 
 			Midi2MML converter = new Midi2MML(opt);
+			BufferedWriter writer = null;
 			try {
-				BufferedWriter writer = new BufferedWriter(new FileWriter(mmlFile));
+				writer = new BufferedWriter(new FileWriter(mmlFile));
 				converter.writeMML(MidiSystem.getSequence(midiFile), writer);
 				writer.flush();
 			} catch (InvalidMidiDataException e) {
 				e.printStackTrace();
 			} catch (IOException e) {
 				e.printStackTrace();
+			} finally {
+				if (writer != null)
+				{
+					try {
+						writer.close();
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+				}
 			}
 		}
 	}

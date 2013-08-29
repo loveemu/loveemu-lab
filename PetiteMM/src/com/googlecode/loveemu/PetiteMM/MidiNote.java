@@ -59,4 +59,10 @@ public class MidiNote {
 	public void setVelocity(int velocity) {
 		this.velocity = velocity;
 	}
+
+	@Override
+	public String toString() {
+		return String.format("MidiNote [channel=%d, time=%d, length=%d, noteNumber=%d, velocity=%d]",
+				channel, time, length, noteNumber, velocity);
+	}
 }

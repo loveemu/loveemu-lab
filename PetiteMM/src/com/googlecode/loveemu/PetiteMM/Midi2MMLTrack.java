@@ -273,7 +273,7 @@ class Midi2MMLTrack {
 		{
 			int noteLenTo = 1 << i;
 			int noteLenFrom = noteLenTo * 3;
-			mmlString = mmlString.replaceAll("([abcdefgr\\^][\\+\\-]*)" + noteLenFrom + "(\\s*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom + "(\\s*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom, "\\" + MMLSymbol.TRIPLET_START + "$1\\" + noteLenTo + "$2\\" + noteLenTo + "$3\\" + noteLenTo + "\\" + MMLSymbol.TRIPLET_END);
+			mmlString = mmlString.replaceAll("([<>]*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom + "(\\s*[<>]*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom + "(\\s*[<>]*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom, "\\" + MMLSymbol.TRIPLET_START + "$1\\" + noteLenTo + "$2\\" + noteLenTo + "$3\\" + noteLenTo + "\\" + MMLSymbol.TRIPLET_END);
 		}
 		return mmlString;
 	}
