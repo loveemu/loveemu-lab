@@ -13,11 +13,6 @@ public class MMLNoteInfo {
 	private String text;
 
 	/**
-	 * Set true if the note is made by two or more notes with tie.
-	 */
-	public boolean usesMultipleNotes = false;
-
-	/**
 	 * Construct a new note info.
 	 */
 	public MMLNoteInfo() {
@@ -37,7 +32,6 @@ public class MMLNoteInfo {
 	 */
 	public MMLNoteInfo(MMLNoteInfo note) {
 		setText(note.getText());
-		this.usesMultipleNotes = note.usesMultipleNotes;
 	}
 
 	/**
@@ -86,5 +80,10 @@ public class MMLNoteInfo {
 	 */
 	public void setText(String text) {
 		this.text = text;
+	}
+
+	@Override
+	public String toString() {
+		return getText();
 	}
 }

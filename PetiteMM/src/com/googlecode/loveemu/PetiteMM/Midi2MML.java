@@ -275,21 +275,37 @@ public class Midi2MML {
 						if (debugDump)
 							System.out.println("Timing: " + mmlLastTick + " -> " + mmlTrack.getTick());
 
-						mmlTrack.add(new MMLEvent(noteConv.getNote((int)(mmlTrack.getTick() - mmlLastTick), mmlLastNoteNumber)));
-						if (mmlKeepCurrentNote)
+						if (mmlLastNoteNumber == MMLNoteConverter.KEY_REST)
 						{
-							mmlTrack.add(new MMLEvent(MMLSymbol.TIE));
+							List<Integer> lengths = noteConv.getPrimitiveNoteLengths((int)(mmlTrack.getTick() - mmlLastTick));
+							for (int length : lengths)
+							{
+								mmlTrack.add(new MMLEvent(noteConv.getNote(length, mmlLastNoteNumber)));
+
+								int lastMeasure = MidiTimeSignature.getMeasureByTick(mmlLastTick, timeSignatures, seq.getResolution());
+								int currentMeasure = MidiTimeSignature.getMeasureByTick(mmlLastTick + length, timeSignatures, seq.getResolution());
+								if (currentMeasure != lastMeasure)
+								{		
+									mmlTrack.add(new MMLEvent(System.getProperty("line.separator")));
+									mmlTrack.setMeasure(currentMeasure);
+								}
+							}
 						}
-
-						int lastMeasure = MidiTimeSignature.getMeasureByTick(mmlLastTick, timeSignatures, seq.getResolution());
-						int currentMeasure = MidiTimeSignature.getMeasureByTick(mmlTrack.getTick(), timeSignatures, seq.getResolution());
-						if (currentMeasure != lastMeasure)
+						else
 						{
-							if (debugDump)
-								System.out.println("Measure: " + lastMeasure + " -> " + currentMeasure);
-
-							mmlTrack.add(new MMLEvent(System.getProperty("line.separator")));
-							mmlTrack.setMeasure(currentMeasure);
+							mmlTrack.add(new MMLEvent(noteConv.getNote((int)(mmlTrack.getTick() - mmlLastTick), mmlLastNoteNumber)));
+							if (mmlKeepCurrentNote)
+							{
+								mmlTrack.add(new MMLEvent(MMLSymbol.TIE));
+							}
+	
+							int lastMeasure = MidiTimeSignature.getMeasureByTick(mmlLastTick, timeSignatures, seq.getResolution());
+							int currentMeasure = MidiTimeSignature.getMeasureByTick(mmlTrack.getTick(), timeSignatures, seq.getResolution());
+							if (currentMeasure != lastMeasure)
+							{	
+								mmlTrack.add(new MMLEvent(System.getProperty("line.separator")));
+								mmlTrack.setMeasure(currentMeasure);
+							}
 						}
 					}
 

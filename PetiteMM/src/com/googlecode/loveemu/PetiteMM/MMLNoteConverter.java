@@ -1,6 +1,8 @@
 package com.googlecode.loveemu.PetiteMM;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 public class MMLNoteConverter {
 
@@ -15,9 +17,9 @@ public class MMLNoteConverter {
 	private MMLNoteInfo[] notes;
 
 	/**
-	 * true if note uses tie, false otherwise.
+	 * Tick to premitive note lengths table.
 	 */
-	private boolean[] noteUsesTie;
+	private List<List<Integer>> noteLengths;
 
 	/**
 	 * Ticks per quarter note of MML.
@@ -76,7 +78,7 @@ public class MMLNoteConverter {
 	{
 		if (length < 0)
 		{
-			throw new IllegalArgumentException("Note length is negative.");
+			throw new IllegalArgumentException("Note length must be a positive number.");
 		}
 
 		StringBuffer sb = new StringBuffer();
@@ -94,13 +96,46 @@ public class MMLNoteConverter {
 	}
 
 	/**
+	 * Get list of notes which are necessary to express a certain length note.
+	 * @param length Length of note to be expressed.
+	 * @return List of note lengths.
+	 */
+	public List<Integer> getPrimitiveNoteLengths(int length)
+	{
+		List<Integer> lengths = new ArrayList<Integer>();
+
+		if (length < 0)
+			throw new IllegalArgumentException("Note length must be a positive number.");
+		else if (length == 0)
+		{
+			lengths.add(0);
+			return lengths;
+		}
+
+		// construct the final length list
+		while (length > (tpqn * 8))
+		{
+			lengths.addAll(noteLengths.get(tpqn * 8));
+			length -= tpqn * 8;
+		}
+		lengths.addAll(noteLengths.get(length));
+		return lengths;
+	}
+
+	/**
 	 * Get if the given note is a simple note.
 	 * @param length Note length in tick(s).
 	 * @return true if the note is simple enough, false otherwise.
 	 */
 	public boolean isSimpleNote(int length)
 	{
-		return !noteUsesTie[length % (tpqn * 4)];
+		if (length < 0)
+			throw new IllegalArgumentException("Note length must be a positive number.");
+		else if (length == 0)
+			return true;
+
+		List<Integer> lengths = noteLengths.get(length % (tpqn * 4));
+		return (lengths.size() <= 1);
 	}
 
 	/**
@@ -140,8 +175,15 @@ public class MMLNoteConverter {
 		// construct the note table
 		notes = new MMLNoteInfo[tpqn * 8 + 1];
 		notes[0] = new MMLNoteInfo("");
-		noteUsesTie = new boolean[tpqn * 8 + 1];
-		noteUsesTie[0] = false;
+
+		// initialize length table
+		List<List<Integer>> singleNoteLengths = new ArrayList<List<Integer>>(tpqn * 8 + 1);
+		noteLengths = new ArrayList<List<Integer>>(tpqn * 8 + 1);
+		for (int mmlNoteLen = 0; mmlNoteLen <= (tpqn * 8); mmlNoteLen++)
+		{
+			singleNoteLengths.add(null);
+			noteLengths.add(null);
+		}
 
 		// set single notes
 		MMLNoteInfo[] singleNotes = new MMLNoteInfo[tpqn * 8 + 1];
@@ -154,9 +196,16 @@ public class MMLNoteConverter {
 
 			// simple note
 			tick = (tpqn * 4) / mmlNoteLen;
+
+			// create length table
+			List<Integer> simpleNoteLength = new ArrayList<Integer>();
+			simpleNoteLength.add(tick);
+
+			// add new note
 			notes[tick] = new MMLNoteInfo("$N" + mmlNoteLen);
-			notes[tick].usesMultipleNotes = false;
+			noteLengths.set(tick, simpleNoteLength);
 			singleNotes[tick] = notes[tick];
+			singleNoteLengths.set(tick, simpleNoteLength);
 
 			// dotted notes
 			int dot = 1;
@@ -183,11 +232,16 @@ public class MMLNoteConverter {
 					continue;
 				}
 
+				// create length table
+				List<Integer> dottedNoteLength = new ArrayList<Integer>();
+				dottedNoteLength.add(tick);
+
 				// add new note
 				mml = mml + ".";
 				notes[tick] = new MMLNoteInfo(mml);
-				notes[tick].usesMultipleNotes = false;
+				noteLengths.set(tick, dottedNoteLength);
 				singleNotes[tick] = notes[tick];
+				singleNoteLengths.set(tick, dottedNoteLength);
 
 				dot++;
 			}
@@ -212,6 +266,7 @@ public class MMLNoteConverter {
 
 				// search the combination
 				String mml = null;
+				List<Integer> multipleNoteLengths = null;
 				for (int tickSub = tick - 1; tickSub > 0; tickSub--)
 				{
 					if (prevNotes[tickSub] != null && singleNotes[tick - tickSub] != null)
@@ -220,6 +275,8 @@ public class MMLNoteConverter {
 						if (mml == null || mml.length() > newMML.length())
 						{
 							mml = newMML;
+							multipleNoteLengths = new ArrayList<Integer>(noteLengths.get(tickSub));
+							multipleNoteLengths.addAll(noteLengths.get(tick - tickSub));
 						}
 					}
 				}
@@ -227,7 +284,7 @@ public class MMLNoteConverter {
 				if (mml != null)
 				{
 					notes[tick] = new MMLNoteInfo(mml);
-					notes[tick].usesMultipleNotes = true;
+					noteLengths.set(tick, multipleNoteLengths);
 				}
 			}
 
@@ -241,12 +298,6 @@ public class MMLNoteConverter {
 					break;
 				}
 			}
-		}
-
-		// construct the single note table at last
-		for (int mmlNoteLen = 1; mmlNoteLen <= (tpqn * 8); mmlNoteLen++)
-		{
-			noteUsesTie[mmlNoteLen] = (singleNotes[mmlNoteLen] == null);
 		}
 	}
 }
