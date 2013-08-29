@@ -130,6 +130,9 @@ public class Midi2MML {
 
 		// reset track parameters
 		Midi2MMLTrack[] mmlTracks = new Midi2MMLTrack[trackCount];
+		int[] noteIndex = new int[trackCount];
+		int[] currNoteIndex = new int[trackCount];
+		int[] nextOctave = new int[trackCount];
 		for (int trackIndex = 0; trackIndex < trackCount; trackIndex++)
 		{
 			mmlTracks[trackIndex] = new Midi2MMLTrack();
@@ -142,8 +145,6 @@ public class Midi2MML {
 		// reading tracks one by one would be simpler than the tick-based loop,
 		// but it would limit handling a global event such as time signature.
 		long tick = 0;
-		int[] noteIndex = new int[trackCount];
-		int[] currNoteIndex = new int[trackCount];
 		boolean mmlFinished = false;
 		while (!mmlFinished)
 		{
@@ -222,11 +223,8 @@ public class Midi2MML {
 								mmlEvents.add(new MMLEvent(MMLSymbol.OCTAVE, new String[] { String.format("%d", noteOctave) }));
 							}
 
-							mmlEvents.addAll(convertMidiEventToMML(event, mmlTrack));
-
 							// remember new note
 							mmlTrack.setTick(tick);
-							mmlTrack.setOctave(noteOctave);
 							mmlTrack.setNoteNumber(noteNumber);
 							mmlKeepCurrentNote = false;
 
@@ -293,12 +291,26 @@ public class Midi2MML {
 						}
 						else
 						{
+							int mmlOctave = mmlTrack.getOctave();
+							int noteOctave = mmlLastNoteNumber / 12;
+							while (mmlOctave < noteOctave)
+							{
+								mmlTrack.add(new MMLEvent(!octaveReversed ? MMLSymbol.OCTAVE_UP : MMLSymbol.OCTAVE_DOWN));
+								mmlOctave++;
+							}
+							while (mmlOctave > noteOctave)
+							{
+								mmlTrack.add(new MMLEvent(!octaveReversed ? MMLSymbol.OCTAVE_DOWN : MMLSymbol.OCTAVE_UP));
+								mmlOctave--;
+							}
+							mmlTrack.setOctave(noteOctave);
+
 							mmlTrack.add(new MMLEvent(noteConv.getNote((int)(mmlTrack.getTick() - mmlLastTick), mmlLastNoteNumber)));
 							if (mmlKeepCurrentNote)
 							{
 								mmlTrack.add(new MMLEvent(MMLSymbol.TIE));
 							}
-	
+
 							int lastMeasure = MidiTimeSignature.getMeasureByTick(mmlLastTick, timeSignatures, seq.getResolution());
 							int currentMeasure = MidiTimeSignature.getMeasureByTick(mmlTrack.getTick(), timeSignatures, seq.getResolution());
 							if (currentMeasure != lastMeasure)
@@ -528,23 +540,7 @@ public class Midi2MML {
 
 			if (message.getCommand() == ShortMessage.NOTE_ON)
 			{
-				int noteNumber = message.getData1();
-				int noteOctave = noteNumber / 12;
-				int mmlOctave = mmlTrack.getOctave();
-
-				// adjust octave
-				while (mmlOctave < noteOctave)
-				{
-					mmlEvents.add(new MMLEvent(!octaveReversed ? MMLSymbol.OCTAVE_UP : MMLSymbol.OCTAVE_DOWN));
-					mmlOctave++;
-				}
-				while (mmlOctave > noteOctave)
-				{
-					mmlEvents.add(new MMLEvent(!octaveReversed ? MMLSymbol.OCTAVE_DOWN : MMLSymbol.OCTAVE_UP));
-					mmlOctave--;
-				}
-
-				// for some reasons, this function does not return the actual note command.
+				// for some reasons, this function does not dispatch note on.
 			}
 			else if (message.getCommand() == ShortMessage.PROGRAM_CHANGE)
 			{
