@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import javax.servlet.RequestDispatcher;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -17,8 +18,6 @@ import org.apache.commons.fileupload.FileItem;
 import org.apache.commons.fileupload.FileUploadException;
 import org.apache.commons.fileupload.disk.DiskFileItemFactory;
 import org.apache.commons.fileupload.servlet.ServletFileUpload;
-
-import com.googlecode.loveemu.PetiteMM.Midi2MML;
 
 public class PetiteMMServlet extends HttpServlet {
 
@@ -54,17 +53,42 @@ public class PetiteMMServlet extends HttpServlet {
 			}
 
 			if (!items.containsKey("midi") || items.get("midi").isFormField())
-			{
 				throw new IllegalArgumentException("Input file is invalid");
-			}
 			InputStream midiStream = items.get("midi").getInputStream();
 
-			Midi2MML converter = new Midi2MML();
+			PetiteMMBean bean = new PetiteMMBean();
+			bean.setTimebase(getQueryInteger(items, "timebase"));
+			bean.setDots(getQueryInteger(items, "dots"));
+			bean.setOctaveReverse(getQueryString(items, "octaveReverse") != null);
+			bean.setUseTriplet(getQueryString(items, "useTriplet") != null);
 			try {
-				converter.writeMML(MidiSystem.getSequence(midiStream), response.getWriter());
+				bean.convertToMML(MidiSystem.getSequence(midiStream));
+			} catch (IOException e) {
+				//throw new ServletException("Conversion error", e);
 			} catch (InvalidMidiDataException e) {
-				throw new ServletException("Input file is invalid", e);
+				//throw new ServletException("Conversion error", e);
 			}
+			request.setAttribute("petiteMMBean", bean);
+			RequestDispatcher rDispatcher = request.getRequestDispatcher("/index.jsp");
+			rDispatcher.forward(request, response);
 		}
+	}
+
+	private Integer getQueryInteger(Map<String, FileItem> items, String name)
+	{
+		FileItem item = items.get(name);
+		if (item != null && item.isFormField())
+			return Integer.parseInt(item.getString());
+		else
+			return null;
+	}
+
+	private String getQueryString(Map<String, FileItem> items, String name)
+	{
+		FileItem item = items.get(name);
+		if (item != null && item.isFormField())
+			return item.getString();
+		else
+			return null;
 	}
 }

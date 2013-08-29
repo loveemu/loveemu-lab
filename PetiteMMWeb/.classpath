@@ -11,5 +11,7 @@
 	<classpathentry kind="lib" path="WEB-INF/lib/commons-fileupload-1.3.jar"/>
 	<classpathentry kind="lib" path="WEB-INF/lib/commons-io-2.4.jar"/>
 	<classpathentry kind="lib" path="WEB-INF/lib/PetiteMM.jar"/>
+	<classpathentry kind="lib" path="WEB-INF/lib/jstl.jar"/>
+	<classpathentry kind="lib" path="WEB-INF/lib/standard.jar"/>
 	<classpathentry kind="output" path="WEB-INF/classes"/>
 </classpath>
