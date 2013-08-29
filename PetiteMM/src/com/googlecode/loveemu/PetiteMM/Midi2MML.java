@@ -3,6 +3,8 @@ package com.googlecode.loveemu.PetiteMM;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.ListIterator;
 
@@ -186,40 +188,71 @@ public class Midi2MML {
 						if (message.getCommand() == ShortMessage.NOTE_OFF ||
 								(message.getCommand() == ShortMessage.NOTE_ON && message.getData2() == 0))
 						{
-							if (message.getData1() == mmlTrack.getNoteNumber())
+							MidiNote midiNextNote = (currNoteIndex[trackIndex] + 1 < midiNotes.size()) ? midiNotes.get(currNoteIndex[trackIndex] + 1) : null;
+							long minLength = tick - mmlLastTick;
+							long maxLength = ((midiNextNote != null) ? midiNextNote.getTime() : midiTracksEndTick[trackIndex]) - mmlLastTick;
+							if (message.getData1() == mmlTrack.getNoteNumber() && minLength != 0)
 							{
-								MidiNote midiNextNote = (currNoteIndex[trackIndex] + 1 < midiNotes.size()) ? midiNotes.get(currNoteIndex[trackIndex] + 1) : null;
-								long minLength = tick - mmlLastTick;
-								long maxLength = ((midiNextNote != null) ? midiNextNote.getTime() : midiTracksEndTick[trackIndex]) - mmlLastTick;
+								long wholeNoteCount = (minLength - 1) / (seq.getResolution() * 4);
 
-								// separate rest longer or equal to whole note
-								while (maxLength - (seq.getResolution() * 4) >= minLength)
-									maxLength -= (seq.getResolution() * 4);
+								// remove whole notes temporarily
+								minLength -= (seq.getResolution() * 4) * wholeNoteCount;
+								maxLength -= (seq.getResolution() * 4) * wholeNoteCount;
 
 								// find the nearest 2^n note
-								//int nearPow2 = 1;
-								//while (nearPow2 < minLength)
-								//	nearPow2 *= 2;
+								// minLength/nearPow2 is almost always in [0.5,1.0]
+								// (almost, because nearPow2 may have slight error at a very short note)
+								// nearPow2 can be greater than maxLength
+								long nearPow2 = seq.getResolution() * 4;
+								while (nearPow2 / 2 >= minLength)
+									nearPow2 /= 2;
 
-								long length = maxLength;
-								//if (nearPow2 < maxLength)
-								//{
-								//	maxLength = nearPow2;
-								//}
+								List<Double> rateCandidates = new ArrayList<Double>(Arrays.asList(0.5, 1.0));
+								int maxDotCount = (mmlMaxDotCount != -1) ? mmlMaxDotCount : 2;
+								double dottedNoteRate = 0.5;
+								for (int dot = 1; dot <= maxDotCount; dot++)
+								{
+									if (nearPow2 % (2 << dot) != 0)
+										break;
 
-								// halve the length as far as possible
-								while ((length / 2) >= minLength)
-									length /= 2;
+									dottedNoteRate += Math.pow(0.5, dot + 1);
+									rateCandidates.add(dottedNoteRate); // dotted note (0.75, 0.875...)
+								}
+								rateCandidates.add(2.0/3.0); // triplet
+								Collections.sort(rateCandidates);
 
-								// quantization
-								int divider = 1;
-								while (divider < 4 && seq.getResolution() % divider == 0)
-									divider *= 2;
-								while (length - (seq.getResolution() / divider) >= minLength)
-									length -= (seq.getResolution() / divider);
+								double rateLowerLimit = (double) minLength / nearPow2;
+								double rateUpperLimit = (double) maxLength / nearPow2;
+								int rateIndex = Collections.binarySearch(rateCandidates, rateLowerLimit);
+
+								double rateNearest;
+								double rateNearestLower; // less than or equal to rateUpperLimit
+								double rateNearestUpper; // greater than or equal to rateLowerLimit
+								if (rateIndex >= 0)
+								{
+									rateNearest = rateCandidates.get(rateIndex);
+									rateNearestLower = rateNearest;
+									rateNearestUpper = rateNearest;
+								}
+								else
+								{
+									rateIndex = -rateIndex - 1;
+									rateNearestUpper = rateCandidates.get(rateIndex);
+									rateNearestLower = rateCandidates.get(rateIndex - 1);
+									if (Math.abs(rateLowerLimit - rateNearestLower) < Math.abs(rateLowerLimit - rateNearestUpper))
+									{
+										rateNearest = rateNearestLower;
+										rateIndex--;
+									}
+									else
+										rateNearest = rateNearestUpper;
+								}
+
+								double rate = Math.min(rateNearest, rateUpperLimit);
+								long length = ((long) (nearPow2 * rate + 0.5)) + (wholeNoteCount * (seq.getResolution() * 4));
 
 								if (debugDump)
-									System.out.format("Note Off: tick=%d,mmlLastTick=%d,length=%d,minLength=%d,maxLength=%d,next=%s\n", tick, mmlLastTick, length, minLength, maxLength, (midiNextNote != null) ? midiNextNote.toString() : "null");
+									System.out.format("Note Off: tick=%d,mmlLastTick=%d,length=%d,minLength=%d,maxLength=%d,nearPow2=%d,rateLowerLimit=%.2f,rateNearest=%.2f [%.2f,%.2f],next=%s\n", tick, mmlLastTick, length, minLength, maxLength, nearPow2, rateLowerLimit, rateNearest, rateNearestLower, rateNearestUpper, (midiNextNote != null) ? midiNextNote.toString() : "null");
 
 								mmlTrack.setTick(mmlLastTick + length);
 								mmlTrack.setNoteNumber(MMLNoteConverter.KEY_REST);
@@ -292,12 +325,14 @@ public class Midi2MML {
 						if (mmlLastNoteNumber == MMLNoteConverter.KEY_REST)
 						{
 							List<Integer> lengths = noteConv.getPrimitiveNoteLengths((int)(mmlTrack.getTick() - mmlLastTick));
+							int totalLength = 0;
 							for (int length : lengths)
 							{
+								totalLength += length;
 								mmlTrack.add(new MMLEvent(noteConv.getNote(length, mmlLastNoteNumber)));
 
 								int lastMeasure = MidiTimeSignature.getMeasureByTick(mmlLastTick, timeSignatures, seq.getResolution());
-								int currentMeasure = MidiTimeSignature.getMeasureByTick(mmlLastTick + length, timeSignatures, seq.getResolution());
+								int currentMeasure = MidiTimeSignature.getMeasureByTick(mmlLastTick + totalLength, timeSignatures, seq.getResolution());
 								if (currentMeasure != lastMeasure)
 								{		
 									mmlTrack.add(new MMLEvent(System.getProperty("line.separator")));
@@ -330,7 +365,7 @@ public class Midi2MML {
 							int lastMeasure = MidiTimeSignature.getMeasureByTick(mmlLastTick, timeSignatures, seq.getResolution());
 							int currentMeasure = MidiTimeSignature.getMeasureByTick(mmlTrack.getTick(), timeSignatures, seq.getResolution());
 							if (currentMeasure != lastMeasure)
-							{	
+							{
 								mmlTrack.add(new MMLEvent(System.getProperty("line.separator")));
 								mmlTrack.setMeasure(currentMeasure);
 							}
