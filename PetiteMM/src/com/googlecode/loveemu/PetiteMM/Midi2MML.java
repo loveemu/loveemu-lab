@@ -33,7 +33,7 @@ public class Midi2MML {
 	/**
 	 * true if write debug informations to stdout.
 	 */
-	final static private boolean debugDump = true;
+	final static private boolean debugDump = false;
 
 	/**
 	 * Construct a new MIDI to MML converter.
