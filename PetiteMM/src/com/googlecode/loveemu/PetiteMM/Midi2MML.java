@@ -191,11 +191,21 @@ public class Midi2MML {
 								MidiNote midiNextNote = (currNoteIndex[trackIndex] + 1 < midiNotes.size()) ? midiNotes.get(currNoteIndex[trackIndex] + 1) : null;
 								long minLength = tick - mmlLastTick;
 								long maxLength = ((midiNextNote != null) ? midiNextNote.getTime() : midiTracksEndTick[trackIndex]) - mmlLastTick;
-								long length = maxLength;
 
 								// separate rest longer or equal to whole note
-								while (length - (seq.getResolution() * 4) >= minLength)
-									length -= (seq.getResolution() * 4);
+								while (maxLength - (seq.getResolution() * 4) >= minLength)
+									maxLength -= (seq.getResolution() * 4);
+
+								// find the nearest 2^n note
+								//int nearPow2 = 1;
+								//while (nearPow2 < minLength)
+								//	nearPow2 *= 2;
+
+								long length = maxLength;
+								//if (nearPow2 < maxLength)
+								//{
+								//	maxLength = nearPow2;
+								//}
 
 								// halve the length as far as possible
 								while ((length / 2) >= minLength)

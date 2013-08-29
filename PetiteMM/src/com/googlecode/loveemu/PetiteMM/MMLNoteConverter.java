@@ -27,6 +27,11 @@ public class MMLNoteConverter {
 	private int tpqn;
 
 	/**
+	 * Maximum dot count used in note.
+	 */
+	private int maxDotCount;
+
+	/**
 	 * Construct new MML note converter.
 	 * @param tpqn Tick per quarter note of MML.
 	 */
@@ -123,6 +128,22 @@ public class MMLNoteConverter {
 	}
 
 	/**
+	 * Get maximum dot count used in note.
+	 * @return Number of dots.
+	 */
+	public int getMaxDotCount() {
+		return maxDotCount;
+	}
+
+	/**
+	 * Set maximum dot count used in note.
+	 * @param maxDotCount Number of dots.
+	 */
+	private void setMaxDotCount(int maxDotCount) {
+		this.maxDotCount = maxDotCount;
+	}
+
+	/**
 	 * Get if the given note is a simple note.
 	 * @param length Note length in tick(s).
 	 * @return true if the note is simple enough, false otherwise.
@@ -186,6 +207,7 @@ public class MMLNoteConverter {
 		}
 
 		// set single notes
+		int maxDotCountUsed = 0;
 		MMLNoteInfo[] singleNotes = new MMLNoteInfo[tpqn * 8 + 1];
 		for (int mmlNoteLen = 1; mmlNoteLen <= (tpqn * 4); mmlNoteLen++)
 		{
@@ -243,10 +265,12 @@ public class MMLNoteConverter {
 				noteLengths.set(tick, dottedNoteLength);
 				singleNotes[tick] = notes[tick];
 				singleNoteLengths.set(tick, dottedNoteLength);
+				maxDotCountUsed = dot;
 
 				dot++;
 			}
 		}
+		this.setMaxDotCount(maxDotCountUsed);
 
 		// search for combinations such as c4^c16
 		// having less notes (shorter text) is preferred
