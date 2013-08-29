@@ -201,6 +201,13 @@ public class Midi2MML {
 								while ((length / 2) >= minLength)
 									length /= 2;
 
+								// quantization
+								int divider = 1;
+								while (divider < 4 && seq.getResolution() % divider == 0)
+									divider *= 2;
+								while (length - (seq.getResolution() / divider) >= minLength)
+									length -= (seq.getResolution() / divider);
+
 								if (debugDump)
 									System.out.format("Note Off: tick=%d,mmlLastTick=%d,length=%d,minLength=%d,maxLength=%d,next=%s\n", tick, mmlLastTick, length, minLength, maxLength, (midiNextNote != null) ? midiNextNote.toString() : "null");
 

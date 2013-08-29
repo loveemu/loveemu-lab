@@ -301,9 +301,9 @@ public class MMLNoteConverter {
 			}
 		}
 
-		for (tick = 1; tick < tpqn * 8; tick++)
-		{
-			System.out.println("" + tick + "\t" + notes[tick]);
-		}
+		//for (tick = 1; tick < tpqn * 8; tick++)
+		//{
+		//	System.out.println("" + tick + "\t" + notes[tick]);
+		//}
 	}
 }
