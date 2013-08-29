@@ -18,6 +18,26 @@ import javax.sound.midi.Track;
 public class Midi2MML {
 
 	/**
+	 * Name of the tool.
+	 */
+	public final static String NAME = "PetiteMM";
+
+	/**
+	 * Version of the tool.
+	 */
+	public final static String VERSION = "2013-08-28";
+
+	/**
+	 * Author of the tool.
+	 */
+	public final static String AUTHOR = "loveemu, gocha";
+
+	/**
+	 * Website of the tool.
+	 */
+	public final static String WEBSITE = "http://loveemu.googlecode.com/";
+
+	/**
 	 * Maximum dot counts allowed for dotted-note.
 	 */
 	private int mmlMaxDotCount = -1;

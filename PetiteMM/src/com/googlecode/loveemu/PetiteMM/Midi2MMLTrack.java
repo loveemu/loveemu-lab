@@ -273,7 +273,9 @@ class Midi2MMLTrack {
 		{
 			int noteLenTo = 1 << i;
 			int noteLenFrom = noteLenTo * 3;
-			mmlString = mmlString.replaceAll("([<>]*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom + "(\\s*[<>]*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom + "(\\s*[<>]*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom, "\\" + MMLSymbol.TRIPLET_START + "$1\\" + noteLenTo + "$2\\" + noteLenTo + "$3\\" + noteLenTo + "\\" + MMLSymbol.TRIPLET_END);
+			mmlString = mmlString.replaceAll("([<>]*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom + "(\\s*[<>]*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom + "(\\s*[<>]*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom, "\\" + MMLSymbol.TRIPLET_START + "$1\\" + noteLenTo + "$2\\" + noteLenTo + "$3\\" + noteLenTo + "\\" + MMLSymbol.TRIPLET_END); // c12c12c12 -> {c4c4c4}
+			mmlString = mmlString.replaceAll("([<>]*[abcdefgr\\^][\\+\\-]*)" + (noteLenFrom * 2) + "(\\s*[<>]*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom, "\\" + MMLSymbol.TRIPLET_START + "$1\\" + (noteLenTo * 2) + "$2\\" + noteLenTo + "\\" + MMLSymbol.TRIPLET_END); // c6c12 -> {c2c4}
+			mmlString = mmlString.replaceAll("([<>]*[abcdefgr\\^][\\+\\-]*)" + noteLenFrom + "(\\s*[<>]*[abcdefgr\\^][\\+\\-]*)" + (noteLenFrom * 2), "\\" + MMLSymbol.TRIPLET_START + "$1\\" + noteLenTo + "$2\\" + (noteLenTo * 2) + "\\" + MMLSymbol.TRIPLET_END); // c12c6 -> {c4c2}
 		}
 		return mmlString;
 	}

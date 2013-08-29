@@ -12,26 +12,6 @@ import com.googlecode.loveemu.PetiteMM.Midi2MML;
 public class PetiteMM {
 
 	/**
-	 * Name of the tool.
-	 */
-	public final static String NAME = "PetiteMM";
-
-	/**
-	 * Version of the tool.
-	 */
-	public final static String VERSION = "2013-08-28";
-
-	/**
-	 * Author of the tool.
-	 */
-	public final static String AUTHOR = "loveemu, gocha";
-
-	/**
-	 * Website of the tool.
-	 */
-	public final static String WEBSITE = "http://loveemu.googlecode.com/";
-
-	/**
 	 * Removes the extension from a filename.
 	 * @param filename the filename to query, null returns null
 	 * @return the filename minus the extension
@@ -71,7 +51,7 @@ public class PetiteMM {
 
 		int argi = 0;
 
-		//args = new String[] { "--dots", "2", "test.mid", "test2.mid", "test3.mid" };
+		//args = new String[] { "test.mid", "test2.mid", "test3.mid" };
 
 		// dispatch option switches
 		while (argi < args.length && args[argi].startsWith("-"))
@@ -99,8 +79,8 @@ public class PetiteMM {
 		// show about the program and exit, if needed
 		if (argi >= args.length || showAbout)
 		{
-			System.out.println(PetiteMM.NAME + " " + VERSION + " by " + AUTHOR);
-			System.out.println(WEBSITE);
+			System.out.println(Midi2MML.NAME + " " + Midi2MML.VERSION + " by " + Midi2MML.AUTHOR);
+			System.out.println(Midi2MML.WEBSITE);
 			System.out.println();
 
 			if (argsAvail.length > 0)
