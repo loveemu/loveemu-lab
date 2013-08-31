@@ -63,7 +63,7 @@ public class PetiteMM {
 				{
 					throw new IllegalArgumentException("Too few arguments for " + args[argi]);
 				}
-				opt.setMmlMaxDotCount(Integer.parseInt(args[argi + 1]));
+				opt.setMaxDots(Integer.parseInt(args[argi + 1]));
 				argi += 1;
 			}
 			else if (args[argi].equals("--timebase"))

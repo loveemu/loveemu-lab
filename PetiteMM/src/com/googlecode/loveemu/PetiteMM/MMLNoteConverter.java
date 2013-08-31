@@ -246,18 +246,22 @@ public class MMLNoteConverter {
 					break;
 				}
 
-				// quit if the note length exceeds c1^c1
+				mml = mml + ".";
 				tick += (baseNoteTick >> dot);
+				dot++;
+
+				// quit if the note length exceeds c1^c1
 				if (tick > (tpqn * 8))
 				{
 					break;
 				}
 
 				// skip existing definitions
+				// c6. == c4, for example.
 				if (notes[tick] != null)
 				{
-					dot++;
-					continue;
+					break;
+					//continue;
 				}
 
 				// create length table
@@ -265,14 +269,11 @@ public class MMLNoteConverter {
 				dottedNoteLength.add(tick);
 
 				// add new note
-				mml = mml + ".";
 				notes[tick] = new MMLNoteInfo(mmlSymbol, mml);
 				noteLengths.set(tick, dottedNoteLength);
 				singleNotes[tick] = notes[tick];
 				singleNoteLengths.set(tick, dottedNoteLength);
 				maxDotCountUsed = dot;
-
-				dot++;
 			}
 		}
 		this.setMaxDotCount(maxDotCountUsed);

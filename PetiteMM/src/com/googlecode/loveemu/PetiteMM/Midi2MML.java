@@ -25,7 +25,7 @@ public class Midi2MML {
 	/**
 	 * Version of the tool.
 	 */
-	public final static String VERSION = "2013-08-29";
+	public final static String VERSION = "2013-08-30";
 
 	/**
 	 * Author of the tool.
@@ -60,7 +60,7 @@ public class Midi2MML {
 	/**
 	 * Maximum dot counts allowed for dotted-note.
 	 */
-	private int mmlMaxDotCount = DEFAULT_MAX_DOT_COUNT;
+	private int maxDots = DEFAULT_MAX_DOT_COUNT;
 
 	/**
 	 * true if reverse the octave up/down effect.
@@ -112,7 +112,7 @@ public class Midi2MML {
 	public Midi2MML(Midi2MML obj)
 	{
 		mmlSymbol = new MMLSymbol(obj.mmlSymbol);
-		mmlMaxDotCount = obj.mmlMaxDotCount;
+		maxDots = obj.maxDots;
 		octaveReversed = obj.octaveReversed;
 		useTriplet = obj.useTriplet;
 		targetResolution = obj.targetResolution;
@@ -138,18 +138,18 @@ public class Midi2MML {
 	 * Get the maximum dot counts allowed for dotted-note.
 	 * @return Maximum dot counts allowed for dotted-note.
 	 */
-	public int getMmlMaxDotCount() {
-		return mmlMaxDotCount;
+	public int getMaxDots() {
+		return maxDots;
 	}
 
 	/**
 	 * Set the maximum dot counts allowed for dotted-note.
 	 * @param mmlMaxDotCount Maximum dot counts allowed for dotted-note.
 	 */
-	public void setMmlMaxDotCount(int mmlMaxDotCount) {
+	public void setMaxDots(int mmlMaxDotCount) {
 		if (mmlMaxDotCount < -1)
 			throw new IllegalArgumentException("Maximum dot count must be a positive number or -1.");
-		this.mmlMaxDotCount = mmlMaxDotCount;
+		this.maxDots = mmlMaxDotCount;
 	}
 
 	/**
@@ -181,7 +181,7 @@ public class Midi2MML {
 	 * @param targetResolution Ticks per quarter note of target MML.
 	 */
 	public void setTargetResolution(int targetResolution) {
-		if (targetResolution == 0)
+		if (targetResolution == -1)
 			targetResolution = DEFAULT_RESOLUTION;
 		if (targetResolution % 4 != 0)
 			throw new IllegalArgumentException("TPQN must be multiple of 4.");
@@ -244,7 +244,7 @@ public class Midi2MML {
 			mmlTracks[trackIndex].setUseTriplet(useTriplet);
 		}
 		// reset subsystems
-		MMLNoteConverter noteConv = new MMLNoteConverter(mmlSymbol, seq.getResolution(), mmlMaxDotCount);
+		MMLNoteConverter noteConv = new MMLNoteConverter(mmlSymbol, seq.getResolution(), maxDots);
 
 		// convert tracks at the same time
 		// reading tracks one by one would be simpler than the tick-based loop,
@@ -278,7 +278,7 @@ public class Midi2MML {
 
 					// dump for debug
 					if (debugDump)
-						System.out.format("MidiEvent: track=%d,tick=%d,message=%s\n", trackIndex, event.getTick(), byteArrayToString(event.getMessage().getMessage()));
+						System.out.format("MidiEvent: track=%d,tick=%d<%s>,message=%s\n", trackIndex, event.getTick(), MidiTimeSignature.getMeasureTickString(event.getTick(), timeSignatures, seq.getResolution()), byteArrayToString(event.getMessage().getMessage()));
 
 					// branch by event type for more detailed access
 					List<MMLEvent> mmlEvents = new ArrayList<MMLEvent>();
@@ -312,7 +312,7 @@ public class Midi2MML {
 									nearPow2 /= 2;
 
 								List<Double> rateCandidates = new ArrayList<Double>(Arrays.asList(0.5, 1.0));
-								int maxDotCount = (mmlMaxDotCount != -1) ? mmlMaxDotCount : Integer.MAX_VALUE;
+								int maxDotCount = (maxDots != -1) ? maxDots : Integer.MAX_VALUE;
 								double dottedNoteRate = 0.5;
 								for (int dot = 1; dot <= maxDotCount; dot++)
 								{
@@ -356,7 +356,7 @@ public class Midi2MML {
 								long length = ((long) (nearPow2 * rate + 0.5)) + (wholeNoteCount * (seq.getResolution() * 4));
 
 								if (debugDump)
-									System.out.format("Note Off: tick=%d,mmlLastTick=%d,length=%d,minLength=%d,maxLength=%d,nearPow2=%d,rateLowerLimit=%.2f,rateNearest=%.2f [%.2f,%.2f],next=%s\n", tick, mmlLastTick, length, minLength, maxLength, nearPow2, rateLowerLimit, rateNearest, rateNearestLower, rateNearestUpper, (midiNextNote != null) ? midiNextNote.toString() : "null");
+									System.out.format("Note Off: track=%d,tick=%d<%s>,mmlLastTick=%d<%s>,length=%d,minLength=%d,maxLength=%d,nearPow2=%d,rateLowerLimit=%.2f,rateNearest=%.2f [%.2f,%.2f],next=%s\n", trackIndex, tick, MidiTimeSignature.getMeasureTickString(tick, timeSignatures, seq.getResolution()), mmlLastTick, MidiTimeSignature.getMeasureTickString(mmlLastTick, timeSignatures, seq.getResolution()), length, minLength, maxLength, nearPow2, rateLowerLimit, rateNearest, rateNearestLower, rateNearestUpper, (midiNextNote != null) ? midiNextNote.toString() : "null");
 
 								mmlTrack.setTick(mmlLastTick + length);
 								mmlTrack.setNoteNumber(MMLNoteConverter.KEY_REST);
@@ -424,7 +424,7 @@ public class Midi2MML {
 					if (mmlTrack.getTick() != mmlLastTick)
 					{
 						if (debugDump)
-							System.out.println("Timing: " + mmlLastTick + " -> " + mmlTrack.getTick());
+							System.out.format("Timing: track=%d,%d<%s> -> %d<%s>\n", trackIndex, mmlLastTick, MidiTimeSignature.getMeasureTickString(mmlLastTick, timeSignatures, seq.getResolution()), mmlTrack.getTick(), MidiTimeSignature.getMeasureTickString(mmlTrack.getTick(), timeSignatures, seq.getResolution()));
 
 						if (mmlLastNoteNumber == MMLNoteConverter.KEY_REST)
 						{

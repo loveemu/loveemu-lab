@@ -148,6 +148,47 @@ public class MidiTimeSignature {
 		return baseMeasure + (int)((tick - baseTick) / timeSignature.getLength(ppqn));
 	}
 
+	/**
+	 * Get measure:tick string.
+	 * @param tick Tick count to be converted.
+	 * @param timeSignatures List of time signatures (must be sorted).
+	 * @param ppqn Ticks per quarter note.
+	 * @return Measure:Tick string.
+	 */
+	static public String getMeasureTickString(long tick, List<MidiTimeSignature> timeSignatures, int ppqn)
+	{
+		if (tick < 0)
+			throw new IllegalArgumentException("Tick must be a positive number.");
+		if (ppqn <= 0)
+			throw new IllegalArgumentException("PPQN must be greater than 0.");
+		if (timeSignatures.isEmpty())
+			throw new IllegalArgumentException("No time signature information.");
+		if (timeSignatures.get(0).getMeasure() != 0)
+			throw new IllegalArgumentException("First time signature is not located at the first measure.");
+
+		long baseTick = 0;
+		int baseMeasure = 0;
+		int timeSigIndex;
+		for (timeSigIndex = 0; timeSigIndex < timeSignatures.size() - 1; timeSigIndex++)
+		{
+			MidiTimeSignature timeSignature = timeSignatures.get(timeSigIndex);
+			MidiTimeSignature nextTimeSignature = timeSignatures.get(timeSigIndex + 1);
+			int numberOfMeasures = nextTimeSignature.getMeasure() - timeSignature.getMeasure();
+			long interval = timeSignature.getLength(ppqn) * numberOfMeasures;
+
+			if (tick < baseTick + interval)
+				break;
+
+			baseTick += interval;
+			baseMeasure = nextTimeSignature.getMeasure();
+		}
+
+		MidiTimeSignature timeSignature = timeSignatures.get(timeSigIndex);
+		int measure = baseMeasure + (int)((tick - baseTick) / timeSignature.getLength(ppqn));
+		int tickInMeasure = (int)((tick - baseTick) % timeSignature.getLength(ppqn));
+		return String.format("%d:%04d", measure, tickInMeasure);
+	}
+
 	@Override
 	public String toString() {
 		return String.format("MidiTimeSignature [numerator=%d, denominator=%d measure=%d]", numerator, denominator, measure);
