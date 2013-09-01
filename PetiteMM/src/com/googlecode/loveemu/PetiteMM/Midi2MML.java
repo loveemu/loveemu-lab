@@ -48,14 +48,24 @@ public class Midi2MML {
 	public final static int DEFAULT_MAX_DOT_COUNT = -1;
 
 	/**
+	 * Constant for using the input resolution.
+	 */
+	public final static int RESOLUTION_AS_IS = 0;
+
+	/**
 	 * MML symbol set.
 	 */
 	private MMLSymbol mmlSymbol;
 
 	/**
-	 * Ticks per quarter note of target MML.
+	 * Ticks per quarter of input MIDI. (0: as is)
 	 */
-	private int targetResolution;
+	private int inputResolution = RESOLUTION_AS_IS;
+
+	/**
+	 * Ticks per quarter note of target MML. (0: same as input)
+	 */
+	private int targetResolution = DEFAULT_RESOLUTION;
 
 	/**
 	 * Maximum dot counts allowed for dotted-note.
@@ -82,7 +92,7 @@ public class Midi2MML {
 	 */
 	public Midi2MML()
 	{
-		this(new MMLSymbol(), DEFAULT_RESOLUTION);
+		this(new MMLSymbol());
 	}
 
 	/**
@@ -91,7 +101,7 @@ public class Midi2MML {
 	 */
 	public Midi2MML(MMLSymbol mmlSymbol)
 	{
-		this(mmlSymbol, DEFAULT_RESOLUTION);
+		this.mmlSymbol = mmlSymbol;
 	}
 
 	/**
@@ -107,6 +117,19 @@ public class Midi2MML {
 
 	/**
 	 * Construct a new MIDI to MML converter.
+	 * @param mmlSymbol MML symbol set.
+	 * @param inputResolution Ticks per quarter note of input sequence.
+	 * @param targetResolution Ticks per quarter note of target MML.
+	 */
+	public Midi2MML(MMLSymbol mmlSymbol, int inputResolution, int targetResolution)
+	{
+		this.mmlSymbol = mmlSymbol;
+		this.setInputResolution(inputResolution);
+		this.setTargetResolution(targetResolution);
+	}
+
+	/**
+	 * Construct a new MIDI to MML converter.
 	 * @param obj
 	 */
 	public Midi2MML(Midi2MML obj)
@@ -115,6 +138,7 @@ public class Midi2MML {
 		maxDots = obj.maxDots;
 		octaveReversed = obj.octaveReversed;
 		useTriplet = obj.useTriplet;
+		inputResolution = obj.inputResolution;
 		targetResolution = obj.targetResolution;
 	}
 
@@ -168,6 +192,14 @@ public class Midi2MML {
 		this.octaveReversed = octaveReversed;
 	}
 
+	public int getInputResolution() {
+		return inputResolution;
+	}
+
+	public void setInputResolution(int inputResolution) {
+		this.inputResolution = inputResolution;
+	}
+
 	/**
 	 * Get TPQN of target MML.
 	 * @return Ticks per quarter note of target MML.
@@ -181,9 +213,7 @@ public class Midi2MML {
 	 * @param targetResolution Ticks per quarter note of target MML.
 	 */
 	public void setTargetResolution(int targetResolution) {
-		if (targetResolution == -1)
-			targetResolution = DEFAULT_RESOLUTION;
-		if (targetResolution % 4 != 0)
+		if (targetResolution != RESOLUTION_AS_IS && targetResolution % 4 != 0)
 			throw new IllegalArgumentException("TPQN must be multiple of 4.");
 		this.targetResolution = targetResolution;
 	}
@@ -205,11 +235,13 @@ public class Midi2MML {
 		}
 
 		// preprocess
+		if (inputResolution != RESOLUTION_AS_IS)
+			seq = MidiUtil.AssumeResolution(seq, inputResolution);
 		// the converter assumes that all events in a track are for a single channel,
 		// when the input file is SMF format 0 or something like that, it requires preprocessing.
 		seq = MidiUtil.SeparateMixedChannel(seq);
 		// adjust resolution for MML conversion
-		if (targetResolution != 0)
+		if (targetResolution != RESOLUTION_AS_IS)
 			seq = MidiUtil.ChangeResolution(seq, targetResolution);
 
 		// get track count (this must be after the preprocess)
@@ -227,7 +259,16 @@ public class Midi2MML {
 		List<List<MidiNote>> midiTrackNotes = getMidiNotes(seq);
 
 		// scan time signatures
-		List<MidiTimeSignature> timeSignatures = getMidiTimeSignatures(seq);
+		List<MidiTimeSignature> timeSignatures;
+		try
+		{
+			timeSignatures = getMidiTimeSignatures(seq);
+		} catch (InvalidMidiDataException e) {
+			System.err.println("Warning: " + e.getMessage());
+			timeSignatures = new ArrayList<MidiTimeSignature>();
+			timeSignatures.add(new MidiTimeSignature(4, 2));
+		}
+
 		if (debugDump)
 		{
 			for (MidiTimeSignature timeSignature : timeSignatures)

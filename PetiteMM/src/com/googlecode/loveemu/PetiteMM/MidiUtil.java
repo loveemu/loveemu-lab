@@ -153,4 +153,38 @@ public class MidiUtil {
 
 		return seq;
 	}
+
+	/**
+	 * Change resolution (TPQN) without retiming events.
+	 * @param seq Sequence to be processed.
+	 * @param resolution Ticks per quarter note of new sequence.
+	 * @return New sequence with new resolution.
+	 * @throws InvalidMidiDataException throw if MIDI data is invalid.
+	 */
+	public static Sequence AssumeResolution(Sequence sourceSeq, int resolution) throws InvalidMidiDataException
+	{
+		// sequence must be tick-based
+		if (sourceSeq.getDivisionType() != Sequence.PPQ)
+		{
+			throw new UnsupportedOperationException("SMPTE is not supported.");
+		}
+
+		Sequence seq = new Sequence(sourceSeq.getDivisionType(), resolution);
+
+		// process all input tracks
+		for (int trackIndex = 0; trackIndex < sourceSeq.getTracks().length; trackIndex++)
+		{
+			Track sourceTrack = sourceSeq.getTracks()[trackIndex];
+			Track track = seq.createTrack();
+
+			// process all events
+			for (int eventIndex = 0; eventIndex < sourceTrack.size(); eventIndex++)
+			{
+				MidiEvent sourceEvent = sourceTrack.get(eventIndex);
+				MidiEvent event = new MidiEvent(sourceEvent.getMessage(), sourceEvent.getTick());
+				track.add(event);
+			}
+		}
+		return seq;
+	}
 }

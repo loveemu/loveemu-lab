@@ -45,7 +45,8 @@ public class PetiteMM {
 		// list of available option switches
 		final String[] argsAvail = {
 				"--dots", "<count>", "Maximum dot counts allowed for dotted-note, -1 for infinity. (default=" + Midi2MML.DEFAULT_MAX_DOT_COUNT + ")",
-				"--timebase", "<TPQN>", "Timebase of target MML, 0 to keep the input timebase. (default=" + Midi2MML.DEFAULT_RESOLUTION + ")",
+				"--timebase", "<TPQN>", "Timebase of target MML, " + Midi2MML.RESOLUTION_AS_IS + " to keep the input timebase. (default=" + Midi2MML.DEFAULT_RESOLUTION + ")",
+				"--input-timebase", "<TPQN>", "Timebase of input sequence, " + Midi2MML.RESOLUTION_AS_IS + " to keep the input timebase. (default=" + Midi2MML.RESOLUTION_AS_IS + ")",
 				"--octave-reverse", "", "Swap the octave symbol.",
 				"--use-triplet", "", "Use triplet if possible. (really not so smart)",
 		};
@@ -75,6 +76,15 @@ public class PetiteMM {
 				opt.setTargetResolution(Integer.parseInt(args[argi + 1]));
 				argi += 1;
 			}
+			else if (args[argi].equals("--input-timebase"))
+			{
+				if (argi + 1 >= args.length)
+				{
+					throw new IllegalArgumentException("Too few arguments for " + args[argi]);
+				}
+				opt.setInputResolution(Integer.parseInt(args[argi + 1]));
+				argi += 1;
+			}
 			else if (args[argi].equals("--octave-reverse"))
 			{
 				opt.setOctaveReversed(true);
@@ -82,6 +92,10 @@ public class PetiteMM {
 			else if (args[argi].equals("--use-triplet"))
 			{
 				opt.setTripletPreference(true);
+			}
+			else
+			{
+				throw new IllegalArgumentException("Unsupported option [" + args[argi] + "]");
 			}
 			argi++;
 		}
