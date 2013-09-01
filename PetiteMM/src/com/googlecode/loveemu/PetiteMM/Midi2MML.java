@@ -292,7 +292,7 @@ public class Midi2MML {
 
 		// preprocess
 		if (inputResolution != RESOLUTION_AS_IS)
-			seq = MidiUtil.AssumeResolution(seq, inputResolution);
+			seq = MidiUtil.AssumeResolution(seq, inputResolution, true);
 		// the converter assumes that all events in a track are for a single channel,
 		// when the input file is SMF format 0 or something like that, it requires preprocessing.
 		seq = MidiUtil.SeparateMixedChannel(seq);

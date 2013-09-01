@@ -55,7 +55,7 @@ public class PetiteMM {
 
 		int argi = 0;
 
-		//args = new String[] { "--no-quantize", "test.mid", "test2.mid", "test3.mid", "test4.mid", "test5.mid" };
+		//args = new String[] { "test.mid", "test2.mid", "test3.mid", "test4.mid", "test5.mid" };
 
 		// dispatch option switches
 		while (argi < args.length && args[argi].startsWith("-"))

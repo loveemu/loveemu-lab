@@ -179,10 +179,11 @@ public class MidiUtil {
 	 * Change resolution (TPQN) without retiming events.
 	 * @param seq Sequence to be processed.
 	 * @param resolution Ticks per quarter note of new sequence.
+	 * @param adjustTempo true if adjust the tempo value to keep the song tempo.
 	 * @return New sequence with new resolution.
 	 * @throws InvalidMidiDataException throw if MIDI data is invalid.
 	 */
-	public static Sequence AssumeResolution(Sequence sourceSeq, int resolution) throws InvalidMidiDataException
+	public static Sequence AssumeResolution(Sequence sourceSeq, int resolution, boolean adjustTempo) throws InvalidMidiDataException
 	{
 		// sequence must be tick-based
 		if (sourceSeq.getDivisionType() != Sequence.PPQ)
@@ -193,6 +194,7 @@ public class MidiUtil {
 		Sequence seq = new Sequence(sourceSeq.getDivisionType(), resolution);
 
 		// process all input tracks
+		double tempoScale = (double) sourceSeq.getResolution() / seq.getResolution();
 		for (int trackIndex = 0; trackIndex < sourceSeq.getTracks().length; trackIndex++)
 		{
 			Track sourceTrack = sourceSeq.getTracks()[trackIndex];
@@ -203,6 +205,26 @@ public class MidiUtil {
 			{
 				MidiEvent sourceEvent = sourceTrack.get(eventIndex);
 				MidiEvent event = new MidiEvent(sourceEvent.getMessage(), sourceEvent.getTick());
+				if (adjustTempo)
+				{
+					if (event.getMessage() instanceof MetaMessage)
+					{
+						MetaMessage message = (MetaMessage) event.getMessage();
+						if (message.getType() == MidiUtil.META_TEMPO)
+						{
+							byte[] data = message.getData();
+							if (data.length != 3)
+							{
+								throw new InvalidMidiDataException("Illegal tempo event.");
+							}
+
+							int sourceTempo = ((data[0] & 0xff) << 16) | ((data[1] & 0xff) << 8) | (data[2] & 0xff);
+							int newTempo = (int) Math.floor(sourceTempo / tempoScale);
+							data = new byte[] { (byte) ((newTempo >> 16) & 0xff), (byte) ((newTempo >> 8) & 0xff), (byte) (newTempo & 0xff) };
+							message.setMessage(MidiUtil.META_TEMPO, data, data.length);
+						}
+					}
+				}
 				track.add(event);
 			}
 		}
