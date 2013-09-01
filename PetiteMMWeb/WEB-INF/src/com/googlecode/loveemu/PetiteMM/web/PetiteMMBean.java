@@ -79,7 +79,7 @@ public class PetiteMMBean {
 			if (timebase != null)
 				converter.setTargetResolution(timebase);
 			if (dots != null)
-				converter.setMmlMaxDotCount(dots);
+				converter.setMaxDots(dots);
 			if (octaveReverse != null)
 				converter.setOctaveReversed(octaveReverse);
 			if (useTriplet != null)
