@@ -48,13 +48,14 @@ public class PetiteMM {
 				"--timebase", "<TPQN>", "Timebase of target MML, " + Midi2MML.RESOLUTION_AS_IS + " to keep the input timebase. (default=" + Midi2MML.DEFAULT_RESOLUTION + ")",
 				"--input-timebase", "<TPQN>", "Timebase of input sequence, " + Midi2MML.RESOLUTION_AS_IS + " to keep the input timebase. (default=" + Midi2MML.RESOLUTION_AS_IS + ")",
 				"--quantize-precision", "<length>", "Specify the minimum note length for quantization.",
+				"--no-quantize", "", "Prevent adjusting note length. Result will be more accurate but more complicated.",
 				"--octave-reverse", "", "Swap the octave symbol.",
 				"--use-triplet", "", "Use triplet if possible. (really not so smart)",
 		};
 
 		int argi = 0;
 
-		//args = new String[] { "test.mid", "test2.mid", "test3.mid", "test4.mid", "test5.mid" };
+		//args = new String[] { "--no-quantize", "test.mid", "test2.mid", "test3.mid", "test4.mid", "test5.mid" };
 
 		// dispatch option switches
 		while (argi < args.length && args[argi].startsWith("-"))
@@ -95,6 +96,10 @@ public class PetiteMM {
 				opt.setQuantizePrecision(Integer.parseInt(args[argi + 1]));
 				argi += 1;
 			}
+			else if (args[argi].equals("--no-quantize"))
+			{
+				opt.setQuantizationEnabled(false);
+			}
 			else if (args[argi].equals("--octave-reverse"))
 			{
 				opt.setOctaveReversed(true);
@@ -121,7 +126,7 @@ public class PetiteMM {
 				System.out.println("Options:");
 			for (int i = 0; i < argsAvail.length / 3; i++)
 			{
-				System.out.format("%-17s %-8s %s\n", argsAvail[i * 3], argsAvail[i * 3 + 1], argsAvail[i * 3 + 2]);
+				System.out.format("%-20s %-8s %s\n", argsAvail[i * 3], argsAvail[i * 3 + 1], argsAvail[i * 3 + 2]);
 			}
 
 			System.exit(1);
