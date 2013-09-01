@@ -394,7 +394,30 @@ public class Midi2MML {
 								}
 
 								double rate = Math.min(rateNearest, rateUpperLimit);
-								long length = ((long) (nearPow2 * rate + 0.5)) + (wholeNoteCount * (seq.getResolution() * 4));
+								long length = (long) (nearPow2 * rate + 0.5);
+
+								if (length < minLength)
+								{
+									List<Integer> restLengths = noteConv.getPrimitiveNoteLengths((int)(maxLength - length));
+									for (int i = restLengths.size() - 1; i >= 0; i--)
+									{
+										int restLength = restLengths.get(i);
+										if (length + restLength <= minLength)
+										{
+											length += restLength;
+										}
+										else
+										{
+											long oldDistance = minLength - length;
+											long newDistance = (length + restLength) - minLength;
+											if (newDistance <= oldDistance)
+												length += restLength;
+											break;
+										}
+									}
+								}
+
+								length += wholeNoteCount * (seq.getResolution() * 4);
 
 								if (debugDump)
 									System.out.format("Note Off: track=%d,tick=%d<%s>,mmlLastTick=%d<%s>,length=%d,minLength=%d,maxLength=%d,nearPow2=%d,rateLowerLimit=%.2f,rateNearest=%.2f [%.2f,%.2f],next=%s\n", trackIndex, tick, MidiTimeSignature.getMeasureTickString(tick, timeSignatures, seq.getResolution()), mmlLastTick, MidiTimeSignature.getMeasureTickString(mmlLastTick, timeSignatures, seq.getResolution()), length, minLength, maxLength, nearPow2, rateLowerLimit, rateNearest, rateNearestLower, rateNearestUpper, (midiNextNote != null) ? midiNextNote.toString() : "null");

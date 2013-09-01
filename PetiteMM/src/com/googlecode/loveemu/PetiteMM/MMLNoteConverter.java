@@ -2,6 +2,7 @@ package com.googlecode.loveemu.PetiteMM;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 public class MMLNoteConverter {
@@ -329,6 +330,13 @@ public class MMLNoteConverter {
 					break;
 				}
 			}
+		}
+
+		for (tick = 1; tick < tpqn * 8; tick++)
+		{
+			List<Integer> lengths = noteLengths.get(tick);
+			Collections.sort(lengths);
+			Collections.reverse(lengths);
 		}
 
 		//for (tick = 1; tick < tpqn * 8; tick++)
