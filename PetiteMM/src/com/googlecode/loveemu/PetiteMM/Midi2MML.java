@@ -25,7 +25,7 @@ public class Midi2MML {
 	/**
 	 * Version of the tool.
 	 */
-	public final static String VERSION = "2013-08-30";
+	public final static String VERSION = "2013-09-01";
 
 	/**
 	 * Author of the tool.
@@ -38,19 +38,29 @@ public class Midi2MML {
 	public final static String WEBSITE = "http://loveemu.googlecode.com/";
 
 	/**
+	 * Constant for using the input resolution.
+	 */
+	public final static int RESOLUTION_AS_IS = 0;
+
+	/**
+	 * Constant for the maximum precision.
+	 */
+	public static final int QUANTIZE_PRECISION_AS_IS = 0;
+
+	/**
 	 * Default ticks per quarter note of target MML.
 	 */
-	public final static int DEFAULT_RESOLUTION = 24;
+	public final static int DEFAULT_RESOLUTION = 48;
+
+	/**
+	 * Default quantize precision value.
+	 */
+	public final static int DEFAULT_QUANTIZE_PRECISION = 32;
 
 	/**
 	 * Default maximum dot count for dotted note.
 	 */
 	public final static int DEFAULT_MAX_DOT_COUNT = -1;
-
-	/**
-	 * Constant for using the input resolution.
-	 */
-	public final static int RESOLUTION_AS_IS = 0;
 
 	/**
 	 * MML symbol set.
@@ -66,6 +76,11 @@ public class Midi2MML {
 	 * Ticks per quarter note of target MML. (0: same as input)
 	 */
 	private int targetResolution = DEFAULT_RESOLUTION;
+
+	/**
+	 * Minimum note length for quantization.
+	 */
+	private int quantizePrecision = DEFAULT_QUANTIZE_PRECISION;
 
 	/**
 	 * Maximum dot counts allowed for dotted-note.
@@ -140,6 +155,7 @@ public class Midi2MML {
 		useTriplet = obj.useTriplet;
 		inputResolution = obj.inputResolution;
 		targetResolution = obj.targetResolution;
+		quantizePrecision = obj.quantizePrecision;
 	}
 
 	/**
@@ -216,6 +232,24 @@ public class Midi2MML {
 		if (targetResolution != RESOLUTION_AS_IS && targetResolution % 4 != 0)
 			throw new IllegalArgumentException("TPQN must be multiple of 4.");
 		this.targetResolution = targetResolution;
+	}
+
+	/**
+	 * Get minimum note length for quantization.
+	 * @return Minimum note length. (must be power of 2)
+	 */
+	public int getQuantizePrecision() {
+		return quantizePrecision;
+	}
+
+	/**
+	 * Set minimum note length for quantization.
+	 * @param quantizePrecision Minimum note length. (must be power of 2)
+	 */
+	public void setQuantizePrecision(int quantizePrecision) {
+		if (quantizePrecision != QUANTIZE_PRECISION_AS_IS && (quantizePrecision & (quantizePrecision - 1)) != 0)
+			throw new IllegalArgumentException("Quantize precision must be power of 2.");
+		this.quantizePrecision = quantizePrecision;
 	}
 
 	/**
@@ -368,37 +402,44 @@ public class Midi2MML {
 
 								double rateLowerLimit = (double) minLength / nearPow2;
 								double rateUpperLimit = (double) maxLength / nearPow2;
-								int rateIndex = Collections.binarySearch(rateCandidates, rateLowerLimit);
 
-								double rateNearest;
-								double rateNearestLower; // less than or equal to rateUpperLimit
-								double rateNearestUpper; // greater than or equal to rateLowerLimit
-								if (rateIndex >= 0)
+								long quantizeNoteLength = 0;
+								if (quantizePrecision != QUANTIZE_PRECISION_AS_IS)
 								{
-									rateNearest = rateCandidates.get(rateIndex);
-									rateNearestLower = rateNearest;
-									rateNearestUpper = rateNearest;
+									quantizeNoteLength = (seq.getResolution() * 4) / quantizePrecision; // can have error
 								}
-								else
+
+								double rateNearest = 0.0;
+								double rateBestDistance = Double.MAX_VALUE;
+								for (double rateCandidate : rateCandidates)
 								{
-									rateIndex = -rateIndex - 1;
-									rateNearestUpper = rateCandidates.get(rateIndex);
-									rateNearestLower = rateCandidates.get(rateIndex - 1);
-									if (Math.abs(rateLowerLimit - rateNearestLower) < Math.abs(rateLowerLimit - rateNearestUpper))
+									rateCandidate = Math.min(rateCandidate, rateUpperLimit);
+
+									double rateDistance = Math.abs(rateLowerLimit - rateCandidate);
+									if (rateDistance <= rateBestDistance)
 									{
-										rateNearest = rateNearestLower;
-										rateIndex--;
+										boolean rateRequiresUpdate = true;
+										if (nearPow2 >= quantizeNoteLength & rateCandidate < rateUpperLimit)
+										{
+											long noteLengthCandidate = Math.round(nearPow2 * rateCandidate);
+											List<Integer> noteLengths = noteConv.getPrimitiveNoteLengths((int)noteLengthCandidate, true);
+											rateRequiresUpdate = (noteLengths.get(noteLengths.size() - 1) >= quantizeNoteLength);// &&
+										}
+										if (rateRequiresUpdate)
+										{
+											rateNearest = rateCandidate;
+											rateBestDistance = rateDistance;
+										}
 									}
-									else
-										rateNearest = rateNearestUpper;
+									if  (rateCandidate >= rateUpperLimit)
+										break;
 								}
 
-								double rate = Math.min(rateNearest, rateUpperLimit);
-								long length = (long) (nearPow2 * rate + 0.5);
+								long length = Math.round(nearPow2 * rateNearest);
 
 								if (length < minLength)
 								{
-									List<Integer> restLengths = noteConv.getPrimitiveNoteLengths((int)(maxLength - length));
+									List<Integer> restLengths = noteConv.getPrimitiveNoteLengths((int)(maxLength - length), false);
 									for (int i = restLengths.size() - 1; i >= 0; i--)
 									{
 										int restLength = restLengths.get(i);
@@ -420,7 +461,7 @@ public class Midi2MML {
 								length += wholeNoteCount * (seq.getResolution() * 4);
 
 								if (debugDump)
-									System.out.format("Note Off: track=%d,tick=%d<%s>,mmlLastTick=%d<%s>,length=%d,minLength=%d,maxLength=%d,nearPow2=%d,rateLowerLimit=%.2f,rateNearest=%.2f [%.2f,%.2f],next=%s\n", trackIndex, tick, MidiTimeSignature.getMeasureTickString(tick, timeSignatures, seq.getResolution()), mmlLastTick, MidiTimeSignature.getMeasureTickString(mmlLastTick, timeSignatures, seq.getResolution()), length, minLength, maxLength, nearPow2, rateLowerLimit, rateNearest, rateNearestLower, rateNearestUpper, (midiNextNote != null) ? midiNextNote.toString() : "null");
+									System.out.format("Note Off: track=%d,tick=%d<%s>,mmlLastTick=%d<%s>,length=%d,minLength=%d,maxLength=%d,nearPow2=%d,rateLimit=[%.2f,%.2f],rateNearest=%.2f,next=%s\n", trackIndex, tick, MidiTimeSignature.getMeasureTickString(tick, timeSignatures, seq.getResolution()), mmlLastTick, MidiTimeSignature.getMeasureTickString(mmlLastTick, timeSignatures, seq.getResolution()), length, minLength, maxLength, nearPow2, rateLowerLimit, rateUpperLimit, rateNearest, (midiNextNote != null) ? midiNextNote.toString() : "null");
 
 								mmlTrack.setTick(mmlLastTick + length);
 								mmlTrack.setNoteNumber(MMLNoteConverter.KEY_REST);
@@ -492,7 +533,7 @@ public class Midi2MML {
 
 						if (mmlLastNoteNumber == MMLNoteConverter.KEY_REST)
 						{
-							List<Integer> lengths = noteConv.getPrimitiveNoteLengths((int)(mmlTrack.getTick() - mmlLastTick));
+							List<Integer> lengths = noteConv.getPrimitiveNoteLengths((int)(mmlTrack.getTick() - mmlLastTick), false);
 							int totalLength = 0;
 							for (int length : lengths)
 							{

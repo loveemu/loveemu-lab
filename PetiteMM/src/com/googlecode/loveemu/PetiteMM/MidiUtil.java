@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import javax.sound.midi.InvalidMidiDataException;
+import javax.sound.midi.MetaMessage;
 import javax.sound.midi.MidiEvent;
 import javax.sound.midi.Sequence;
 import javax.sound.midi.ShortMessage;
@@ -102,7 +103,27 @@ public class MidiUtil {
 				else
 				{
 					// non-channel message
-					targetTracks.get(0).add(event);
+					boolean addToAll = false;
+					if (event.getMessage() instanceof MetaMessage)
+					{
+						MetaMessage message = (MetaMessage) event.getMessage();
+						if (message.getType() == MidiUtil.META_END_OF_TRACK)
+						{
+							addToAll = true;
+						}
+					}
+
+					if (addToAll)
+					{
+						for (Track targetTrack : targetTracks)
+						{
+							targetTrack.add(event);
+						}
+					}
+					else
+					{
+						targetTracks.get(0).add(event);
+					}
 				}
 			}
 		}
@@ -137,7 +158,7 @@ public class MidiUtil {
 			for (int eventIndex = 0; eventIndex < sourceTrack.size(); eventIndex++)
 			{
 				MidiEvent sourceEvent = sourceTrack.get(eventIndex);
-				MidiEvent event = new MidiEvent(sourceEvent.getMessage(), (long) (sourceEvent.getTick() * timingRate + 0.5));
+				MidiEvent event = new MidiEvent(sourceEvent.getMessage(), Math.round(sourceEvent.getTick() * timingRate));
 				track.add(event);
 			}
 		}

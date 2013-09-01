@@ -23,6 +23,11 @@ public class MMLNoteConverter {
 	private List<List<Integer>> noteLengths;
 
 	/**
+	 * Tick to premitive note lengths table. (dotted notes disassembled)
+	 */
+	private List<List<Integer>> noteLengthsDotsDisassembled;
+
+	/**
 	 * Ticks per quarter note of MML.
 	 */
 	private int tpqn;
@@ -109,9 +114,10 @@ public class MMLNoteConverter {
 	/**
 	 * Get list of notes which are necessary to express a certain length note.
 	 * @param length Length of note to be expressed.
+	 * @param dotsDisassembled true if dotted note must be expressed by two or more elements. 
 	 * @return List of note lengths.
 	 */
-	public List<Integer> getPrimitiveNoteLengths(int length)
+	public List<Integer> getPrimitiveNoteLengths(int length, boolean dotsDisassembled)
 	{
 		List<Integer> lengths = new ArrayList<Integer>();
 
@@ -119,17 +125,22 @@ public class MMLNoteConverter {
 			throw new IllegalArgumentException("Note length must be a positive number.");
 		else if (length == 0)
 		{
-			lengths.add(0);
-			return lengths;
+			return lengths; // blank list
 		}
+
+		List<List<Integer>> targetNoteLengths;
+		if (dotsDisassembled)
+			targetNoteLengths = noteLengthsDotsDisassembled;
+		else
+			targetNoteLengths = noteLengths;
 
 		// construct the final length list
 		while (length > (tpqn * 8))
 		{
-			lengths.addAll(noteLengths.get(tpqn * 8));
+			lengths.addAll(targetNoteLengths.get(tpqn * 8));
 			length -= tpqn * 8;
 		}
-		lengths.addAll(noteLengths.get(length));
+		lengths.addAll(targetNoteLengths.get(length));
 		return lengths;
 	}
 
@@ -206,10 +217,12 @@ public class MMLNoteConverter {
 		// initialize length table
 		List<List<Integer>> singleNoteLengths = new ArrayList<List<Integer>>(tpqn * 8 + 1);
 		noteLengths = new ArrayList<List<Integer>>(tpqn * 8 + 1);
+		noteLengthsDotsDisassembled = new ArrayList<List<Integer>>(tpqn * 8 + 1);
 		for (int mmlNoteLen = 0; mmlNoteLen <= (tpqn * 8); mmlNoteLen++)
 		{
 			singleNoteLengths.add(null);
 			noteLengths.add(null);
+			noteLengthsDotsDisassembled.add(null);
 		}
 
 		// set single notes
@@ -232,6 +245,7 @@ public class MMLNoteConverter {
 			// add new note
 			notes[tick] = new MMLNoteInfo(mmlSymbol, "$N" + mmlNoteLen);
 			noteLengths.set(tick, simpleNoteLength);
+			noteLengthsDotsDisassembled.set(tick, simpleNoteLength);
 			singleNotes[tick] = notes[tick];
 			singleNoteLengths.set(tick, simpleNoteLength);
 
@@ -239,6 +253,8 @@ public class MMLNoteConverter {
 			int dot = 1;
 			int baseNoteTick = tick;
 			String mml = notes[tick].getText();
+			List<Integer> dottedNoteLengthDotsDisassembled = new ArrayList<Integer>();
+			dottedNoteLengthDotsDisassembled.add(baseNoteTick);
 			while (baseNoteTick % (1 << dot) == 0)
 			{
 				// limit the maximum dot count
@@ -268,10 +284,12 @@ public class MMLNoteConverter {
 				// create length table
 				List<Integer> dottedNoteLength = new ArrayList<Integer>();
 				dottedNoteLength.add(tick);
+				dottedNoteLengthDotsDisassembled.add(baseNoteTick >> dot);
 
 				// add new note
 				notes[tick] = new MMLNoteInfo(mmlSymbol, mml);
 				noteLengths.set(tick, dottedNoteLength);
+				noteLengthsDotsDisassembled.set(tick, dottedNoteLengthDotsDisassembled);
 				singleNotes[tick] = notes[tick];
 				singleNoteLengths.set(tick, dottedNoteLength);
 				maxDotCountUsed = dot;
@@ -299,6 +317,7 @@ public class MMLNoteConverter {
 				// search the combination
 				String mml = null;
 				List<Integer> multipleNoteLengths = null;
+				List<Integer> multipleNoteLengthsDotsDisassembled = null;
 				for (int tickSub = tick - 1; tickSub > 0; tickSub--)
 				{
 					if (prevNotes[tickSub] != null && singleNotes[tick - tickSub] != null)
@@ -309,6 +328,8 @@ public class MMLNoteConverter {
 							mml = newMML;
 							multipleNoteLengths = new ArrayList<Integer>(noteLengths.get(tickSub));
 							multipleNoteLengths.addAll(noteLengths.get(tick - tickSub));
+							multipleNoteLengthsDotsDisassembled = new ArrayList<Integer>(noteLengthsDotsDisassembled.get(tickSub));
+							multipleNoteLengthsDotsDisassembled.addAll(noteLengthsDotsDisassembled.get(tick - tickSub));
 						}
 					}
 				}
@@ -317,6 +338,7 @@ public class MMLNoteConverter {
 				{
 					notes[tick] = new MMLNoteInfo(mmlSymbol, mml);
 					noteLengths.set(tick, multipleNoteLengths);
+					noteLengthsDotsDisassembled.set(tick, multipleNoteLengthsDotsDisassembled);
 				}
 			}
 
@@ -334,7 +356,13 @@ public class MMLNoteConverter {
 
 		for (tick = 1; tick < tpqn * 8; tick++)
 		{
-			List<Integer> lengths = noteLengths.get(tick);
+			List<Integer> lengths;
+
+			lengths = noteLengths.get(tick);
+			Collections.sort(lengths);
+			Collections.reverse(lengths);
+
+			lengths = noteLengthsDotsDisassembled.get(tick);
 			Collections.sort(lengths);
 			Collections.reverse(lengths);
 		}
