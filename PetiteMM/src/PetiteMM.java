@@ -53,7 +53,7 @@ public class PetiteMM {
 				"--quantize-precision", "<length>", "Specify the minimum note length for quantization.",
 				"--no-quantize", "", "Prevent adjusting note length. Result will be more accurate but more complicated.",
 				"--octave-reverse", "", "Swap the octave symbol.",
-				"--use-triplet", "", "Use triplet if possible. (really not so smart)",
+				"--use-triplet", "", "Use triplet syntax if possible. (really not so smart)",
 		};
 
 		int argi = 0;

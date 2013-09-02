@@ -422,7 +422,8 @@ public class Midi2MML {
 										dottedNoteRate += Math.pow(0.5, dot + 1);
 										rateCandidates.add(dottedNoteRate); // dotted note (0.75, 0.875...)
 									}
-									rateCandidates.add(2.0/3.0); // triplet
+									if (nearPow2 * 2 % 3 == 0)
+										rateCandidates.add(2.0/3.0); // triplet
 									Collections.sort(rateCandidates);
 
 									if (debugDump)

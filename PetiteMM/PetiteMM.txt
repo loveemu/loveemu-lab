@@ -14,9 +14,13 @@ Features:
 
 === How to use ===
 
-Drag and drop .mid files into PetiteMM.bat
-
 PetiteMM is a Java tool.
+If you do not have Java, install it first.
+http://java.com/download/
+
+Drag and drop .mid files into PetiteMM.bat,
+and .mml files will be saved in the input directory.
+
 You can run it manually by java -jar PetiteMM.jar <arguments>
 There are some conversion options. Run the tool with no arguments for the list of options.
 
