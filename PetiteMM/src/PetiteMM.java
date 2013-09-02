@@ -3,6 +3,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.StringWriter;
 
 import javax.sound.midi.InvalidMidiDataException;
 import javax.sound.midi.MidiSystem;
@@ -41,9 +42,11 @@ public class PetiteMM {
 	{
 		boolean showAbout = false;
 		Midi2MML opt = new Midi2MML();
+		String mmlFileName = null;
 
 		// list of available option switches
 		final String[] argsAvail = {
+				"-o", "<filename>", "Specify the output MML filename.",
 				"--dots", "<count>", "Maximum dot counts allowed for dotted-note, -1 for infinity. (default=" + Midi2MML.DEFAULT_MAX_DOT_COUNT + ")",
 				"--timebase", "<TPQN>", "Timebase of target MML, " + Midi2MML.RESOLUTION_AS_IS + " to keep the input timebase. (default=" + Midi2MML.DEFAULT_RESOLUTION + ")",
 				"--input-timebase", "<TPQN>", "Timebase of input sequence, " + Midi2MML.RESOLUTION_AS_IS + " to keep the input timebase. (default=" + Midi2MML.RESOLUTION_AS_IS + ")",
@@ -55,12 +58,21 @@ public class PetiteMM {
 
 		int argi = 0;
 
-		//args = new String[] { "test.mid", "test2.mid", "test3.mid", "test4.mid", "test5.mid" };
+		//args = new String[] { "test.mid" };
 
 		// dispatch option switches
 		while (argi < args.length && args[argi].startsWith("-"))
 		{
-			if (args[argi].equals("--dots"))
+			if (args[argi].equals("-o"))
+			{
+				if (argi + 1 >= args.length)
+				{
+					throw new IllegalArgumentException("Too few arguments for " + args[argi]);
+				}
+				mmlFileName = args[argi + 1];
+				argi += 1;
+			}
+			else if (args[argi].equals("--dots"))
 			{
 				if (argi + 1 >= args.length)
 				{
@@ -132,36 +144,52 @@ public class PetiteMM {
 			System.exit(1);
 		}
 
-		// convert the all given file(s)
-		for (; argi < args.length; argi++)
+		// target must be a single file
+		if (argi + 1 < args.length)
 		{
-			File midiFile = new File(args[argi]);
-			File mmlFile = new File(PetiteMM.removeExtension(args[argi]) + ".txt");
+			throw new IllegalArgumentException("Too many arguments.");
+		}
 
-			Midi2MML converter = new Midi2MML(opt);
-			BufferedWriter writer = null;
-			try {
-				if (!midiFile.exists())
-					throw new FileNotFoundException(midiFile.getName() + " (The system cannot find the file specified)");
+		// convert the given file
+		File midiFile = new File(args[argi]);
+		if (mmlFileName == null)
+		{
+			mmlFileName = PetiteMM.removeExtension(args[argi]) + ".mml";
+		}
+		File mmlFile = new File(mmlFileName);
 
-				writer = new BufferedWriter(new FileWriter(mmlFile));
-				converter.writeMML(MidiSystem.getSequence(midiFile), writer);
-				writer.flush();
-			} catch (InvalidMidiDataException e) {
-				e.printStackTrace();
-			} catch (IOException e) {
-				e.printStackTrace();
-			} finally {
-				if (writer != null)
-				{
-					try {
-						writer.close();
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
+		Midi2MML converter = new Midi2MML(opt);
+		FileWriter fileWriter = null;
+		boolean succeeded = false;
+		try {
+			if (!midiFile.exists())
+				throw new FileNotFoundException(midiFile.getName() + " (The system cannot find the file specified)");
+
+			StringWriter strWriter = new StringWriter();
+			BufferedWriter writer = new BufferedWriter(strWriter);
+			converter.writeMML(MidiSystem.getSequence(midiFile), writer);
+			writer.flush();
+
+			fileWriter = new FileWriter(mmlFile);
+			fileWriter.write(strWriter.toString());
+
+			succeeded = true;
+		} catch (InvalidMidiDataException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		} finally {
+			if (fileWriter != null)
+			{
+				try {
+					fileWriter.close();
+				} catch (IOException e) {
+					e.printStackTrace();
 				}
 			}
 		}
+
+		System.exit(succeeded ? 0 : 1);
 	}
 
 }
