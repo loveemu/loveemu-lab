@@ -134,11 +134,12 @@ public class PetiteMM {
 			System.out.println(Midi2MML.WEBSITE);
 			System.out.println();
 
+			System.out.println("Syntax: PetiteMM <options> input.mid");
 			if (argsAvail.length > 0)
 				System.out.println("Options:");
 			for (int i = 0; i < argsAvail.length / 3; i++)
 			{
-				System.out.format("%-20s %-8s %s\n", argsAvail[i * 3], argsAvail[i * 3 + 1], argsAvail[i * 3 + 2]);
+				System.out.format("%-20s %-9s %s\n", argsAvail[i * 3], argsAvail[i * 3 + 1], argsAvail[i * 3 + 2]);
 			}
 
 			System.exit(1);
