@@ -16,7 +16,7 @@
 
 #define APPNAME "Pandora Box SPC2MIDI"
 #define APPSHORTNAME "pboxspc"
-#define VERSION "[2013-09-15]"
+#define VERSION "[2013-09-16]"
 
 // from VS2008 math.h
 #define M_PI       3.14159265358979323846
@@ -1127,8 +1127,10 @@ static void pboxSpcEventIncreaseVolume (PBoxSpcSeqStat *seq, SeqEventReport *ev,
         tr->volumeIndex++;
     }
 
-    sprintf(ev->note, "Increase Octave, volume = %d", tr->volumeIndex);
+    sprintf(ev->note, "Increase Volume, volume = %d", tr->volumeIndex);
     strcat(ev->classStr, " ev-incvolume");
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_VOLUME, pboxSpcMidiVolOf(tr->volumeIndex));
 }
 
 /** vcmd e7: decrease volume. */
@@ -1143,6 +1145,8 @@ static void pboxSpcEventDecreaseVolume (PBoxSpcSeqStat *seq, SeqEventReport *ev,
 
     sprintf(ev->note, "Decrease Volume, volume = %d", tr->volumeIndex);
     strcat(ev->classStr, " ev-decvolume");
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_VOLUME, pboxSpcMidiVolOf(tr->volumeIndex));
 }
 
 /** vcmd e8: vibrato params. */
