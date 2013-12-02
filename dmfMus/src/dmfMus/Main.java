@@ -6,7 +6,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.Arrays;
-import java.util.LinkedList;
 
 import javax.sound.midi.InvalidMidiDataException;
 import javax.sound.midi.MidiSystem;
@@ -36,18 +35,14 @@ public class Main
     static int[] track_ptr;
     //Counters until next event comes on a track
     static int[] counter;
-    //True if a note is currently playing
-    static boolean[] note_flag;
-    //Number of the MIDI key of the note currently playing
-    static int[] current_key;
 
     //True if the entire track has been decoded at least once
     static boolean[] track_completed;
 
-    //FIFO for note on events
-    static LinkedList<Integer> pending_note_on_chn;
-    static LinkedList<Integer> pending_note_on_key;
-    static LinkedList<Integer> pending_note_on_vel;
+    //Call-Return stack
+    final static int CALL_STACK_LENGTH = 64; // TODO: set correct stack length
+    static int[] callStackPtr;
+    static int[][] callStack;
 
     //Linearise volume flag (currently unused)
     static boolean lv = false;
@@ -79,8 +74,8 @@ public class Main
         System.out.println();
         System.out.println("Header");
         System.out.println(String.format("0004: %1$d", inSEQ.readInt()));
-        System.out.println(String.format("0008: %1$d", inSEQ.readByte()));
-        num_tracks = inSEQ.readByte() & 0xff;
+        System.out.println(String.format("0008: %1$d", inSEQ.read()));
+        num_tracks = inSEQ.read();
         System.out.println(String.format("Tracks: %1$d", num_tracks));
         int timebase = inSEQ.readShort() & 0xffff;
         System.out.println(String.format("Timebase: %1$d", timebase));
@@ -123,6 +118,13 @@ public class Main
             {
                 System.out.println("Invalid output file.");
                 System.exit(-1);
+            }
+
+            //Read first delta-time
+            for(int i=0; i<counter.length; i++) {
+                inSEQ.seek(track_ptr[i]);
+                counter[i] = readVarInt(inSEQ);
+                track_ptr[i] += getVarIntLength(counter[i]);
             }
 
             //This is the main loop which will process all channels
@@ -168,6 +170,14 @@ public class Main
             while(!track_completed[track] && counter[track] <= 0)
             {
                 engine_ver.process_event(track);
+
+                if (!track_completed[track])
+                {
+                    // read next delta-time
+                    inSEQ.seek(track_ptr[track]);
+                    counter[track] = readVarInt(inSEQ);
+                    track_ptr[track] += getVarIntLength(counter[track]);
+                }
             }
         }
 
@@ -184,15 +194,6 @@ public class Main
         //If everything is completed, the main program should quit its loop
         if(all_completed_flag)
             return false;
-
-        //Add pending note ons after all events are processed
-        while(!pending_note_on_key.isEmpty())
-        {
-            int channel = pending_note_on_chn.removeFirst().intValue();
-            int key = pending_note_on_key.removeFirst().intValue();
-            int vel = pending_note_on_vel.removeFirst().intValue();
-            midi.getTracks()[channel].add(MidiEventCreator.createNoteOnEvent(midiTick, channel, key, vel));
-        }
 
         //Increment MIDI time
         midiTick++;
@@ -253,6 +254,37 @@ public class Main
     {
         File file = new File(s);
         return removeExtension(file.getName());
+    }
+
+    static int readVarInt(RandomAccessFile file) throws IOException
+    {
+        int value = 0;
+        int length = 0;
+        int byteValue;
+        do {
+            if (length == 4) {
+                throw new NumberFormatException("Number too large.");
+            }
+
+            byteValue = file.read();
+            value = (value << 7) | (byteValue & 0x7f);
+            length++;
+        } while (byteValue >= 0x80);
+        return value;
+    }
+
+    static int getVarIntLength(int value)
+    {
+        int length = 1;
+        while ((value >>> 7) != 0) {
+            if (length == 4) {
+                throw new NumberFormatException("Number too large.");
+            }
+
+            value >>>= 7;
+            length++;
+        }
+        return length;
     }
 
     static String removeExtension(String s)

@@ -128,6 +128,7 @@ public class MidiEventCreator {
 		{
 			throw new InvalidMidiDataException("Pitchbend " + pitch + " is out of range.");
 		}
+		pitch += 8192;
 
 		ShortMessage message = new ShortMessage();
 		message.setMessage(ShortMessage.PITCH_BEND, channel, pitch & 0x7f, (pitch >> 7) & 0x7f);
@@ -150,27 +151,27 @@ public class MidiEventCreator {
 
 	static MidiEvent createGMResetEvent(long tick) throws InvalidMidiDataException
 	{
-		return createSysexEvent(tick, 0xf0, new byte[] {0x7e, 0x7f, 0x09, 0x01});
+		return createSysexEvent(tick, 0xf0, new byte[] {0x7e, 0x7f, 0x09, 0x01, (byte)0xf7});
 	}
 
 	static MidiEvent createGM2ResetEvent(long tick) throws InvalidMidiDataException
 	{
-		return createSysexEvent(tick, 0xf0, new byte[] {0x7e, 0x7f, 0x09, 0x03});
+		return createSysexEvent(tick, 0xf0, new byte[] {0x7e, 0x7f, 0x09, 0x03, (byte)0xf7});
 	}
 
 	static MidiEvent createGSResetEvent(long tick) throws InvalidMidiDataException
 	{
-		return createSysexEvent(tick, 0xf0, new byte[] {0x41, 0x10, 0x42, 0x12, 0x40, 0x00, 0x7f, 0x00, 0x41});
+		return createSysexEvent(tick, 0xf0, new byte[] {0x41, 0x10, 0x42, 0x12, 0x40, 0x00, 0x7f, 0x00, 0x41, (byte)0xf7});
 	}
 
 	static MidiEvent createXGResetEvent(long tick) throws InvalidMidiDataException
 	{
-		return createSysexEvent(tick, 0xf0, new byte[] {0x43, 0x10, 0x4c, 0x00, 0x00, 0x7e, 0x00});
+		return createSysexEvent(tick, 0xf0, new byte[] {0x43, 0x10, 0x4c, 0x00, 0x00, 0x7e, 0x00, (byte)0xf7});
 	}
 
 	static MidiEvent createMasterVolumeEvent(long tick, int volume) throws InvalidMidiDataException
 	{
-		return createSysexEvent(tick, 0xf0, new byte[] {0x7f, 0x7f, 0x04, 0x01, 0x00, (byte)(volume & 0x7f)});
+		return createSysexEvent(tick, 0xf0, new byte[] {0x7f, 0x7f, 0x04, 0x01, 0x00, (byte)(volume & 0x7f), (byte)0xf7});
 	}
 
 	static MidiEvent createMetaEvent(long tick, int type, byte[] data) throws InvalidMidiDataException
