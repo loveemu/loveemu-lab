@@ -266,18 +266,18 @@ int main(int argc, char *argv[])
 	strcpy(glInFilename, argv[0]);
 	if (strcmp(glOutFilename, "") == 0)
 	{
-		int inNameLen = strlen(glOutFilename);
-
+		int inNameLen = strlen(glInFilename);
 		strcpy(glOutFilename, glInFilename);
+
 		if (inNameLen >= 4 && strcmp(&glOutFilename[inNameLen - 4], ".lzs") == 0)
 		{
 			glOutFilename[inNameLen - 4] = '\0';
 		}
 		else if (inNameLen >= 5 && strcmp(&glOutFilename[inNameLen - 5], ".lzss") == 0)
 		{
-			glOutFilename[inNameLen - 4] = '\0';
+			glOutFilename[inNameLen - 5] = '\0';
 		}
-		strcat(glOutFilename, ".raw");
+		strcat(glOutFilename, ".bin");
 	}
 
 	// check LZSS bit field width

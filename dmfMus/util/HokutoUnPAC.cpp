@@ -137,7 +137,7 @@ int main(int argc, char *argv[])
 	strcpy(glInFilename, argv[0]);
 	if (strcmp(glOutFilename, "") == 0)
 	{
-		int inNameLen = strlen(glOutFilename);
+		int inNameLen = strlen(glInFilename);
 		strcpy(glOutFilename, glInFilename);
 
 		// remove extension
@@ -225,7 +225,7 @@ int main(int argc, char *argv[])
 		{
 			// because of LZSS compression,
 			// the signature cannot be found sometimes
-			strcpy(outExtension, ".dmf.lzs");
+			strcpy(outExtension, ".lzs");
 		}
 		else if (_memmem(file_data, MIN(file_length, 128), "pBAV", 4) != NULL)
 		{
