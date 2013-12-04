@@ -24,6 +24,7 @@ public class Main
     //Output MIDI file
     static DataOutputStream outMID;
     //Input sequence file
+    static File inSEQFile;
     static RandomAccessFile inSEQ;
 
     //Base of input filename
@@ -58,6 +59,8 @@ public class Main
     public static void main(String[] args) throws Exception
     {
         System.out.println("DMF to MIDI ripper");
+        System.out.println("==================");
+        System.out.println("");
 
         parseArguments(args);
 
@@ -70,24 +73,30 @@ public class Main
             System.exit(-1);
         }
 
+        System.out.println(String.format("Converting " + inSEQFile.getName() + "..."));
+        System.out.println();
+
         //Song Header
         System.out.println();
         System.out.println("Header");
-        System.out.println(String.format("0004: %1$d", inSEQ.readInt()));
-        System.out.println(String.format("0008: %1$d", inSEQ.read()));
+        System.out.println("------");
+        System.out.println("");
+        System.out.println(String.format("- 0004: %1$d", inSEQ.readInt()));
+        System.out.println(String.format("- 0008: %1$d", inSEQ.read()));
         num_tracks = inSEQ.read();
-        System.out.println(String.format("Tracks: %1$d", num_tracks));
+        System.out.println(String.format("- Tracks: %1$d", num_tracks));
         int timebase = inSEQ.readShort() & 0xffff;
-        System.out.println(String.format("Timebase: %1$d", timebase));
+        System.out.println(String.format("- Timebase: %1$d", timebase));
 
+        System.out.println();
+        System.out.println("Conversion");
+        System.out.println("----------");
+        System.out.println();
         for(int song = 0; song < 1; song++)
         {
             //Output MIDIs are in a new folder called "music"
             //File dir = new File("music");
             //dir.mkdir();
-
-            System.out.println();
-            System.out.println(String.format("Converting song..."));
 
             midi = new Sequence(Sequence.PPQ, timebase);
             for (int trackIndex = 0; trackIndex < num_tracks; trackIndex++)
@@ -142,18 +151,23 @@ public class Main
                         break;
                     }
                 }
+                System.out.println("Dump complete. Now outputing MIDI file...");
+                System.out.println();
             }
             catch(Exception e)
             {
                 e.printStackTrace();
                 continue;
             }
-            System.out.println("Dump complete. Now outputing MIDI file...");
-            MidiSystem.write(midi, 1, outMID);
+            finally
+            {
+                MidiSystem.write(midi, 1, outMID);
+            }
         }
         //Close files
         inSEQ.close();
-        System.out.println(" Done !");
+        System.out.println("Done !");
+        System.out.println();
     }
 
     static boolean tick() throws IOException, InvalidMidiDataException
@@ -221,6 +235,7 @@ public class Main
         String path = args[0];
         try
         {
+        	inSEQFile = new File(path);
             inSEQ = new RandomAccessFile(path, "r");
         }
         catch(FileNotFoundException e)

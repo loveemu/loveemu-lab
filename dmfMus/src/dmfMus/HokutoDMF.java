@@ -55,7 +55,7 @@ public class HokutoDMF implements DMF
         for(int i=0; i<Main.num_tracks; i++)
         {
             midi.getTracks()[i].add(MidiEventCreator.createTrackNameEvent(0, String.format("Track %1$d - %2$08x", i, track_ptr[i])));
-            System.out.println(String.format("Track %1$d starts from %2$08x", i, track_ptr[i]));
+            System.out.println(String.format("- Track %1$d starts from %2$08x", i, track_ptr[i]));
 
             // Default bend range
             midi.getTracks()[i].add(MidiEventCreator
@@ -65,6 +65,7 @@ public class HokutoDMF implements DMF
             midi.getTracks()[i].add(MidiEventCreator
                     .createControlChangeEvent(0, i, MidiEventCreator.CONTROL_DATAENTRYMSB, 16));
         }
+        System.out.println();
 
         return true;
     }
@@ -171,6 +172,13 @@ public class HokutoDMF implements DMF
                     track_ptr[track] += 1;
                     return;
 
+                case 0x96:
+                    arg1 = inSEQ.read();
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, "event 96 (" + arg1 + ")"));
+                    track_ptr[track] += 1;
+                    return;
+
                 case 0x98:
                     //Repeat start? (127 for infinite loop)
                     arg1 = inSEQ.read();
@@ -205,19 +213,21 @@ public class HokutoDMF implements DMF
                         .createTextEvent(Main.midiTick, "event 9d"));
                     return;
 
-                    default :
-                        midi.getTracks()[track].add(MidiEventCreator
-                            .createTextEvent(Main.midiTick, String.format("Ignored command 0x%1$02X at %2$08x", command, event_addr)));
-                        System.out.println(String.format("Track %1$d : Ignored command 0x%2$02X at %3$08x", track, command, event_addr));
+                default :
+                    midi.getTracks()[track].add(MidiEventCreator
+                        .createTextEvent(Main.midiTick, String.format("Ignored command 0x%1$02X at %2$08x", command, event_addr)));
+                    System.out.println(String.format("Track %1$d : Ignored command 0x%2$02X at %3$08x", track, command, event_addr));
+                    System.out.println();
 
-                        //End track for the safe
-                        track_completed[track] = true;
+                    //End track for the safe
+                    track_completed[track] = true;
                 }
             }
         }
         catch (InvalidMidiDataException e)
         {
             System.err.println(String.format("Error in Track %1$d at %2$08x", track + 1, track_ptr[track]));
+            System.err.println();
             throw e;
         }
     }

@@ -221,19 +221,18 @@ int main(int argc, char *argv[])
 
 		// determine output file extension
 		char outExtension[512];
-		if (_memmem(file_data, MIN(file_length, 128), "DMF", 3) != NULL)
-		{
-			// because of LZSS compression,
-			// the signature cannot be found sometimes
-			strcpy(outExtension, ".lzs");
-		}
-		else if (_memmem(file_data, MIN(file_length, 128), "pBAV", 4) != NULL)
+		if (_memmem(file_data, MIN(file_length, 128), "pBAV", 4) != NULL)
 		{
 			strcpy(outExtension, ".vh");
 		}
 		else if (file_length >= 8 && memcmp(&file_data[file_length - 8], "wwwwwwww", 8) == 0)
 		{
 			strcpy(outExtension, ".vb");
+		}
+		else if (file_length >= 3 && _memmem(file_data, MIN(file_length, 128), "MF", 2) != NULL)
+		{
+			// LZSS compressed DMF
+			strcpy(outExtension, ".lzs");
 		}
 		else
 		{
