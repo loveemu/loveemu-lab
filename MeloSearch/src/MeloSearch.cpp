@@ -232,7 +232,7 @@ void printUsage(void)
 	printf("-q\n");
 	printf("  : quiet mode, prints only errors and offsets\n");
 	printf("\n");
-	printf("-l<length>\n");
+	printf("-l[length]\n");
 	printf("  : max distance between notes (in bytes) (default: -l%d)\n", MELO_MAX_NOTE_DIST_DEFAULT);
 }
 
