@@ -192,6 +192,12 @@ bool parseMML(SeqNote *notes, int &noteCount, int maxNotes, const char *mml)
 			}
 
 			time += duration;
+
+			if (noteCount == maxNotes)
+			{
+				fprintf(stderr, "Warning: MML contains too much notes\n");
+				return true;
+			}
 		}
 		else
 		{
