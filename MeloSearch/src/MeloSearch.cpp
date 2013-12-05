@@ -8,6 +8,7 @@
 #include <string.h>
 #include <limits.h>
 #include <ctype.h>
+#include <time.h>
 
 #define APP_NAME	"Melo Melo Search"
 #define APP_VER		"[2013-12-05]"
@@ -255,6 +256,9 @@ bool searchNotes(FILE *inFile, const char *mml, int maxNoteDist)
 
 	long fileSize;
 
+	time_t currPrintTime = time(NULL);
+	time_t lastPrintTime = currPrintTime;
+
 	if (maxNoteDist < 1)
 	{
 		fprintf(stderr, "Error: search length too small\n");
@@ -271,6 +275,11 @@ bool searchNotes(FILE *inFile, const char *mml, int maxNoteDist)
 	int noteCount;
 	if (!parseMML(notes, noteCount, COUNT(notes), mml))
 	{
+		goto finish;
+	}
+	if (noteCount < 2)
+	{
+		fprintf(stderr, "Error: two or more notes are required\n");
 		goto finish;
 	}
 
@@ -301,6 +310,16 @@ bool searchNotes(FILE *inFile, const char *mml, int maxNoteDist)
 	// search...
 	for (long offset = 0; offset < fileSize; offset++)
 	{
+		currPrintTime = time(NULL);
+		if (currPrintTime > lastPrintTime + 60)
+		{
+			if (!glQuiet)
+			{
+				fprintf(stderr, "Progress: %ld/%ld %.1f%%\n", offset, fileSize, (offset * 100.0) / fileSize);
+			}
+			lastPrintTime = currPrintTime;
+		}
+
 		fseek(inFile, offset, SEEK_SET);
 		byte firstByte = (byte) fgetc(inFile);
 
@@ -366,7 +385,7 @@ bool searchNotes(FILE *inFile, const char *mml, int maxNoteDist)
 				printf("- %08lX: %02X", offset, firstByte);
 				for (int noteIndex = 1; noteIndex < noteCount; noteIndex++)
 				{
-					int byteValue = (int)firstByte + notes[noteIndex].key;
+					byte byteValue = (byte)(firstByte + notes[noteIndex].key);
 					printf(" %02X", byteValue);
 				}
 				printf("\n");
