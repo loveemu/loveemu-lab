@@ -14,8 +14,6 @@
 #define APP_VER		"[2013-12-05]"
 #define APP_AUTHOR	"[loveemu](http://loveemu.googlecode.com/)"
 
-#define MIN(a, b)	(((a) < (b)) ? (a) : (b))
-#define MAX(a, b)	(((a) > (b)) ? (a) : (b))
 #define COUNT(a)	(sizeof(a) / sizeof(a[0]))
 
 #define MELO_MAX_NOTE_DIST_DEFAULT	6
@@ -356,11 +354,15 @@ bool searchNotes(FILE *inFile, const char *mml, int maxNoteDist)
 				dataBlockSize = fileSize - dataOffset;
 			}
 
-			memcpy(data, &data[MELO_SEARCH_BLOCK_SIZE / 2], MIN(dataBlockSize, MELO_SEARCH_BLOCK_SIZE / 2));
-			if (dataBlockSize > (MELO_SEARCH_BLOCK_SIZE / 2))
+			if (dataBlockSize <= (MELO_SEARCH_BLOCK_SIZE / 2))
 			{
+				memcpy(data, &data[MELO_SEARCH_BLOCK_SIZE / 2], dataBlockSize);
+			}
+			else
+			{
+				memcpy(data, &data[MELO_SEARCH_BLOCK_SIZE / 2], MELO_SEARCH_BLOCK_SIZE / 2);
 				fseek(inFile, dataOffset + (MELO_SEARCH_BLOCK_SIZE / 2), SEEK_SET);
-				if (fread(data, dataBlockSize - (MELO_SEARCH_BLOCK_SIZE / 2), 1, inFile) != 1)
+				if (fread(&data[MELO_SEARCH_BLOCK_SIZE / 2], dataBlockSize - (MELO_SEARCH_BLOCK_SIZE / 2), 1, inFile) != 1)
 				{
 					fprintf(stderr, "Error: file read error\n");
 					goto finish;
@@ -371,14 +373,20 @@ bool searchNotes(FILE *inFile, const char *mml, int maxNoteDist)
 		byte firstByte = data[offset - dataOffset];
 
 		// byte range check
+		bool byteArrayHasOverflow = false;
 		for (int noteIndex = 1; noteIndex < noteCount; noteIndex++)
 		{
-			int byteValue = (int)firstByte + notes[noteIndex].key;
+			int byteValue = ((int)firstByte) + notes[noteIndex].key;
 			if (byteValue < 0 || byteValue > 0xff)
 			{
 				// overflow
-				continue;
+				byteArrayHasOverflow = true;
+				break;
 			}
+		}
+		if (byteArrayHasOverflow)
+		{
+			continue;
 		}
 
 		minOffsets[0] = 0;
