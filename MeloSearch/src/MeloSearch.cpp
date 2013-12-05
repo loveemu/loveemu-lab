@@ -260,6 +260,7 @@ bool searchNotes(FILE *inFile, const char *mml, int maxNoteDist)
 
 	long fileSize;
 	long dataOffset = 0;
+	long dataBlockSize = 0;
 
 	time_t currPrintTime = time(NULL);
 	time_t lastPrintTime = currPrintTime;
@@ -319,8 +320,17 @@ bool searchNotes(FILE *inFile, const char *mml, int maxNoteDist)
 	}
 
 	// read first block
+	dataBlockSize = MELO_SEARCH_BLOCK_SIZE;
+	if (dataOffset + dataBlockSize > fileSize)
+	{
+		dataBlockSize = fileSize - dataOffset;
+	}
 	rewind(inFile);
-	fread(data, MELO_SEARCH_BLOCK_SIZE, 1, inFile);
+	if (fread(data, dataBlockSize, 1, inFile) != 1)
+	{
+		fprintf(stderr, "Error: file read error\n");
+		goto finish;
+	}
 
 	// search...
 	for (long offset = 0; offset < fileSize; offset++)
@@ -338,8 +348,18 @@ bool searchNotes(FILE *inFile, const char *mml, int maxNoteDist)
 		if ((offset - dataOffset) >= (MELO_SEARCH_BLOCK_SIZE / 2))
 		{
 			dataOffset += (MELO_SEARCH_BLOCK_SIZE / 2);
+			dataBlockSize = MELO_SEARCH_BLOCK_SIZE;
+			if (dataOffset + dataBlockSize > fileSize)
+			{
+				dataBlockSize = fileSize - dataOffset;
+			}
+
 			fseek(inFile, dataOffset, SEEK_SET);
-			fread(data, MELO_SEARCH_BLOCK_SIZE, 1, inFile);
+			if (fread(data, dataBlockSize, 1, inFile) != 1)
+			{
+				fprintf(stderr, "Error: file read error\n");
+				goto finish;
+			}
 		}
 
 		byte firstByte = data[offset - dataOffset];
