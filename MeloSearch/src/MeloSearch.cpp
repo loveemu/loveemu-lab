@@ -115,7 +115,7 @@ bool parseMML(SeqNote *notes, int &noteCount, int maxNotes, const char *mml)
 		}
 		else if ((c >= 'a' && c <= 'g') || c == 'r' || c == '^')
 		{
-			int key;
+			int key = 0;
 			if (c >= 'a' && c <= 'g')
 			{
 				int keys[] = { 9, 11, 0, 2, 4, 5, 7 };
@@ -244,6 +244,8 @@ bool searchNotes(FILE *inFile, const char *mml, int maxNoteDist)
 	int *minOffsets = NULL;
 	int *maxOffsets = NULL;
 
+	long fileSize;
+
 	if (maxNoteDist < 1)
 	{
 		fprintf(stderr, "Error: search length too small\n");
@@ -272,7 +274,7 @@ bool searchNotes(FILE *inFile, const char *mml, int maxNoteDist)
 
 	// get whole file size
 	fseek(inFile, 0, SEEK_END);
-	long fileSize = ftell(inFile);
+	fileSize = ftell(inFile);
 
 	minOffsets = (int*) calloc(noteCount, sizeof(int));
 	if (minOffsets == NULL)
@@ -348,17 +350,17 @@ bool searchNotes(FILE *inFile, const char *mml, int maxNoteDist)
 
 			if (glQuiet)
 			{
-				printf("%08X\n", offset);
+				printf("%08lX\n", offset);
 			}
 			else
 			{
-				printf("- %08X: %02X", offset, firstByte);
+				printf("- %08lX: %02X", offset, firstByte);
 				for (int noteIndex = 1; noteIndex < noteCount; noteIndex++)
 				{
 					int byteValue = (int)firstByte + notes[noteIndex].key;
 					printf(" %02X", byteValue);
 				}
-				printf("\n", offset);
+				printf("\n");
 			}
 		}
 	}
@@ -392,6 +394,8 @@ int main(int argc, char *argv[])
 
 	// closable objects
 	FILE *inFile = NULL;
+
+	char *mml = NULL;
 
 	// set command path
 	glCommandPath = argv[0];
@@ -435,7 +439,7 @@ int main(int argc, char *argv[])
 	strcpy(glInFilename, argv[0]);
 
 	// set MML string
-	const char *mml = (const char *) argv[1];
+	mml = argv[1];
 
 	// open input file
 	inFile = fopen(glInFilename, "rb");
@@ -446,7 +450,7 @@ int main(int argc, char *argv[])
 	}
 
 	// start searching notes
-	if (!searchNotes(inFile, mml, meloMaxNoteDist))
+	if (!searchNotes(inFile, (const char*) mml, meloMaxNoteDist))
 	{
 		goto finish;
 	}

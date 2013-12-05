@@ -15,6 +15,13 @@ int main(int argc, char *argv[])
 	FILE* fp = NULL;
 	uint8_t* data = NULL;
 
+	long lastFileOffset = -1;
+	int fileCount = 0;
+	char *pdot = NULL;
+	char *pslash = NULL;
+	char *pbslash = NULL;
+	long filesize;
+
 	if (argc == 1) {
 		puts("No file input.");
 		goto finish;
@@ -29,9 +36,9 @@ int main(int argc, char *argv[])
 	char outfilename[512];
 	strcpy(outfilename, argv[1]);
 	// remove extension
-	char *pdot = strrchr(outfilename, '.');
-	char *pslash = strrchr(outfilename, '/');
-	char *pbslash = strrchr(outfilename, '\\');
+	pdot = strrchr(outfilename, '.');
+	pslash = strrchr(outfilename, '/');
+	pbslash = strrchr(outfilename, '\\');
 	if (pdot != NULL)
 	{
 		if (pslash == NULL || (pbslash != NULL && pslash > pbslash))
@@ -45,7 +52,7 @@ int main(int argc, char *argv[])
 	}
 
 	fseek(fp, 0, SEEK_END);
-	long filesize = ftell(fp);
+	filesize = ftell(fp);
 	rewind(fp);
 
 	data = (uint8_t*) malloc(filesize);
@@ -63,8 +70,6 @@ int main(int argc, char *argv[])
 
 	// start main part
 
-	long lastFileOffset = -1;
-	int fileCount = 0;
 	for (long currOffset = 0; currOffset <= filesize; currOffset++)
 	{
 		bool saveLastFile = false;
@@ -93,7 +98,7 @@ int main(int argc, char *argv[])
 			fileCount++;
 
 			char fwname[64];
-			sprintf(fwname, "%s_%08x.dmf", outfilename, lastFileOffset);
+			sprintf(fwname, "%s_%08lx.dmf", outfilename, lastFileOffset);
 
 			FILE *fpw = fopen(fwname, "wb");
 			if (fpw != NULL)

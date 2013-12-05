@@ -137,7 +137,6 @@ int main(int argc, char *argv[])
 	strcpy(glInFilename, argv[0]);
 	if (strcmp(glOutFilename, "") == 0)
 	{
-		int inNameLen = strlen(glInFilename);
 		strcpy(glOutFilename, glInFilename);
 
 		// remove extension

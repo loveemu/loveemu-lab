@@ -81,6 +81,11 @@ bool decompressLZSS(FILE *inFile, FILE *outFile, int lzssMatchBitCount, int lzss
 	char *lzssBuffer = NULL;
 	char *lzssRefBuffer = NULL;
 
+	int lzssBufferOffset = 0;
+	int lzssMatchWordLength = lzssMatchBitCount / 8;
+	int lzssRefWordLength = (lzssOffsetBitCount + lzssLengthBitCount) / 8;
+	size_t lzssBufferLength = 1 << lzssOffsetBitCount;
+
 	if (lzssMatchBitCount % 8 != 0 || lzssMatchBitCount < 8 || lzssMatchBitCount > 32)
 	{
 		fprintf(stderr, "Error: A word must be byte-aligned");
@@ -92,9 +97,6 @@ bool decompressLZSS(FILE *inFile, FILE *outFile, int lzssMatchBitCount, int lzss
 		goto finish;
 	}
 
-	size_t lzssBufferLength = 1 << lzssOffsetBitCount;
-	int lzssMatchWordLength = lzssMatchBitCount / 8;
-	int lzssRefWordLength = (lzssOffsetBitCount + lzssLengthBitCount) / 8;
 	if (lzssRefWordLength < 1 || lzssRefWordLength > 4)
 	{
 		fprintf(stderr, "Error: %d byte(s) word is not supported", lzssRefWordLength);
@@ -108,7 +110,6 @@ bool decompressLZSS(FILE *inFile, FILE *outFile, int lzssMatchBitCount, int lzss
 		goto finish;
 	}
 	memset(lzssBuffer, 0, lzssBufferLength);
-	int lzssBufferOffset = 0;
 
 	lzssRefBuffer = (char *) malloc(lzssBufferLength);
 	if (lzssRefBuffer == NULL)
