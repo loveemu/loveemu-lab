@@ -18,6 +18,9 @@
 
 #define MELO_MAX_NOTE_DIST_DEFAULT	6
 
+// make sure it is greater than (maxNotes * maxMeloDist * 2) bytes
+#define MELO_SEARCH_BLOCK_SIZE	0x10000
+
 // Command path (set by main)
 char *glCommandPath = NULL;
 // Input filename
@@ -251,10 +254,12 @@ bool searchNotes(FILE *inFile, const char *mml, int maxNoteDist)
 	bool found = false;
 
 	// closable objects
+	byte *data = NULL;
 	int *minOffsets = NULL;
 	int *maxOffsets = NULL;
 
 	long fileSize;
+	long dataOffset = 0;
 
 	time_t currPrintTime = time(NULL);
 	time_t lastPrintTime = currPrintTime;
@@ -306,6 +311,16 @@ bool searchNotes(FILE *inFile, const char *mml, int maxNoteDist)
 		fprintf(stderr, "Error: Memory allocation failed\n");
 		goto finish;
 	}
+	data = (byte*) malloc(MELO_SEARCH_BLOCK_SIZE);
+	if (data == NULL)
+	{
+		fprintf(stderr, "Error: Memory allocation failed\n");
+		goto finish;
+	}
+
+	// read first block
+	rewind(inFile);
+	fread(data, MELO_SEARCH_BLOCK_SIZE, 1, inFile);
 
 	// search...
 	for (long offset = 0; offset < fileSize; offset++)
@@ -320,8 +335,14 @@ bool searchNotes(FILE *inFile, const char *mml, int maxNoteDist)
 			lastPrintTime = currPrintTime;
 		}
 
-		fseek(inFile, offset, SEEK_SET);
-		byte firstByte = (byte) fgetc(inFile);
+		if ((offset - dataOffset) >= (MELO_SEARCH_BLOCK_SIZE / 2))
+		{
+			dataOffset += (MELO_SEARCH_BLOCK_SIZE / 2);
+			fseek(inFile, dataOffset, SEEK_SET);
+			fread(data, MELO_SEARCH_BLOCK_SIZE, 1, inFile);
+		}
+
+		byte firstByte = data[offset - dataOffset];
 
 		// byte range check
 		for (int noteIndex = 1; noteIndex < noteCount; noteIndex++)
@@ -346,14 +367,15 @@ bool searchNotes(FILE *inFile, const char *mml, int maxNoteDist)
 
 			minOffsets[noteIndex] = INT_MAX;
 			maxOffsets[noteIndex] = INT_MIN;
-			fseek(inFile, offset + minOffset, SEEK_SET);
 			for (int off = minOffset; off <= maxOffset; off++)
 			{
-				int c = fgetc(inFile);
-				if (c == EOF)
+				if (offset + off >= fileSize)
 				{
+					// EOF
 					break;
 				}
+
+				int c = data[offset + off - dataOffset];
 				if (c == targetByte)
 				{
 					targetByteFound = true;
@@ -398,6 +420,10 @@ finish:
 	{
 		printf("\n");
 		printf("Note that the above dump omits bytes in between note numbers.\n");
+	}
+	if (data != NULL)
+	{
+		free(data);
 	}
 	if (minOffsets != NULL)
 	{
