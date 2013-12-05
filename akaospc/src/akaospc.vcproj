@@ -133,6 +133,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalOptions="/PDBALTPATH:%_PDB%"
 				AdditionalDependencies="setargv.obj"
 				LinkIncremental="1"
 				GenerateDebugInformation="false"
@@ -176,11 +177,11 @@
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
 			<File
-				RelativePath=".\cioutil.c"
+				RelativePath=".\akaospc.c"
 				>
 			</File>
 			<File
-				RelativePath=".\akaospc.c"
+				RelativePath=".\cioutil.c"
 				>
 			</File>
 			<File
@@ -202,11 +203,11 @@
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
 			<File
-				RelativePath=".\cioutil.h"
+				RelativePath=".\akaospc.h"
 				>
 			</File>
 			<File
-				RelativePath=".\akaospc.h"
+				RelativePath=".\cioutil.h"
 				>
 			</File>
 			<File

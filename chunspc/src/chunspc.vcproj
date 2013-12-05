@@ -133,6 +133,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalOptions="/PDBALTPATH:%_PDB%"
 				AdditionalDependencies="setargv.obj"
 				LinkIncremental="1"
 				GenerateDebugInformation="false"

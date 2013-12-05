@@ -132,6 +132,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalOptions="/PDBALTPATH:%_PDB%"
 				LinkIncremental="1"
 				GenerateDebugInformation="true"
 				SubSystem="1"

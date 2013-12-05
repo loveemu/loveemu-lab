@@ -142,6 +142,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalOptions="/PDBALTPATH:%_PDB%"
 				OutputFile="$(OutDir)\$(ProjectName).spi"
 				LinkIncremental="1"
 				IgnoreAllDefaultLibraries="false"

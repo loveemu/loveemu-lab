@@ -133,6 +133,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalOptions="/PDBALTPATH:%_PDB%"
 				AdditionalDependencies="setargv.obj"
 				LinkIncremental="1"
 				GenerateDebugInformation="false"
@@ -180,15 +181,15 @@
 				>
 			</File>
 			<File
-				RelativePath=".\pboxspc.c"
-				>
-			</File>
-			<File
 				RelativePath=".\libsmfc.c"
 				>
 			</File>
 			<File
 				RelativePath=".\libsmfcx.c"
+				>
+			</File>
+			<File
+				RelativePath=".\pboxspc.c"
 				>
 			</File>
 			<File
@@ -206,15 +207,15 @@
 				>
 			</File>
 			<File
-				RelativePath=".\pboxspc.h"
-				>
-			</File>
-			<File
 				RelativePath=".\libsmfc.h"
 				>
 			</File>
 			<File
 				RelativePath=".\libsmfcx.h"
+				>
+			</File>
+			<File
+				RelativePath=".\pboxspc.h"
 				>
 			</File>
 			<File

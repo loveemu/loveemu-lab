@@ -133,6 +133,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalOptions="/PDBALTPATH:%_PDB%"
 				AdditionalDependencies="setargv.obj"
 				LinkIncremental="1"
 				GenerateDebugInformation="false"
@@ -180,10 +181,6 @@
 				>
 			</File>
 			<File
-				RelativePath=".\suzuhspc.c"
-				>
-			</File>
-			<File
 				RelativePath=".\libsmfc.c"
 				>
 			</File>
@@ -193,6 +190,10 @@
 			</File>
 			<File
 				RelativePath=".\spcseq.c"
+				>
+			</File>
+			<File
+				RelativePath=".\suzuhspc.c"
 				>
 			</File>
 		</Filter>
@@ -206,10 +207,6 @@
 				>
 			</File>
 			<File
-				RelativePath=".\suzuhspc.h"
-				>
-			</File>
-			<File
 				RelativePath=".\libsmfc.h"
 				>
 			</File>
@@ -219,6 +216,10 @@
 			</File>
 			<File
 				RelativePath=".\spcseq.h"
+				>
+			</File>
+			<File
+				RelativePath=".\suzuhspc.h"
 				>
 			</File>
 		</Filter>

@@ -134,6 +134,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalOptions="/PDBALTPATH:%_PDB%"
 				AdditionalDependencies="setargv.obj"
 				LinkIncremental="1"
 				GenerateDebugInformation="false"
@@ -189,11 +190,11 @@
 				>
 			</File>
 			<File
-				RelativePath=".\wgpspc.c"
+				RelativePath=".\spcseq.c"
 				>
 			</File>
 			<File
-				RelativePath=".\spcseq.c"
+				RelativePath=".\wgpspc.c"
 				>
 			</File>
 		</Filter>
@@ -215,11 +216,11 @@
 				>
 			</File>
 			<File
-				RelativePath=".\wgpspc.h"
+				RelativePath=".\spcseq.h"
 				>
 			</File>
 			<File
-				RelativePath=".\spcseq.h"
+				RelativePath=".\wgpspc.h"
 				>
 			</File>
 		</Filter>

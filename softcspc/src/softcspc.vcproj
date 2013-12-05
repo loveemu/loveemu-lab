@@ -133,6 +133,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalOptions="/PDBALTPATH:%_PDB%"
 				AdditionalDependencies="setargv.obj"
 				LinkIncremental="1"
 				GenerateDebugInformation="false"
@@ -176,10 +177,6 @@
 			UniqueIdentifier="{4FC737F1-C7A5-4376-A066-2A32D752A2FF}"
 			>
 			<File
-				RelativePath=".\softcspc.c"
-				>
-			</File>
-			<File
 				RelativePath=".\cioutil.c"
 				>
 			</File>
@@ -189,6 +186,10 @@
 			</File>
 			<File
 				RelativePath=".\libsmfcx.c"
+				>
+			</File>
+			<File
+				RelativePath=".\softcspc.c"
 				>
 			</File>
 			<File
@@ -202,10 +203,6 @@
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
 			<File
-				RelativePath=".\softcspc.h"
-				>
-			</File>
-			<File
 				RelativePath=".\cioutil.h"
 				>
 			</File>
@@ -215,6 +212,10 @@
 			</File>
 			<File
 				RelativePath=".\libsmfcx.h"
+				>
+			</File>
+			<File
+				RelativePath=".\softcspc.h"
 				>
 			</File>
 			<File
