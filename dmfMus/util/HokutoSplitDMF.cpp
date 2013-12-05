@@ -117,7 +117,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	printf("Found %d files.\n", fileCount);
+	//printf("Found %d files.\n", fileCount);
 
 finish:
 	if (data != NULL) {

@@ -9,7 +9,7 @@
 #include <stdint.h>
 
 #define APP_NAME	"LZSS Decompressor"
-#define APP_VER		"interim"
+#define APP_VER		"[2013-12-05]"
 
 // Command path (set by main)
 char *glCommandPath = NULL;

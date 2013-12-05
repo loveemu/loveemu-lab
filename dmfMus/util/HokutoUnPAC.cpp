@@ -12,7 +12,7 @@
 #define MIN(a, b)	((a) < (b) ? (a) : (b))
 
 #define APP_NAME	"PAC Unpacker"
-#define APP_VER		"interim"
+#define APP_VER		"[2013-12-05]"
 
 // Command path (set by main)
 char *glCommandPath = NULL;
