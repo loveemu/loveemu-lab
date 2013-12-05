@@ -244,12 +244,15 @@ void printUsage(void)
 	printf("\n");
 	printf("-l[length]\n");
 	printf("  : max distance between notes (in bytes) (default: -l%d)\n", MELO_MAX_NOTE_DIST_DEFAULT);
+	printf("\n");
+	printf("-eq\n");
+	printf("  : assume that notes must be equally spaced (-l means exact interval)\n");
 }
 
 /**
  * Search melody candidate bytes from file and mml.
  */
-bool searchNotes(FILE *inFile, const char *mml, int maxNoteDist)
+bool searchNotes(FILE *inFile, const char *mml, int maxNoteDist, bool requireEquallySpaced)
 {
 	bool found = false;
 
@@ -423,6 +426,19 @@ bool searchNotes(FILE *inFile, const char *mml, int maxNoteDist)
 					}
 				}
 			}
+			if (targetByteFound && requireEquallySpaced)
+			{
+				if (minOffsets[noteIndex] >= minOffsets[noteIndex - 1] + maxNoteDist &&
+					maxOffsets[noteIndex] <= minOffsets[noteIndex - 1] + maxNoteDist)
+				{
+					minOffsets[noteIndex] = minOffsets[noteIndex - 1] + maxNoteDist;
+					maxOffsets[noteIndex] = minOffsets[noteIndex - 1] + maxNoteDist;
+				}
+				else
+				{
+					targetByteFound = false;
+				}
+			}
 			if (!targetByteFound)
 			{
 				break;
@@ -479,6 +495,7 @@ int main(int argc, char *argv[])
 
 	// user options
 	int meloMaxNoteDist = MELO_MAX_NOTE_DIST_DEFAULT;
+	bool meloRequireEquallySpaced = false;
 
 	// closable objects
 	FILE *inFile = NULL;
@@ -501,6 +518,10 @@ int main(int argc, char *argv[])
 		if (strcmp(argv[argi], "-q") == 0)
 		{
 			glQuiet = true;
+		}
+		if (strcmp(argv[argi], "-eq") == 0)
+		{
+			meloRequireEquallySpaced = true;
 		}
 		else if (memcmp(argv[argi], "-l", 2) == 0)
 		{
@@ -538,7 +559,7 @@ int main(int argc, char *argv[])
 	}
 
 	// start searching notes
-	if (!searchNotes(inFile, (const char*) mml, meloMaxNoteDist))
+	if (!searchNotes(inFile, (const char*) mml, meloMaxNoteDist, meloRequireEquallySpaced))
 	{
 		goto finish;
 	}
