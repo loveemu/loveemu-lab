@@ -92,7 +92,7 @@ bool decompressLZSS(FILE *inFile, FILE *outFile, int lzssMatchBitCount, int lzss
 		goto finish;
 	}
 
-	int lzssBufferLength = 1 << lzssOffsetBitCount;
+	size_t lzssBufferLength = 1 << lzssOffsetBitCount;
 	int lzssMatchWordLength = lzssMatchBitCount / 8;
 	int lzssRefWordLength = (lzssOffsetBitCount + lzssLengthBitCount) / 8;
 	if (lzssRefWordLength < 1 || lzssRefWordLength > 4)
