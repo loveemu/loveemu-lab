@@ -11,6 +11,7 @@
 
 #define APP_NAME	"Melo Melo Search"
 #define APP_VER		"[2013-12-05]"
+#define APP_AUTHOR	"loveemu <loveemu.googlecode.com>"
 
 #define COUNT(a)	(sizeof(a) / sizeof(a[0]))
 
@@ -207,7 +208,7 @@ bool parseMML(SeqNote *notes, int &noteCount, int maxNotes, const char *mml)
  */
 void printUsage(void)
 {
-	printf("%s %s\n", APP_NAME, APP_VER);
+	printf("%s %s - %s\n", APP_NAME, APP_VER, APP_AUTHOR);
 	printf("=============================\n");
 	printf("\n");
 	printf("Small utility to search a byte sequence by melody.\n");
