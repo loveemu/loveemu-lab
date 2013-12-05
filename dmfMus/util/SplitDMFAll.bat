@@ -1,1 +1,1 @@
-@for %%a in (*.bin) do @HokutoSplitDMF %%a
+@for %%a in (*.bin) do @HokutoSplitDMF "%%a"

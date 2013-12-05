@@ -1,1 +1,1 @@
-@for %%a in (*.PAC) do @HokutoUnPAC %%a
+@for %%a in (*.PAC) do @HokutoUnPAC "%%a"
