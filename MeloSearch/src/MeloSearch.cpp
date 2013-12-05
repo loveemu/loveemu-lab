@@ -14,6 +14,8 @@
 #define APP_VER		"[2013-12-05]"
 #define APP_AUTHOR	"[loveemu](http://loveemu.googlecode.com/)"
 
+#define MIN(a, b)	(((a) < (b)) ? (a) : (b))
+#define MAX(a, b)	(((a) > (b)) ? (a) : (b))
 #define COUNT(a)	(sizeof(a) / sizeof(a[0]))
 
 #define MELO_MAX_NOTE_DIST_DEFAULT	6
@@ -354,11 +356,15 @@ bool searchNotes(FILE *inFile, const char *mml, int maxNoteDist)
 				dataBlockSize = fileSize - dataOffset;
 			}
 
-			fseek(inFile, dataOffset, SEEK_SET);
-			if (fread(data, dataBlockSize, 1, inFile) != 1)
+			memcpy(data, &data[MELO_SEARCH_BLOCK_SIZE / 2], MIN(dataBlockSize, MELO_SEARCH_BLOCK_SIZE / 2));
+			if (dataBlockSize > (MELO_SEARCH_BLOCK_SIZE / 2))
 			{
-				fprintf(stderr, "Error: file read error\n");
-				goto finish;
+				fseek(inFile, dataOffset + (MELO_SEARCH_BLOCK_SIZE / 2), SEEK_SET);
+				if (fread(data, dataBlockSize - (MELO_SEARCH_BLOCK_SIZE / 2), 1, inFile) != 1)
+				{
+					fprintf(stderr, "Error: file read error\n");
+					goto finish;
+				}
 			}
 		}
 
