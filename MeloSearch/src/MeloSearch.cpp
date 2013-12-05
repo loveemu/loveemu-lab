@@ -515,11 +515,11 @@ int main(int argc, char *argv[])
 			printUsage();
 			goto finish;
 		}
-		if (strcmp(argv[argi], "-q") == 0)
+		else if (strcmp(argv[argi], "-q") == 0)
 		{
 			glQuiet = true;
 		}
-		if (strcmp(argv[argi], "-eq") == 0)
+		else if (strcmp(argv[argi], "-eq") == 0)
 		{
 			meloRequireEquallySpaced = true;
 		}
@@ -531,6 +531,11 @@ int main(int argc, char *argv[])
 				fprintf(stderr, "Error: Option \"%s\" must have a positive number\n", "-l");
 				goto finish;
 			}
+		}
+		else
+		{
+			fprintf(stderr, "Error: Unknown option \"%s\"", argv[argi]);
+			goto finish;
 		}
 		argi++;
 	}
