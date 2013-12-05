@@ -11,7 +11,7 @@
 
 #define APP_NAME	"Melo Melo Search"
 #define APP_VER		"[2013-12-05]"
-#define APP_AUTHOR	"loveemu <loveemu.googlecode.com>"
+#define APP_AUTHOR	"[loveemu]<http://loveemu.googlecode.com/>"
 
 #define COUNT(a)	(sizeof(a) / sizeof(a[0]))
 
