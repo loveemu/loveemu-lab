@@ -314,10 +314,11 @@ int main(int argc, char *argv[])
 			}
 		}
 
-		// determine output file extension
-		char outExtension[512];
+		// determine output filename
+		char outFilename[512];
 		if (autoSoundExtension)
 		{
+			char outExtension[512];
 			switch (fileNo % 3)
 			{
 			case 0:
@@ -337,15 +338,13 @@ int main(int argc, char *argv[])
 				strcpy(outExtension, ".bin");
 				break;
 			}
+			sprintf(outFilename, "%s_%c%s", glOutFilename, 'A' + (fileNo / 3), outExtension);
 		}
 		else
 		{
-			strcpy(outExtension, ".bin");
+			sprintf(outFilename, "%s_%02d.bin", glOutFilename, fileNo);
 		}
 
-		// determine output filename
-		char outFilename[512];
-		sprintf(outFilename, "%s_%02d%s", glOutFilename, fileNo, outExtension);
 
 		// open output file
 		fpw = fopen(outFilename, "wb");
