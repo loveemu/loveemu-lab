@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 #include <stdint.h>
 
 #include "BasicLZSS.h"
@@ -79,13 +80,24 @@ void *_memmem(const void *base, int count, const void *pattern, int length)
 void printUsage(void)
 {
 	printf("%s %s\n", APP_NAME, APP_VER);
+	printf("====================================================\n");
 	printf("\n");
-	printf("Syntax:\n");
-	printf("  %s (options) <input file>\n", glCommandPath);
+	printf("Syntax\n");
+	printf("------\n");
 	printf("\n");
-	printf("Options:\n");
-	printf("  --help            show this help\n");
-	printf("  -o <filename>     specify output filename (without extension)\n");
+	printf("%s (options) [input file]\n", glCommandPath);
+	printf("\n");
+	printf("Options\n");
+	printf("-------\n");
+	printf("\n");
+	printf("--help\n");
+	printf("  : show this help\n");
+	printf("\n");
+	printf("-o [filename]\n");
+	printf("  : specify output filename (without extension)\n");
+	printf("\n");
+	printf("--extension-sound\n");
+	printf("  : set file extension for sound files (sif, vh, vb)\n");
 	printf("\n");
 }
 
@@ -104,6 +116,7 @@ int main(int argc, char *argv[])
 
 	// user options
 	bool rawExport = false;
+	bool autoSoundExtension = false;
 
 	// set command path
 	glCommandPath = argv[0];
@@ -120,6 +133,10 @@ int main(int argc, char *argv[])
 		else if (strcmp(argv[argi], "--raw") == 0)
 		{
 			rawExport = true;
+		}
+		else if (strcmp(argv[argi], "--extension-sound") == 0)
+		{
+			autoSoundExtension = true;
 		}
 		else if (strcmp(argv[argi], "-o") == 0)
 		{
@@ -180,8 +197,15 @@ int main(int argc, char *argv[])
 	}
 
 	// process each files
-	for (int fileNo = 0; fileNo < 12; fileNo++)
+	int minFileOffset = INT_MAX;
+	for (int fileNo = 0; fileNo < 16; fileNo++)
 	{
+		// check the boundary (file count is variable)
+		if (fileNo * 8 >= minFileOffset)
+		{
+			break;
+		}
+
 		// seek to file info table
 		if (fseek(fp, fileNo * 8, SEEK_SET) != 0)
 		{
@@ -209,6 +233,12 @@ int main(int argc, char *argv[])
 		if (file_offset == 0)
 		{
 			continue;
+		}
+
+		// update start offset
+		if (minFileOffset > file_offset)
+		{
+			minFileOffset = file_offset;
 		}
 
 		// first length check
@@ -286,11 +316,7 @@ int main(int argc, char *argv[])
 
 		// determine output file extension
 		char outExtension[512];
-		if (rawExport)
-		{
-			strcpy(outExtension, ".bin");
-		}
-		else
+		if (autoSoundExtension)
 		{
 			switch (fileNo % 3)
 			{
@@ -311,6 +337,10 @@ int main(int argc, char *argv[])
 				strcpy(outExtension, ".bin");
 				break;
 			}
+		}
+		else
+		{
+			strcpy(outExtension, ".bin");
 		}
 
 		// determine output filename
@@ -355,7 +385,7 @@ int main(int argc, char *argv[])
 				{
 					if (rawFileSizeWritten != (size_t) rawFileSize)
 					{
-						fprintf(stderr, "Warning: Mismatch file size (got %d bytes, expected %d bytes)\n", rawFileSizeWritten, rawFileSize);
+						fprintf(stderr, "Warning: Mismatch file size (got %d bytes, expected %d bytes) [%s]\n", rawFileSizeWritten, rawFileSize, glInFilename);
 					}
 
 					if (fwrite(file_raw_data, rawFileSizeWritten, 1, fpw) != 1)
@@ -366,7 +396,7 @@ int main(int argc, char *argv[])
 				}
 				else
 				{
-					fprintf(stderr, "Decompression failed [file %d, offset 0x%08X]\n", fileNo, file_offset);
+					fprintf(stderr, "Decompression failed [%s, file %d, offset 0x%08X]\n", glInFilename, fileNo, file_offset);
 				}
 
 				free(file_raw_data);
@@ -377,7 +407,7 @@ int main(int argc, char *argv[])
 				// raw file
 				if (fileTranscodeType != 0)
 				{
-					fprintf(stderr, "Unknown compression type [file %d, offset 0x%08X]\n", fileNo, file_offset);
+					fprintf(stderr, "Unknown compression type [%s, file %d, offset 0x%08X]\n", glInFilename, fileNo, file_offset);
 				}
 
 				if (fwrite(file_entry_data + headerSize, file_length - headerSize, 1, fpw) != 1)
