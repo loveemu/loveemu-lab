@@ -353,6 +353,11 @@ int main(int argc, char *argv[])
 					16, lzssBufferBitCount, 16 - lzssBufferBitCount);
 				if (rawFileSizeWritten != 0)
 				{
+					if (rawFileSizeWritten != (size_t) rawFileSize)
+					{
+						fprintf(stderr, "Warning: Mismatch file size (got %d bytes, expected %d bytes)\n", rawFileSizeWritten, rawFileSize);
+					}
+
 					if (fwrite(file_raw_data, rawFileSizeWritten, 1, fpw) != 1)
 					{
 						fprintf(stderr, "File write error\n");

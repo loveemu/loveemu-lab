@@ -99,7 +99,7 @@ size_t decompressLZSS(const void *pIn, size_t inBuffSize, void *pOut, size_t out
 
 	while(true)
 	{
-		if (inOffset + lzssMatchWordLength >= inBuffSize)
+		if (inOffset + lzssMatchWordLength > inBuffSize)
 		{
 			goto quit_decompress;
 		}
@@ -115,7 +115,7 @@ size_t decompressLZSS(const void *pIn, size_t inBuffSize, void *pOut, size_t out
 			if ((lzssMatchFlags & (1 << matchBitIndex)) != 0)
 			{
 				// reference to the slide window
-				if (inOffset + lzssMatchWordLength >= inBuffSize)
+				if (inOffset + lzssMatchWordLength > inBuffSize)
 				{
 					goto quit_decompress;
 				}
@@ -137,7 +137,7 @@ size_t decompressLZSS(const void *pIn, size_t inBuffSize, void *pOut, size_t out
 
 				readCircularBufferWithUpdate(lzssRefBuffer, lzssBuffer, lzssBufferLength, lzssBufferOffset - lzssOffset - 1, lzssBufferOffset, lzssLength);
 				lzssBufferOffset = fixCircularBufferOffset(lzssBufferOffset + lzssLength, lzssBufferLength);
-				if (outOffset + lzssLength >= outBuffSize)
+				if (outOffset + lzssLength > outBuffSize)
 				{
 					memcpy(outBytes + outOffset, lzssRefBuffer, outBuffSize - outOffset);
 					outOffset = outBuffSize;
