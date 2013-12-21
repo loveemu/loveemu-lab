@@ -1,6 +1,11 @@
 /**
  * PS1 Hokuto no Ken - Seikimatsu Kyuuseishu Densetsu (J) (SLPS-02993)
  * Split combined multiple songs to each files (experimental)
+ * 
+ * DMF files should be stored in SIF archive (which is decompressed by sound_sif_open function).
+ * The exact way to get DMFs is to parse SIF and split them into each file.
+ * However, I think this tool should give the same result,
+ * so that I will not write a SIF parser. :)
  */
 
 #include <stdio.h>
@@ -95,10 +100,9 @@ int main(int argc, char *argv[])
 
 		if (saveLastFile && lastFileOffset != -1)
 		{
-			fileCount++;
-
 			char fwname[64];
-			sprintf(fwname, "%s_%08lx.dmf", outfilename, lastFileOffset);
+			sprintf(fwname, "%s_%02d.dmf", outfilename, fileCount);
+			//sprintf(fwname, "%s_%08lx.dmf", outfilename, lastFileOffset);
 
 			FILE *fpw = fopen(fwname, "wb");
 			if (fpw != NULL)
@@ -115,6 +119,7 @@ int main(int argc, char *argv[])
 			}
 
 			lastFileOffset = -1;
+			fileCount++;
 		}
 		if (matchFile)
 		{

@@ -1,6 +1,6 @@
 /**
  * PS1 Hokuto no Ken - Seikimatsu Kyuuseishu Densetsu (J) (SLPS-02993)
- * Expand PAC archive (experimental)
+ * Expand PAC archive (do not care about non-sound stuffs)
  */
 
 #include <stdio.h>
@@ -8,11 +8,13 @@
 #include <string.h>
 #include <stdint.h>
 
+#include "BasicLZSS.h"
+
 #define MAX(a, b)	((a) > (b) ? (a) : (b))
 #define MIN(a, b)	((a) < (b) ? (a) : (b))
 
-#define APP_NAME	"PAC Unpacker"
-#define APP_VER		"[2013-12-05]"
+#define APP_NAME	"PAC Unpacker (PS1 Hokuto no Ken)"
+#define APP_VER		"[2013-12-21]"
 
 // Command path (set by main)
 char *glCommandPath = NULL;
@@ -97,7 +99,11 @@ int main(int argc, char *argv[])
 	// closable objects
 	FILE *fp = NULL;
 	FILE *fpw = NULL;
-	uint8_t *file_data = NULL;
+	uint8_t *file_entry_data = NULL;
+	uint8_t *file_raw_data = NULL;
+
+	// user options
+	bool rawExport = false;
 
 	// set command path
 	glCommandPath = argv[0];
@@ -111,6 +117,10 @@ int main(int argc, char *argv[])
 			printUsage();
 			goto finish;
 		}
+		else if (strcmp(argv[argi], "--raw") == 0)
+		{
+			rawExport = true;
+		}
 		else if (strcmp(argv[argi], "-o") == 0)
 		{
 			if (argi + 1 >= argc)
@@ -120,6 +130,11 @@ int main(int argc, char *argv[])
 			}
 			strcpy(glOutFilename, argv[argi + 1]);
 			argi++;
+		}
+		else
+		{
+			fprintf(stderr, "Error: Unknown option \"%s\"\n", argv[argi]);
+			goto finish;
 		}
 		argi++;
 	}
@@ -160,7 +175,7 @@ int main(int argc, char *argv[])
 	fp = fopen(glInFilename, "rb");
 	if (fp == NULL)
 	{
-		fprintf(stderr, "File open error (read)\n");
+		fprintf(stderr, "File open error (read) [%s]\n", glInFilename);
 		goto finish;
 	}
 
@@ -170,7 +185,7 @@ int main(int argc, char *argv[])
 		// seek to file info table
 		if (fseek(fp, fileNo * 8, SEEK_SET) != 0)
 		{
-			fprintf(stderr, "File seek error [%d]\n", fileNo * 8);
+			fprintf(stderr, "File seek error [%s, file %d]\n", glInFilename, fileNo);
 			goto finish;
 		}
 
@@ -178,7 +193,7 @@ int main(int argc, char *argv[])
 		int32_t file_offset = fget4l(fp);
 		if (file_offset == EOF)
 		{
-			fprintf(stderr, "Unexpected EOF\n");
+			fprintf(stderr, "Unexpected EOF [%s, offset %ld]\n", glInFilename, ftell(fp));
 			goto finish;
 		}
 
@@ -186,56 +201,116 @@ int main(int argc, char *argv[])
 		int32_t file_length = fget4l(fp);
 		if (file_length == EOF)
 		{
-			fprintf(stderr, "Unexpected EOF\n");
+			fprintf(stderr, "Unexpected EOF [%s, offset %ld]\n", glInFilename, ftell(fp));
 			goto finish;
 		}
 
 		// skip if not used
-		if (file_length == 0)
+		if (file_offset == 0)
 		{
+			continue;
+		}
+
+		// first length check
+		if (file_length <= 4)
+		{
+			fprintf(stderr, "File too short [%s, file %d]\n", glInFilename, fileNo);
 			continue;
 		}
 
 		// seek to file
 		if (fseek(fp, file_offset, SEEK_SET) != 0)
 		{
-			fprintf(stderr, "File seek error [%d]\n", file_offset);
+			fprintf(stderr, "File seek error [%s, offset 0x%08X]\n", glInFilename, file_offset);
 			goto finish;
 		}
 
 		// alloc file buffer
-		file_data = (uint8_t*) malloc(file_length);
-		if (file_data == NULL)
+		file_entry_data = (uint8_t*) malloc(file_length);
+		if (file_entry_data == NULL)
 		{
 			fprintf(stderr, "Memory allocation error\n");
 			goto finish;
 		}
 
 		// read whole file data
-		if (fread(file_data, file_length, 1, fp) != 1)
+		if (fread(file_entry_data, file_length, 1, fp) != 1)
 		{
-			fprintf(stderr, "File read error\n");
+			fprintf(stderr, "File read error [%s]\n", glInFilename);
 			goto finish;
+		}
+
+		// determine header size
+		int headerSize = 0x10;
+		bool lzssCompressed = false;
+		int fileTranscodeType = file_entry_data[0] | (file_entry_data[1] << 8) | (file_entry_data[2] << 16) | (file_entry_data[3] << 24);
+		if (fileTranscodeType == 3)
+		{
+			headerSize = 0x1c;
+		}
+		if (fileTranscodeType == 1 || fileTranscodeType == 3)
+		{
+			lzssCompressed = true;
+		}
+
+		// it must have a header
+		if (file_length <= headerSize)
+		{
+			free(file_entry_data);
+			file_entry_data = NULL;
+
+			fprintf(stderr, "File too short [%s, file %d, offset 0x%08X]\n", glInFilename, fileNo, file_offset);
+			continue;
+		}
+
+		int rawFileSize = file_length;
+		int lzssBufferBitCount = 0;
+
+		// read header fields
+		// Note: upper 16 bits seems to be often ignored in actual driver
+		rawFileSize = file_entry_data[4] | (file_entry_data[5] << 8) | (file_entry_data[6] << 16) | (file_entry_data[7] << 24);
+		lzssBufferBitCount = file_entry_data[8] | (file_entry_data[9] << 8) | (file_entry_data[10] << 16) | (file_entry_data[11] << 24);
+
+		// simple header check
+		if (!rawExport && lzssCompressed)
+		{
+			if (rawFileSize < 0 || rawFileSize > 0x200000 || lzssBufferBitCount < 1 || lzssBufferBitCount > 15)
+			{
+				free(file_entry_data);
+				file_entry_data = NULL;
+
+				fprintf(stderr, "Corrupt header [%s, file %d, offset 0x%08X]\n", glInFilename, fileNo, file_offset);
+				continue;
+			}
 		}
 
 		// determine output file extension
 		char outExtension[512];
-		if (_memmem(file_data, MIN(file_length, 128), "pBAV", 4) != NULL)
+		if (rawExport)
 		{
-			strcpy(outExtension, ".vh");
-		}
-		else if (file_length >= 8 && memcmp(&file_data[file_length - 8], "wwwwwwww", 8) == 0)
-		{
-			strcpy(outExtension, ".vb");
-		}
-		else if (file_length >= 3 && _memmem(file_data, MIN(file_length, 128), "MF", 2) != NULL)
-		{
-			// LZSS compressed DMF
-			strcpy(outExtension, ".lzs");
+			strcpy(outExtension, ".bin");
 		}
 		else
 		{
-			strcpy(outExtension, ".bin");
+			switch (fileNo % 3)
+			{
+			case 0:
+				strcpy(outExtension, ".sif");
+				break;
+
+			case 1:
+				strcpy(outExtension, ".vh");
+				break;
+
+			case 2:
+				strcpy(outExtension, ".vb");
+				break;
+
+			// to make sure
+			default:
+				strcpy(outExtension, ".bin");
+				break;
+			}
 		}
 
 		// determine output filename
@@ -246,22 +321,73 @@ int main(int argc, char *argv[])
 		fpw = fopen(outFilename, "wb");
 		if (fpw == NULL)
 		{
-			fprintf(stderr, "File open error (write)\n");
+			fprintf(stderr, "File open error (write) [%s]\n", outFilename);
 			goto finish;
 		}
 
 		// export file data
-		if (fwrite(file_data, file_length, 1, fpw) != 1)
+		if (rawExport)
 		{
-			fprintf(stderr, "File write error\n");
-			goto finish;
+			if (fwrite(file_entry_data, file_length, 1, fpw) != 1)
+			{
+				fprintf(stderr, "File write error\n");
+				goto finish;
+			}
+		}
+		else
+		{
+			if (lzssCompressed)
+			{
+				// alloc file buffer
+				file_raw_data = (uint8_t*) malloc(rawFileSize);
+				if (file_raw_data == NULL)
+				{
+					fprintf(stderr, "Memory allocation error\n");
+					goto finish;
+				}
+
+				// decompress
+				size_t rawFileSizeWritten = decompressLZSS(
+					file_entry_data + headerSize, file_length - headerSize,
+					file_raw_data, rawFileSize,
+					16, lzssBufferBitCount, 16 - lzssBufferBitCount);
+				if (rawFileSizeWritten != 0)
+				{
+					if (fwrite(file_raw_data, rawFileSizeWritten, 1, fpw) != 1)
+					{
+						fprintf(stderr, "File write error\n");
+						goto finish;
+					}
+				}
+				else
+				{
+					fprintf(stderr, "Decompression failed [file %d, offset 0x%08X]\n", fileNo, file_offset);
+				}
+
+				free(file_raw_data);
+				file_raw_data = NULL;
+			}
+			else
+			{
+				// raw file
+				if (fileTranscodeType != 0)
+				{
+					fprintf(stderr, "Unknown compression type [file %d, offset 0x%08X]\n", fileNo, file_offset);
+				}
+
+				if (fwrite(file_entry_data + headerSize, file_length - headerSize, 1, fpw) != 1)
+				{
+					fprintf(stderr, "File write error\n");
+					goto finish;
+				}
+			}
 		}
 
 		fclose(fpw);
 		fpw = NULL;
 
-		free(file_data);
-		file_data = NULL;
+		free(file_entry_data);
+		file_entry_data = NULL;
 	}
 
 	ret = EXIT_SUCCESS;
@@ -275,9 +401,13 @@ finish:
 	{
 		fclose(fpw);
 	}
-	if (file_data != NULL)
+	if (file_entry_data != NULL)
 	{
-		free(file_data);
+		free(file_entry_data);
+	}
+	if (file_raw_data != NULL)
+	{
+		free(file_raw_data);
 	}
 	return ret;
 }
