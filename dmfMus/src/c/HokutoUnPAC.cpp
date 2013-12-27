@@ -1,6 +1,6 @@
 /**
  * PS1 Hokuto no Ken - Seikimatsu Kyuuseishu Densetsu (J) (SLPS-02993)
- * Expand PAC archive (do not care about non-sound stuffs)
+ * Expand PAC archive
  */
 
 #include <stdio.h>
