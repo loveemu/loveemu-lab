@@ -111,7 +111,7 @@ bool seqq2mid(FILE *fSEQq, FILE *fMIDI)
 			}
 			seqDelta = (seqDelta << 7) | (seqByte & 0x7F);
 			seqVarIntLen++;
-		} while((seqByte & 0x80) != 0);
+		} while(seqVarIntLen < 4 && (seqByte & 0x80) != 0);
 
 		// get the next byte, and check the end marker!
 		seqByte = fgetc(fSEQq);
@@ -193,6 +193,7 @@ bool seqq2mid(FILE *fSEQq, FILE *fMIDI)
 
 						// data length
 						seqMetaLength = 0;
+						seqVarIntLen = 0;
 						do
 						{
 							seqByte = fgetc(fSEQq);
@@ -210,7 +211,8 @@ bool seqq2mid(FILE *fSEQq, FILE *fMIDI)
 								printf(" %02X", seqByte);
 							}
 							seqMetaLength = (seqMetaLength << 7) | (seqByte & 0x7F);
-						} while((seqByte & 0x80) != 0);
+							seqVarIntLen++;
+						} while(seqVarIntLen < 4 && (seqByte & 0x80) != 0);
 
 						if (seqMetaLength > 0)
 						{
