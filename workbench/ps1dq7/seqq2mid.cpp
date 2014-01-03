@@ -8,6 +8,8 @@
 
 #include "cioutils.h"
 
+#define APP_VERSION "[2014-01-03]"
+
 bool quiet = false;
 
 bool seqq2mid(FILE *fSEQq, FILE *fMIDI)
@@ -318,8 +320,8 @@ int main(int argc, char *argv[])
 
 	if (argnum != 2)
 	{
-		printf("PS1 Dragon Quest SEQq to MIDI converter (experimental)\n", argv[0]);
-		printf("loveemu <http://loveemu.googlecode.com/>\n", argv[0]);
+		printf("PS1 Dragon Quest SEQq to MIDI converter (experimental) %s\n", APP_VERSION);
+		printf("loveemu <http://loveemu.googlecode.com/>\n");
 		printf("\n");
 		printf("Usage: %s input.seqq output.mid\n", argv[0]);
 		goto finish;
