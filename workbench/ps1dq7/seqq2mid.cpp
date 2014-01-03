@@ -23,6 +23,7 @@ bool seqq2mid(FILE *fSEQq, FILE *fMIDI)
 	int seqTimeSigDenom;
 	int seqUsedChanCount;
 
+	int seqStartOffset;
 	int seqByte;
 	int seqDelta;
 	int seqAbsTime = 0;
@@ -31,12 +32,38 @@ bool seqq2mid(FILE *fSEQq, FILE *fMIDI)
 	int seqVarIntLen;
 	int seqEventAddr;
 
-	// read qQES header
-	if (fread(s, 4, 1, fSEQq) != 1 || memcmp(s, "qQES", 4) != 0)
+	rewind(fSEQq);
+
+	// search qQES signature
+	// in fact, a in-ROM sequence seems to have 0x3C bytes header before it
+	seqStartOffset = 0;
+	while (1)
+	{
+		seqByte = fgetc(fSEQq);
+		if (seqStartOffset > 0x100 || seqByte == EOF)
+		{
+			seqStartOffset = -1;
+			break;
+		}
+		if (seqByte == 'q')
+		{
+			s[0] = seqByte;
+			if (fread(&s[1], 4 - 1, 1, fSEQq) == 1 && memcmp(s, "qQES", 4) == 0)
+			{
+				//fseek(fSEQq, seqStartOffset + 4, SEEK_SET);
+				break;
+			}
+			fseek(fSEQq, seqStartOffset + 1, SEEK_SET);
+		}
+		seqStartOffset++;
+	}
+	if (seqStartOffset == -1)
 	{
 		fprintf(stderr, "Error: Invalid signature\n");
 		return false;
 	}
+
+	// read qQES header
 	seqVersion = fget2b(fSEQq);
 	seqId = fget2b(fSEQq);
 	seqTPQN = fget2b(fSEQq);
@@ -50,6 +77,10 @@ bool seqq2mid(FILE *fSEQq, FILE *fMIDI)
 		printf("Header\n");
 		printf("------\n");
 		printf("\n");
+		if (seqStartOffset != 0)
+		{
+			printf("- Offset: 0x%04X\n", seqStartOffset);
+		}
 		printf("- Version: %d\n", seqVersion);
 		printf("- ID: 0x%04X\n", seqId);
 		printf("- Resolution: %d\n", seqTPQN);
