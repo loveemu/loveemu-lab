@@ -323,6 +323,7 @@ static INLINE int fgetvl(FILE* stream)
       return EOF;
     }
     value |= (c & 0x7F) << (7 * len);
+    len++;
   } while (len < 4 && (c & 0x80) != 0);
   return (int) value;
 }
@@ -392,6 +393,7 @@ static INLINE int fgetvb(FILE* stream)
       return EOF;
     }
     value = (value << 7) | (c & 0x7F);
+    len++;
   } while (len < 4 && (c & 0x80) != 0);
   return (int) value;
 }
@@ -459,9 +461,9 @@ static INLINE int fputvl(unsigned int value, FILE* stream)
   int i;
   int len = varintlen(value);
   int result;
-  for (i = 0; i <len; i++)
+  for (i = 0; i < len; i++)
   {
-    result = fputc(((value >> (7 * i)) & 0x7F) | (i < len - 1) ? 0x80 : 0, stream);
+    result = fputc(((value >> (7 * i)) & 0x7F) | ((i < len - 1) ? 0x80 : 0), stream);
     if (result == EOF)
     {
       return EOF;
@@ -527,15 +529,35 @@ static INLINE int fputvb(unsigned int value, FILE* stream)
   int i;
   int len = varintlen(value);
   int result;
-  for (i = 0; i <len; i++)
+  for (i = 0; i < len; i++)
   {
-    result = fputc(((value >> (7 * (len - i - 1))) & 0x7F) | (i < len - 1) ? 0x80 : 0, stream);
+    result = fputc(((value >> (7 * (len - i - 1))) & 0x7F) | ((i < len - 1) ? 0x80 : 0), stream);
     if (result == EOF)
     {
       return EOF;
     }
   }
   return result;
+}
+
+static INLINE int fseekmem(FILE* stream, const void *buf, size_t n)
+{
+  char s[0x8000];
+  size_t buflen;
+  int i;
+
+  while ((buflen = fread(s, 1, sizeof(s), stream)) != 0)
+  {
+    for (i = 0; i <= ((int)buflen - (int)n); i++)
+    {
+      if (memcmp(&s[i], buf, n) == 0)
+      {
+        fseek(stream, i - ((int)buflen), SEEK_CUR);
+        return 0;
+      }
+    }
+  }
+  return 1;
 }
 
 #endif /* !CIOUTILS_H */
