@@ -1,17 +1,21 @@
 /**
- * simple i/o routines for C.
+ * simple inline i/o routines for C.
  */
 
-#ifndef CIOUTIL_H
-#define CIOUTIL_H
+#ifndef CIOUTILS_H
+#define CIOUTILS_H
 
 #include <stdio.h>
 
+#ifdef HAVE_STDBOOL
+#include <stdbool.h>
+#else
 #if !defined(bool) && !defined(__cplusplus)
   typedef int bool;
-  #define true    1
-  #define false   0
+# define true    1
+# define false   0
 #endif /* !bool */
+#endif
 
 #ifndef byte
   typedef unsigned char byte;
@@ -21,7 +25,7 @@
 #endif /* !sbyte */
 
 #ifndef countof
-  #define countof(a)    (sizeof(a) / sizeof(a[0]))
+#define countof(a)    (sizeof(a) / sizeof(a[0]))
 #endif
 
 #ifndef INLINE
@@ -58,6 +62,18 @@ static INLINE int utos4(unsigned int value)
   return (value & 0x80000000) ? -(signed)(value ^ 0xffffffff)-1 : value;
 }
 
+/** get length of variable-length integer */
+static INLINE int varintlen(unsigned int value)
+{
+  int len = 0;
+  do
+  {
+    value >>= 7;
+    len++;
+  } while (len < 4 && value != 0);
+  return len;
+}
+
 /** get 1 byte */
 static INLINE int mget1(const byte* data)
 {
@@ -82,6 +98,20 @@ static INLINE int mget4l(const byte* data)
   return data[0] | (data[1] * 0x0100) | (data[2] * 0x010000) | (data[3] * 0x01000000);
 }
 
+/** get variable-length integer (little-endian) */
+static INLINE int mgetvl(const byte* data)
+{
+  unsigned int value = 0;
+  int len = 0;
+  byte c;
+  do
+  {
+    c = data[len];
+    value |= (c & 0x7F) << (7 * len);
+  } while (len < 4 && (c & 0x80) != 0);
+  return (int) value;
+}
+
 /** get 2 bytes (big-endian) */
 static INLINE int mget2b(const byte* data)
 {
@@ -98,6 +128,20 @@ static INLINE int mget3b(const byte* data)
 static INLINE int mget4b(const byte* data)
 {
   return data[3] | (data[2] * 0x0100) | (data[1] * 0x010000) | (data[0] * 0x01000000);
+}
+
+/** get variable-length integer (big-endian) */
+static INLINE int mgetvb(const byte* data)
+{
+  unsigned int value = 0;
+  int len = 0;
+  byte c;
+  do
+  {
+    c = data[len];
+    value = (value << 7) | (c & 0x7F);
+  } while (len < 4 && (c & 0x80) != 0);
+  return (int) value;
 }
 
 /** put 1 byte */
@@ -144,6 +188,20 @@ static INLINE int mput4l(int value, byte* data)
   return lastPut & 0xff;
 }
 
+/** put variable-length integer (little-endian) */
+static INLINE int mputvl(unsigned int value, byte* data)
+{
+  int i;
+  int len = varintlen(value);
+  int lastPut;
+  for (i = 0; i <len; i++)
+  {
+    lastPut = (int) (((value >> (7 * i)) & 0x7F) | (i < len - 1) ? 0x80 : 0);
+    data[i] = lastPut;
+  }
+  return lastPut;
+}
+
 /** put 2 bytes (big-endian) */
 static INLINE int mput2b(int value, byte* data)
 {
@@ -178,6 +236,20 @@ static INLINE int mput4b(int value, byte* data)
   lastPut /= 0x0100;
   data[0] = lastPut & 0xff;
   return lastPut & 0xff;
+}
+
+/** put variable-length integer (big-endian) */
+static INLINE int mputvb(unsigned int value, byte* data)
+{
+  int i;
+  int len = varintlen(value);
+  int lastPut;
+  for (i = 0; i <len; i++)
+  {
+    lastPut = (int) (((value >> (7 * (len - i - 1))) & 0x7F) | (i < len - 1) ? 0x80 : 0);
+    data[i] = lastPut;
+  }
+  return lastPut;
 }
 
 /** get 1 byte from file */
@@ -237,6 +309,24 @@ static INLINE int fget4l(FILE* stream)
   return EOF;
 }
 
+/** get variable-length integer to file (little-endian) */
+static INLINE int fgetvl(FILE* stream)
+{
+  unsigned int value = 0;
+  int len = 0;
+  int c;
+  do
+  {
+    c = fgetc(stream);
+    if (c == EOF)
+    {
+      return EOF;
+    }
+    value |= (c & 0x7F) << (7 * len);
+  } while (len < 4 && (c & 0x80) != 0);
+  return (int) value;
+}
+
 /** get 2 bytes from file (big-endian) */
 static INLINE int fget2b(FILE* stream)
 {
@@ -286,6 +376,24 @@ static INLINE int fget4b(FILE* stream)
     return b4 | (b3 * 0x0100) | (b2 * 0x010000) | (b1 * 0x01000000);
   }
   return EOF;
+}
+
+/** get variable-length integer to file (big-endian) */
+static INLINE int fgetvb(FILE* stream)
+{
+  unsigned int value = 0;
+  int len = 0;
+  int c;
+  do
+  {
+    c = fgetc(stream);
+    if (c == EOF)
+    {
+      return EOF;
+    }
+    value = (value << 7) | (c & 0x7F);
+  } while (len < 4 && (c & 0x80) != 0);
+  return (int) value;
 }
 
 /** put 1 byte to file */
@@ -345,6 +453,23 @@ static INLINE int fput4l(int value, FILE* stream)
   return result;
 }
 
+/** put variable-length integer to file (little-endian) */
+static INLINE int fputvl(unsigned int value, FILE* stream)
+{
+  int i;
+  int len = varintlen(value);
+  int result;
+  for (i = 0; i <len; i++)
+  {
+    result = fputc(((value >> (7 * i)) & 0x7F) | (i < len - 1) ? 0x80 : 0, stream);
+    if (result == EOF)
+    {
+      return EOF;
+    }
+  }
+  return result;
+}
+
 /** put 2 bytes to file (big-endian) */
 static INLINE int fput2b(int value, FILE* stream)
 {
@@ -396,4 +521,21 @@ static INLINE int fput4b(int value, FILE* stream)
   return result;
 }
 
-#endif /* !CIOUTIL_H */
+/** put variable-length integer to file (big-endian) */
+static INLINE int fputvb(unsigned int value, FILE* stream)
+{
+  int i;
+  int len = varintlen(value);
+  int result;
+  for (i = 0; i <len; i++)
+  {
+    result = fputc(((value >> (7 * (len - i - 1))) & 0x7F) | (i < len - 1) ? 0x80 : 0, stream);
+    if (result == EOF)
+    {
+      return EOF;
+    }
+  }
+  return result;
+}
+
+#endif /* !CIOUTILS_H */

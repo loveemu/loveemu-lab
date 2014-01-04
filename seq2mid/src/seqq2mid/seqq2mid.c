@@ -15,6 +15,8 @@ bool quiet = false;
 bool seqq2mid(FILE *fSEQq, FILE *fMIDI)
 {
 	char s[8192];
+	int i;
+
 	int seqVersion;
 	int seqId;
 	int seqTPQN;
@@ -31,6 +33,7 @@ bool seqq2mid(FILE *fSEQq, FILE *fMIDI)
 	int seqEventLength = 0;
 	int seqVarIntLen;
 	int seqEventAddr;
+    int seqTrackSize;
 
 	rewind(fSEQq);
 
@@ -158,7 +161,7 @@ bool seqq2mid(FILE *fSEQq, FILE *fMIDI)
 		}
 
 		// write delta-time to MIDI file
-		for (int i = seqVarIntLen; i >= 0; i--)
+		for (i = seqVarIntLen; i >= 0; i--)
 		{
 			fputc((seqDelta >> (i * 7)) & 0x7F | (i != 0 ? 0x80 : 0), fMIDI);
 		}
@@ -260,7 +263,7 @@ bool seqq2mid(FILE *fSEQq, FILE *fMIDI)
 							}
 							if (!quiet)
 							{
-								for (int i = 0; i < seqMetaLength; i++)
+								for (i = 0; i < seqMetaLength; i++)
 								{
 									printf(" %02X", s[i]);
 								}
@@ -305,7 +308,7 @@ bool seqq2mid(FILE *fSEQq, FILE *fMIDI)
 				if (!quiet)
 				{
 					printf("- %06X: %06d %02X %02X", seqEventAddr, seqAbsTime, seqOpcode, seqByte);
-					for (int i = 0; i < seqEventLength - 1; i++)
+					for (i = 0; i < seqEventLength - 1; i++)
 					{
 						printf(" %02X", s[i]);
 					}
@@ -319,7 +322,7 @@ bool seqq2mid(FILE *fSEQq, FILE *fMIDI)
 	printf("\n");
 quit_main_loop:
 
-	int seqTrackSize = ftell(fMIDI) - 0x16;
+	seqTrackSize = ftell(fMIDI) - 0x16;
 	fseek(fMIDI, 0x12, SEEK_SET);
 	fput4b(seqTrackSize, fMIDI);
 
