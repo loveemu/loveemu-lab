@@ -47,7 +47,7 @@ bool seqq2mid(FILE *fSEQp, FILE *fMIDI, bool quiet)
 		fprintf(stderr, "Error: Invalid signature\n");
 		return false;
 	}
-	seqStartOffset = ftell(fSEQp);
+	seqStartOffset = (int) ftell(fSEQp);
 	fseek(fSEQp, 4, SEEK_CUR);
 
 	// read qQES header
@@ -144,13 +144,13 @@ bool seqq2mid(FILE *fSEQp, FILE *fMIDI, bool quiet)
 	// event stream
 	while (1)
 	{
-		seqEventAddr = ftell(fSEQp);
+		seqEventAddr = (int) ftell(fSEQp);
 
 		// delta-time
 		seqDelta = fgetvb(fSEQp);
 		if (seqDelta == EOF)
 		{
-			fprintf(stderr, "Error: Unexpected EOF at 0x%08X\n", ftell(fSEQp));
+			fprintf(stderr, "Error: Unexpected EOF at 0x%08X\n", (int) ftell(fSEQp));
 			break;
 		}
 
@@ -158,7 +158,7 @@ bool seqq2mid(FILE *fSEQp, FILE *fMIDI, bool quiet)
 		seqByte = fgetc(fSEQp);
 		if (seqByte == EOF)
 		{
-			fprintf(stderr, "Error: Unexpected EOF at 0x%08X\n", ftell(fSEQp));
+			fprintf(stderr, "Error: Unexpected EOF at 0x%08X\n", (int) ftell(fSEQp));
 			break;
 		}
 		// check the end marker!
@@ -187,7 +187,7 @@ bool seqq2mid(FILE *fSEQp, FILE *fMIDI, bool quiet)
 
 			if (seqOpcode < 0x80)
 			{
-				fprintf(stderr, "Error: Unexpected opcode at 0x%08X\n", ftell(fSEQp));
+				fprintf(stderr, "Error: Unexpected opcode at 0x%08X\n", (int) ftell(fSEQp));
 				break;
 			}
 
@@ -220,7 +220,7 @@ bool seqq2mid(FILE *fSEQp, FILE *fMIDI, bool quiet)
 						seqMetaType = fgetc(fSEQp);
 						if (seqMetaType == EOF)
 						{
-							fprintf(stderr, "Error: Unexpected EOF at 0x%08X\n", ftell(fSEQp));
+							fprintf(stderr, "Error: Unexpected EOF at 0x%08X\n", (int) ftell(fSEQp));
 							goto quit_main_loop;
 						}
 						fputc(seqMetaType, fMIDI);
@@ -238,7 +238,7 @@ bool seqq2mid(FILE *fSEQp, FILE *fMIDI, bool quiet)
 							{
 								printf("\n");
 							}
-							fprintf(stderr, "Error: Unexpected EOF at 0x%08X\n", ftell(fSEQp));
+							fprintf(stderr, "Error: Unexpected EOF at 0x%08X\n", (int) ftell(fSEQp));
 							goto quit_main_loop;
 						}
 						if (!quiet)
@@ -278,7 +278,7 @@ bool seqq2mid(FILE *fSEQp, FILE *fMIDI, bool quiet)
 							{
 								printf("\n");
 							}
-							fprintf(stderr, "Error: Unsupported meta event %02X at 0x%08X\n", seqMetaType, ftell(fSEQp));
+							fprintf(stderr, "Error: Unsupported meta event %02X at 0x%08X\n", seqMetaType, (int) ftell(fSEQp));
 							goto quit_main_loop;
 						}
 						fputvb(seqMetaLength, fMIDI);
@@ -288,16 +288,16 @@ bool seqq2mid(FILE *fSEQp, FILE *fMIDI, bool quiet)
 						{
 							if (seqMetaLength > sizeof(s))
 							{
-								fprintf(stderr, "Error: Too long message at 0x%08X (the message may be valid, but this tool does not support it because of laziness.)\n", ftell(fSEQp));
+								fprintf(stderr, "Error: Too long message at 0x%08X (the message may be valid, but this tool does not support it because of laziness.)\n", (int) ftell(fSEQp));
 								goto quit_main_loop;
 							}
 
 							if (fread(s, seqMetaLength, 1, fSEQp) != 1) {
-								fprintf(stderr, "Error: File read error at 0x%08X\n", ftell(fSEQp));
+								fprintf(stderr, "Error: File read error at 0x%08X\n", (int) ftell(fSEQp));
 								goto quit_main_loop;
 							}
 							if (fwrite(s, seqMetaLength, 1, fMIDI) != 1) {
-								fprintf(stderr, "Error: File write error at 0x%08X\n", ftell(fMIDI));
+								fprintf(stderr, "Error: File write error at 0x%08X\n", (int) ftell(fMIDI));
 								goto quit_main_loop;
 							}
 							if (!quiet)
@@ -329,7 +329,7 @@ bool seqq2mid(FILE *fSEQp, FILE *fMIDI, bool quiet)
 					{
 						printf("- %06X: %06d %02X %02X\n", seqEventAddr, seqAbsTime, seqOpcode, seqByte);
 					}
-					fprintf(stderr, "Error: Unknown status 0x%02X at 0x%08X\n", seqOpcode, ftell(fMIDI));
+					fprintf(stderr, "Error: Unknown status 0x%02X at 0x%08X\n", seqOpcode, (int) ftell(fMIDI));
 					goto quit_main_loop;
 			}
 		}
@@ -339,11 +339,11 @@ bool seqq2mid(FILE *fSEQp, FILE *fMIDI, bool quiet)
 			if (seqEventLength > 0)
 			{
 				if (fread(s, seqEventLength, 1, fSEQp) != 1) {
-					fprintf(stderr, "Error: File read error at 0x%08X\n", ftell(fSEQp));
+					fprintf(stderr, "Error: File read error at 0x%08X\n", (int) ftell(fSEQp));
 					break;
 				}
 				if (fwrite(s, seqEventLength, 1, fMIDI) != 1) {
-					fprintf(stderr, "Error: File write error at 0x%08X\n", ftell(fMIDI));
+					fprintf(stderr, "Error: File write error at 0x%08X\n", (int) ftell(fMIDI));
 					break;
 				}
 				if (!quiet)
@@ -368,7 +368,7 @@ bool seqq2mid(FILE *fSEQp, FILE *fMIDI, bool quiet)
 quit_main_loop:
 
 	// set final track size
-	seqTrackSize = ftell(fMIDI) - 0x16;
+	seqTrackSize = (int) ftell(fMIDI) - 0x16;
 	fseek(fMIDI, 0x12, SEEK_SET);
 	fput4b(seqTrackSize, fMIDI);
 
