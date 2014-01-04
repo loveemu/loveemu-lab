@@ -124,6 +124,15 @@ bool seqq2mid(FILE *fSEQp, FILE *fMIDI, bool quiet)
 	fputc(seqTimeSigDenom, fMIDI);
 	fputc(0x18, fMIDI);
 	fputc(0x08, fMIDI);
+	// every SMF should have GM Reset
+	fputc(0x00, fMIDI);
+	fputc(0xF0, fMIDI);
+	fputc(0x05, fMIDI);
+	fputc(0x7E, fMIDI);
+	fputc(0x7F, fMIDI);
+	fputc(0x09, fMIDI);
+	fputc(0x01, fMIDI);
+	fputc(0xF7, fMIDI);
 
 	if (!quiet)
 	{
