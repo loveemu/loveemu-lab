@@ -4,23 +4,23 @@ CFLAGS = -O2 -Wall
 CXX = g++
 CXXFLAGS = -O2 -Wall
 LDFLAGS = -lm
-OBJS = seqq2mid
+TARGET = seqq2mid
+SRCS = $(TARGET).cpp ../cutils.c
+OBJS := $(SRCS:.cpp=.o)
 
 .PHONY: all clean
 .SUFFIXES: .c .cpp .o
 
-all: $(OBJS)
+all: $(TARGET)
+
+$(TARGET): $(OBJS)
+	$(CXX) -o $@ $(OBJS) $(LDFLAGS)
 
 clean:
+	$(RM) $(TARGET)
 	$(RM) $(OBJS)
-
-$(OBJS): seqq2mid.o ../common/cutils.o
 
 .c.o:
 	$(CC) $(CFLAGS) -o $@ -c $^
 .cpp.o:
 	$(CXX) $(CXXFLAGS) -o $@ -c $^
-.c:
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
-.cpp:
-	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
