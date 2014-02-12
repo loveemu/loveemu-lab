@@ -1,9 +1,9 @@
 ﻿
-Microsoft Visual Studio Solution File, Format Version 10.00
-# Visual Studio 2008
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "seq2mid", "seq2mid\seq2mid.vcproj", "{E358C98E-590E-4A89-9D41-536BF3562685}"
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "seq2mid", "seq2mid\seq2mid.vcxproj", "{E358C98E-590E-4A89-9D41-536BF3562685}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "seqq2mid", "seqq2mid\seqq2mid.vcproj", "{370757DF-AD7C-45BD-BB24-1A1B642C43FB}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "seqq2mid", "seqq2mid\seqq2mid.vcxproj", "{370757DF-AD7C-45BD-BB24-1A1B642C43FB}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

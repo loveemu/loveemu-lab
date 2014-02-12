@@ -1,11 +1,11 @@
 ﻿
-Microsoft Visual Studio Solution File, Format Version 10.00
-# Visual Studio 2008
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "HokutoLZSS", "HokutoLZSS.vcproj", "{7FEC0235-866F-4129-A487-F2F7A11C75D9}"
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "HokutoLZSS", "HokutoLZSS.vcxproj", "{7FEC0235-866F-4129-A487-F2F7A11C75D9}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "HokutoSplitDMF", "HokutoSplitDMF.vcproj", "{2A99E5C6-2603-4AE5-83EC-5F0DED6EB78C}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "HokutoSplitDMF", "HokutoSplitDMF.vcxproj", "{2A99E5C6-2603-4AE5-83EC-5F0DED6EB78C}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "HokutoUnPAC", "HokutoUnPAC.vcproj", "{75234637-7F77-43CD-B840-4DB9E3D9D5A7}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "HokutoUnPAC", "HokutoUnPAC.vcxproj", "{75234637-7F77-43CD-B840-4DB9E3D9D5A7}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
