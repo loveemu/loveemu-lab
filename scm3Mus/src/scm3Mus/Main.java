@@ -115,7 +115,7 @@ public class Main
 
             midi.getTracks()[0].add(MidiEventCreator.createSequenceNameEvent(0, "Converted by Scm3Mus"));
             midi.getTracks()[0].add(MidiEventCreator.createGMResetEvent(0));
-            midi.getTracks()[0].add(MidiEventCreator.createGSResetEvent(0));
+            midi.getTracks()[0].add(MidiEventCreator.createGM2ResetEvent(0));
 
             //Exit if there is no song to be converted anymore
             if(!engine_ver.init()) break;

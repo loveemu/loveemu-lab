@@ -19,7 +19,7 @@
 
 #define APPNAME         "Heart Beat DQ6/DQ3 SPC2MIDI"
 #define APPSHORTNAME    "hbdqspc"
-#define VERSION         "[2008-12-31]"
+#define VERSION         "[2014-02-15]"
 #define AUTHOR          "loveemu"
 #define WEBSITE         "http://loveemu.yh.land.to/"
 
@@ -50,7 +50,7 @@ enum {
     SMF_RESET_XG,           // YAMAHA XG
     SMF_RESET_GM2,          // General MIDI Level 2
 };
-static int hbSpcMidiResetType = SMF_RESET_GM1;
+static int hbSpcMidiResetType = SMF_RESET_GM2;
 
 static const char *mycssfile = APPSHORTNAME ".css";
 
@@ -728,6 +728,7 @@ static Smf *hbSpcCreateSmf (HbSpcSeqStat *seq)
         smfInsertSysex(smf, 0, 0, 0, (const byte *) "\xf0\x43\x10\x4c\x00\x00\x7e\x00\xf7", 9);
         break;
       case SMF_RESET_GM2:
+        smfInsertGM1SystemOn(smf, 0, 0, 0);
         smfInsertSysex(smf, 0, 0, 0, (const byte *) "\xf0\x7e\x7f\x09\x03\xf7", 6);
         break;
       default:
@@ -2148,6 +2149,7 @@ static bool cmdOptLoop (void);
 static bool cmdOptPatchFix (void);
 static bool cmdOptGS (void);
 static bool cmdOptXG (void);
+static bool cmdOptGM1 (void);
 static bool cmdOptGM2 (void);
 
 static CmdOptDefs optDef[] = {
@@ -2162,6 +2164,7 @@ static CmdOptDefs optDef[] = {
     { "patchfix", '\0', 1, cmdOptPatchFix, "<file>", "modify patch/transpose" },
     { "gs", '\0', 0, cmdOptGS, "", "Insert GS Reset at beginning of seq" },
     { "xg", '\0', 0, cmdOptXG, "", "Insert XG System On at beginning of seq" },
+    { "gm1", '\0', 0, cmdOptGM1, "", "Insert GM1 System On at beginning of seq" },
     { "gm2", '\0', 0, cmdOptGM2, "", "Insert GM2 System On at beginning of seq" },
 };
 
@@ -2296,6 +2299,13 @@ static bool cmdOptGS (void)
 static bool cmdOptXG (void)
 {
     hbSpcMidiResetType = SMF_RESET_XG;
+    return true;
+}
+
+/** use GM1 reset. */
+static bool cmdOptGM1 (void)
+{
+    hbSpcMidiResetType = SMF_RESET_GM1;
     return true;
 }
 

@@ -106,7 +106,7 @@ public class Main
 
             midi.getTracks()[0].add(MidiEventCreator.createSequenceNameEvent(0, "Converted by DMFMus"));
             midi.getTracks()[0].add(MidiEventCreator.createGMResetEvent(0));
-            midi.getTracks()[0].add(MidiEventCreator.createGSResetEvent(0));
+            midi.getTracks()[0].add(MidiEventCreator.createGM2ResetEvent(0));
 
             //Track Pointers
             //Exit if there is no song to be converted anymore

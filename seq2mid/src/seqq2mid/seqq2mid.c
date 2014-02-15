@@ -116,6 +116,15 @@ bool seqq2mid(FILE *fSEQq, FILE *fMIDI, bool quiet)
 	fputc(0x09, fMIDI);
 	fputc(0x01, fMIDI);
 	fputc(0xF7, fMIDI);
+	// and GM2 Reset
+	fputc(0x00, fMIDI);
+	fputc(0xF0, fMIDI);
+	fputc(0x05, fMIDI);
+	fputc(0x7E, fMIDI);
+	fputc(0x7F, fMIDI);
+	fputc(0x09, fMIDI);
+	fputc(0x02, fMIDI);
+	fputc(0xF7, fMIDI);
 
 	if (!quiet)
 	{
