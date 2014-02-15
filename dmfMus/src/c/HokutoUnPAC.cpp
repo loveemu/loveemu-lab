@@ -409,6 +409,18 @@ int main(int argc, char *argv[])
 					fprintf(stderr, "Unknown compression type [%s, file %d, offset 0x%08X]\n", glInFilename, fileNo, file_offset);
 				}
 
+				// special output for .VB file
+				if (autoSoundExtension && (fileNo % 3) == 2)
+				{
+					uint8_t zeroblock[16];
+					memset(zeroblock, 0, 16);
+					if (fwrite(zeroblock, 16, 1, fpw) != 1)
+					{
+						fprintf(stderr, "File write error\n");
+						goto finish;
+					}
+				}
+
 				if (fwrite(file_entry_data + headerSize, file_length - headerSize, 1, fpw) != 1)
 				{
 					fprintf(stderr, "File write error\n");
