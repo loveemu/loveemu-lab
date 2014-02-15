@@ -48,6 +48,7 @@ enum {
     SMF_RESET_GM2,          // General MIDI Level 2
 };
 static int rareSpcMidiResetType = SMF_RESET_GM2;
+static bool preferBankMSB = true;
 
 static const char *mycssfile = APPSHORTNAME ".css";
 
@@ -221,8 +222,16 @@ bool rareSpcImportPatchFixFile (const char *filename)
 
     // reset patch fix
     for (patch = 0; patch < 256; patch++) {
-        rareSpcPatchFix[patch].bankSelM = 0;
-        rareSpcPatchFix[patch].bankSelL = patch >> 7;
+        if (preferBankMSB)
+        {
+            rareSpcPatchFix[patch].bankSelM = patch >> 7;
+            rareSpcPatchFix[patch].bankSelL = 0;
+        }
+        else
+        {
+            rareSpcPatchFix[patch].bankSelM = 0;
+            rareSpcPatchFix[patch].bankSelL = patch >> 7;
+        }
         rareSpcPatchFix[patch].patchNo = patch & 0x7f;
         rareSpcPatchFix[patch].key = 0;
         rareSpcPatchFix[patch].mmlKey = 0;
@@ -321,8 +330,16 @@ static void rareSpcResetParam (RareSpcSeqStat *seq)
 
     // reset patch fix
     for (patch = 0; patch < 256; patch++) {
-        seq->ver.patchFix[patch].bankSelM = 0;
-        seq->ver.patchFix[patch].bankSelL = patch >> 7;
+        if (preferBankMSB)
+        {
+            seq->ver.patchFix[patch].bankSelM = patch >> 7;
+            seq->ver.patchFix[patch].bankSelL = 0;
+        }
+        else
+        {
+            seq->ver.patchFix[patch].bankSelM = 0;
+            seq->ver.patchFix[patch].bankSelL = patch >> 7;
+        }
         seq->ver.patchFix[patch].patchNo = patch & 0x7f;
         seq->ver.patchFix[patch].key = 0;
         seq->ver.patchFix[patch].mmlKey = 0;

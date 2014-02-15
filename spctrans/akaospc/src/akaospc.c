@@ -39,6 +39,7 @@ enum {
     SMF_RESET_GM2,          // General MIDI Level 2
 };
 static int akaoSpcMidiResetType = SMF_RESET_GM2;
+static bool preferBankMSB = true;
 
 static const char *mycssfile = APPSHORTNAME ".css";
 
@@ -284,8 +285,16 @@ bool akaoSpcImportPatchFixFile (const char *filename)
 
     // reset patch fix
     for (patch = 0; patch < 256; patch++) {
-        akaoSpcPatchFix[patch].bankSelM = 0;
-        akaoSpcPatchFix[patch].bankSelL = patch >> 7;
+        if (preferBankMSB)
+        {
+            akaoSpcPatchFix[patch].bankSelM = patch >> 7;
+            akaoSpcPatchFix[patch].bankSelL = 0;
+        }
+        else
+        {
+            akaoSpcPatchFix[patch].bankSelM = 0;
+            akaoSpcPatchFix[patch].bankSelL = patch >> 7;
+        }
         akaoSpcPatchFix[patch].patchNo = patch & 0x7f;
         akaoSpcPatchFix[patch].key = 0;
         akaoSpcPatchFix[patch].mmlKey = 0;
@@ -373,8 +382,16 @@ static void akaoSpcResetParam (AkaoSpcSeqStat *seq)
 
     // reset patch fix
     for (patch = 0; patch < 256; patch++) {
-        seq->ver.patchFix[patch].bankSelM = 0;
-        seq->ver.patchFix[patch].bankSelL = patch >> 7;
+        if (preferBankMSB)
+        {
+            seq->ver.patchFix[patch].bankSelM = patch >> 7;
+            seq->ver.patchFix[patch].bankSelL = 0;
+        }
+        else
+        {
+            seq->ver.patchFix[patch].bankSelM = 0;
+            seq->ver.patchFix[patch].bankSelL = patch >> 7;
+        }
         seq->ver.patchFix[patch].patchNo = patch & 0x7f;
         seq->ver.patchFix[patch].key = 0;
         seq->ver.patchFix[patch].mmlKey = 0;

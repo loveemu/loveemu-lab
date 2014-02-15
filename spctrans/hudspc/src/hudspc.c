@@ -40,6 +40,7 @@ enum {
     SMF_RESET_GM2,          // General MIDI Level 2
 };
 static int hudsonSpcMidiResetType = SMF_RESET_GM2;
+static bool preferBankMSB = true;
 
 static const char *mycssfile = APPSHORTNAME ".css";
 
@@ -215,8 +216,16 @@ bool hudsonSpcImportPatchFixFile (const char *filename)
 
     // reset patch fix
     for (patch = 0; patch < 256; patch++) {
-        hudsonSpcPatchFix[patch].bankSelM = 0;
-        hudsonSpcPatchFix[patch].bankSelL = patch >> 7;
+        if (preferBankMSB)
+        {
+            hudsonSpcPatchFix[patch].bankSelM = patch >> 7;
+            hudsonSpcPatchFix[patch].bankSelL = 0;
+        }
+        else
+        {
+            hudsonSpcPatchFix[patch].bankSelM = 0;
+            hudsonSpcPatchFix[patch].bankSelL = patch >> 7;
+        }
         hudsonSpcPatchFix[patch].patchNo = patch & 0x7f;
         hudsonSpcPatchFix[patch].key = 0;
         hudsonSpcPatchFix[patch].mmlKey = 0;
@@ -350,8 +359,16 @@ static void hudsonSpcResetParam (HudsonSpcSeqStat *seq)
 
     // reset patch fix
     for (patch = 0; patch < 256; patch++) {
-        seq->ver.patchFix[patch].bankSelM = 0;
-        seq->ver.patchFix[patch].bankSelL = patch >> 7;
+        if (preferBankMSB)
+        {
+            seq->ver.patchFix[patch].bankSelM = patch >> 7;
+            seq->ver.patchFix[patch].bankSelL = 0;
+        }
+        else
+        {
+            seq->ver.patchFix[patch].bankSelM = 0;
+            seq->ver.patchFix[patch].bankSelL = patch >> 7;
+        }
         seq->ver.patchFix[patch].patchNo = patch & 0x7f;
         seq->ver.patchFix[patch].key = 0;
         seq->ver.patchFix[patch].mmlKey = 0;
