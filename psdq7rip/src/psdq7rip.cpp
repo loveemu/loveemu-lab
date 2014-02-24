@@ -191,7 +191,6 @@ int main(int argc, char **argv)
 		}
 
 		// items for each sample bank
-		totalSize = seqSize;
 		bool validBankInfo = true;
 		bool firstEmptyBank = true;
 		for (unsigned int bank = 0; bank < 4; bank++)
@@ -262,7 +261,7 @@ int main(int argc, char **argv)
 		}
 
 		// address range check
-		if (totalSize == 0 || offset + totalSize > fsize)
+		if (totalSize == SND_HEADER_SIZE || offset + totalSize > fsize)
 		{
 			continue;
 		}
