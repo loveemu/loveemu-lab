@@ -9,6 +9,7 @@
 @call UnPACAll.bat
 @call SplitDMFAll.bat
 @call DMFToMidiAll.bat
+@call VABJoin.bat
 @exit /B 0
 
 :needs_pac
