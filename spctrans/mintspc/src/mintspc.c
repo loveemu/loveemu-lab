@@ -16,7 +16,7 @@
 
 #define APPNAME "Mint SPC2MIDI"
 #define APPSHORTNAME "mintspc"
-#define VERSION "[2014-02-15]"
+#define VERSION "[2014-04-13]"
 
 static int mintSpcLoopMax = 2;            // maximum loop count of parser
 static int mintSpcTextLoopMax = 1;        // maximum loop count of text output
@@ -1148,7 +1148,7 @@ static void mintSpcEventInstrument (MintSpcSeqStat *seq, SeqEventReport *ev)
 
     instrItemAddr = (*p + arg1) & 0xffff;
 
-    sprintf(ev->note, "Set Instrument, patch = $%04X", instrItemAddr);
+    sprintf(ev->note, "Set Instrument/Envelope, procedure = $%04X", instrItemAddr);
     strcat(ev->classStr, " ev-patch");
 
     if (!mintSpcLessTextInSMF)
@@ -1236,6 +1236,144 @@ static void mintSpcEventVolume (MintSpcSeqStat *seq, SeqEventReport *ev)
     smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_VOLUME, mintSpcMidiVolOf(tr->volume));
 }
 
+/** vcmd c6: set priority. */
+static void mintSpcEventPriority (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Priority, priority = %d", arg1);
+    strcat(ev->classStr, " ev-priority");
+
+    if (!mintSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd c7: fine tuning (absolute). */
+static void mintSpcEventFineTuningAbs (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Fine Tuning (Absolute), tuning = %d/256 semitones", arg1);
+    strcat(ev->classStr, " ev-tuning");
+
+    if (!mintSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd d6: pitch bend range. */
+static void mintSpcEventPitchBendRange (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = seq->aRAM[*p];
+    (*p)++;
+
+    sprintf(ev->note, "Pitch Bend Range, range = %d", arg1);
+    strcat(ev->classStr, " ev-pitchbendrange");
+
+    //if (!mintSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNM, 0);
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNL, 0);
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_DATAENTRYM, arg1);
+}
+
+/** vcmd d7: coarse tuning (absolute). */
+static void mintSpcEventCoarseTuningAbs (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    sprintf(ev->note, "Coarse Tuning (Absolute), tuning = %d semitones", arg1);
+    strcat(ev->classStr, " ev-tuning");
+
+    if (!mintSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd d8: coarse tuning (relative). */
+static void mintSpcEventCoarseTuningRel (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    sprintf(ev->note, "Coarse Tuning (Relative), tuning += %d semitones", arg1);
+    strcat(ev->classStr, " ev-tuning");
+
+    if (!mintSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd d9: fine tuning (relative). */
+static void mintSpcEventFineTuningRel (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    sprintf(ev->note, "Fine Tuning (Relative), tuning += %d/256 semitones", arg1);
+    strcat(ev->classStr, " ev-tuning");
+
+    if (!mintSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd da: key on. */
+static void mintSpcEventKeyOn (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int *p = &seq->track[ev->track].pos;
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Key On");
+    strcat(ev->classStr, " ev-keyon");
+
+    if (!mintSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
+/** vcmd db: key off. */
+static void mintSpcEventKeyOff (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int *p = &seq->track[ev->track].pos;
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+
+    sprintf(ev->note, "Key Off");
+    strcat(ev->classStr, " ev-keyoff");
+
+    if (!mintSpcLessTextInSMF)
+        smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+}
+
 /** vcmd dc: add volume. */
 static void mintSpcEventAddVolume (MintSpcSeqStat *seq, SeqEventReport *ev)
 {
@@ -1264,6 +1402,26 @@ static void mintSpcEventAddVolume (MintSpcSeqStat *seq, SeqEventReport *ev)
     //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 
     smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_VOLUME, mintSpcMidiVolOf(tr->volume));
+}
+
+/** vcmd dd: pitch bend. */
+static void mintSpcEventPitchBend (MintSpcSeqStat *seq, SeqEventReport *ev)
+{
+    int arg1;
+    int *p = &seq->track[ev->track].pos;
+    MintSpcTrackStat *tr = &seq->track[ev->track];
+
+    ev->size++;
+    arg1 = utos1(seq->aRAM[*p]);
+    (*p)++;
+
+    sprintf(ev->note, "Pitch Bend, pitch = %d", arg1);
+    strcat(ev->classStr, " ev-pitchbend");
+
+    //if (!mintSpcLessTextInSMF)
+    //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
+
+    smfInsertPitchBend(seq->smf, ev->tick, ev->track, ev->track, arg1 * 16);
 }
 
 /** vcmd c8: echo on. */
@@ -1530,8 +1688,8 @@ static void mintSpcSetEventList (MintSpcSeqStat *seq)
     event[0xc3] = (MintSpcEvent) mintSpcEventSetTempo;
     event[0xc4] = (MintSpcEvent) mintSpcEventUnknown1;
     event[0xc5] = (MintSpcEvent) mintSpcEventVolume;
-    event[0xc6] = (MintSpcEvent) mintSpcEventUnknown1;
-    event[0xc7] = (MintSpcEvent) mintSpcEventUnknown1;
+    event[0xc6] = (MintSpcEvent) mintSpcEventPriority;
+    event[0xc7] = (MintSpcEvent) mintSpcEventFineTuningAbs;
     event[0xc8] = (MintSpcEvent) mintSpcEventEchoOn;
     event[0xc9] = (MintSpcEvent) mintSpcEventEchoOff;
     event[0xca] = (MintSpcEvent) mintSpcEventEchoParam;
@@ -1546,14 +1704,14 @@ static void mintSpcSetEventList (MintSpcSeqStat *seq)
     event[0xd3] = (MintSpcEvent) mintSpcEventOctaveDown;
     event[0xd4] = (MintSpcEvent) mintSpcEventRest;
     event[0xd5] = (MintSpcEvent) mintSpcEventUnknown1;
-    event[0xd6] = (MintSpcEvent) mintSpcEventUnknown1;
-    event[0xd7] = (MintSpcEvent) mintSpcEventUnknown1;
-    event[0xd8] = (MintSpcEvent) mintSpcEventUnknown1;
-    event[0xd9] = (MintSpcEvent) mintSpcEventUnknown1;
-    event[0xda] = (MintSpcEvent) mintSpcEventUnknown0;
-    event[0xdb] = (MintSpcEvent) mintSpcEventUnknown0;
+    event[0xd6] = (MintSpcEvent) mintSpcEventPitchBendRange;
+    event[0xd7] = (MintSpcEvent) mintSpcEventCoarseTuningAbs;
+    event[0xd8] = (MintSpcEvent) mintSpcEventCoarseTuningRel;
+    event[0xd9] = (MintSpcEvent) mintSpcEventFineTuningRel;
+    event[0xda] = (MintSpcEvent) mintSpcEventKeyOn;
+    event[0xdb] = (MintSpcEvent) mintSpcEventKeyOff;
     event[0xdc] = (MintSpcEvent) mintSpcEventAddVolume;
-    event[0xdd] = (MintSpcEvent) mintSpcEventUnknown1;
+    event[0xdd] = (MintSpcEvent) mintSpcEventPitchBend;
     event[0xdf] = (MintSpcEvent) mintSpcEventUnknown1;
     event[0xe0] = (MintSpcEvent) mintSpcEventUnknown1;
     event[0xe1] = (MintSpcEvent) mintSpcEventUnknown1;

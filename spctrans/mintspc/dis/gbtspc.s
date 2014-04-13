@@ -25,7 +25,7 @@
 0312: dc        dec   y
 0313: d0 f9     bne   $030e
 0315: 8f 35 0c  mov   $0c,#$35
-0318: 8f ab 0d  mov   $0d,#$ab
+0318: 8f ab 0d  mov   $0d,#$ab          ; set RNG constant
 031b: 8f 20 17  mov   $17,#$20
 031e: 3f 18 0b  call  $0b18
 0321: 3f 70 0b  call  $0b70
@@ -36,7 +36,7 @@
 0330: e8 00     mov   a,#$00
 0332: c4 f4     mov   $f4,a
 0334: c4 f5     mov   $f5,a
-0336: 3f ae 0f  call  $0fae
+0336: 3f ae 0f  call  $0fae             ; step RNG
 0339: 3f 80 09  call  $0980
 033c: eb fd     mov   y,$fd
 033e: f0 f6     beq   $0336
@@ -86,9 +86,9 @@
 038f: fa 13 f3  mov   ($f3),($13)       ; set KOF
 0392: cd 00     mov   x,#$00
 0394: 8f 01 11  mov   $11,#$01
-0397: 3f dc 05  call  $05dc
-039a: 3d        inc   x
-039b: 0b 11     asl   $11
+0397: 3f dc 05  call  $05dc             ; update hardware voice channel
+039a: 3d        inc   x                 ; increment hardware voice channel #
+039b: 0b 11     asl   $11               ; shift channel mask bit
 039d: d0 f8     bne   $0397
 039f: e4 1a     mov   a,$1a
 03a1: f0 06     beq   $03a9
@@ -114,7 +114,7 @@
 03d3: 8f 0d f2  mov   $f2,#$0d
 03d6: fa 18 f3  mov   ($f3),($18)       ; set EFB
 03d9: 8f 4c f2  mov   $f2,#$4c
-03dc: fa 12 f3  mov   ($f3),($12)       ; set KOL
+03dc: fa 12 f3  mov   ($f3),($12)       ; set KON
 03df: e8 00     mov   a,#$00
 03e1: c4 12     mov   $12,a
 03e3: c4 13     mov   $13,a
@@ -200,19 +200,20 @@
 
 ; handle note byte
 046d: 6d        push  y
-046e: c4 33     mov   $33,a
+046e: c4 33     mov   $33,a             ; key offset from note byte
 0470: f4 8c     mov   a,$8c+x
 0472: 28 01     and   a,#$01
-0474: f0 28     beq   $049e
+0474: f0 28     beq   $049e             ; melody/rhythm?
+; rhythm channel
 0476: f5 36 02  mov   a,$0236+x
 0479: c4 02     mov   $02,a
 047b: f5 48 02  mov   a,$0248+x
-047e: c4 03     mov   $03,a
+047e: c4 03     mov   $03,a             ; instrument address
 0480: e4 33     mov   a,$33
 0482: 1c        asl   a
 0483: 8d 00     mov   y,#$00
 0485: 7a 02     addw  ya,$02
-0487: da 02     movw  $02,ya
+0487: da 02     movw  $02,ya            ; += (key_offset * 2)
 0489: 8d 00     mov   y,#$00
 048b: f7 02     mov   a,($02)+y
 048d: 3a 02     incw  $02
@@ -221,63 +222,66 @@
 0492: f7 02     mov   a,($02)+y
 0494: 3a 02     incw  $02
 0496: fd        mov   y,a
-0497: ae        pop   a
-0498: 7a 02     addw  ya,$02
+0497: ae        pop   a                 ; read envelope procedure offset (2 bytes)
+0498: 7a 02     addw  ya,$02            ; relative offset to absolute address
 049a: da 06     movw  $06,ya
 049c: 2f 0a     bra   $04a8
+; melody channel
 049e: f5 36 02  mov   a,$0236+x
 04a1: c4 06     mov   $06,a
 04a3: f5 48 02  mov   a,$0248+x
-04a6: c4 07     mov   $07,a
-04a8: e4 33     mov   a,$33
+04a6: c4 07     mov   $07,a             ; envelope procedure address
+;
+04a8: e4 33     mov   a,$33             ; key offset
 04aa: 60        clrc
-04ab: 95 6c 02  adc   a,$026c+x
+04ab: 95 6c 02  adc   a,$026c+x         ; add coarse tuning
 04ae: 60        clrc
-04af: 95 5a 02  adc   a,$025a+x
+04af: 95 5a 02  adc   a,$025a+x         ; add base key (vcmd d1-d3)
 04b2: 28 7f     and   a,#$7f
-04b4: c4 33     mov   $33,a
+04b4: c4 33     mov   $33,a             ; set adjusted key back
 04b6: 3f 5d 05  call  $055d
-04b9: b0 73     bcs   $052e
-04bb: 3f 58 0d  call  $0d58
+04b9: b0 73     bcs   $052e             ; slur/tie, update only duration
+04bb: 3f 58 0d  call  $0d58             ; get lowest priority voice
 04be: 68 00     cmp   a,#$00
-04c0: f0 1d     beq   $04df
-04c2: c4 37     mov   $37,a
-04c4: cc 36 00  mov   $0036,y
+04c0: f0 1d     beq   $04df             ; no more tests for unused channel
+04c2: c4 37     mov   $37,a             ; lowest priority value
+04c4: cc 36 00  mov   $0036,y           ; lowest priority channel # (candidate for new voice)
 04c7: e4 06     mov   a,$06
-04c9: 2d        push  a
+04c9: 2d        push  a                 ; push $06
 04ca: 8f 00 06  mov   $06,#$00
-04cd: 7d        mov   a,x
-04ce: 3f 41 0d  call  $0d41
+04cd: 7d        mov   a,x               ; virtual channel # (track #)
+04ce: 3f 41 0d  call  $0d41             ; y = $0224[0..7].index(0)
 04d1: ae        pop   a
-04d2: c4 06     mov   $06,a
-04d4: b0 09     bcs   $04df
+04d2: c4 06     mov   $06,a             ; pop $06
+04d4: b0 09     bcs   $04df             ; branch if $0224[0..7].include?(0)
 04d6: e4 37     mov   a,$37
 04d8: 74 c0     cmp   a,$c0+x
 04da: b0 5f     bcs   $053b
 04dc: ec 36 00  mov   y,$0036
+; register a new note
 04df: f4 c0     mov   a,$c0+x
-04e1: d6 ca 00  mov   $00ca+y,a
+04e1: d6 ca 00  mov   $00ca+y,a         ; priority
 04e4: 7d        mov   a,x
-04e5: d6 1c 02  mov   $021c+y,a
+04e5: d6 1c 02  mov   $021c+y,a         ; virtual channel #
 04e8: e8 00     mov   a,#$00
 04ea: d6 24 02  mov   $0224+y,a
-04ed: 3f 3d 05  call  $053d
+04ed: 3f 3d 05  call  $053d             ; panpot
 04f0: e4 06     mov   a,$06
-04f2: d6 4e 00  mov   $004e+y,a
+04f2: d6 4e 00  mov   $004e+y,a         ; envelope procedure address (lo)
 04f5: e4 07     mov   a,$07
-04f7: d6 60 00  mov   $0060+y,a
+04f7: d6 60 00  mov   $0060+y,a         ; envelope procedure address (hi)
 04fa: f5 7e 02  mov   a,$027e+x
-04fd: d6 88 02  mov   $0288+y,a
+04fd: d6 88 02  mov   $0288+y,a         ; fine tuning
 0500: e4 33     mov   a,$33
-0502: d6 64 02  mov   $0264+y,a
-0505: d6 76 02  mov   $0276+y,a
+0502: d6 64 02  mov   $0264+y,a         ; key (base + coarse tuning)
+0505: d6 76 02  mov   $0276+y,a         ; key (will be modified by fine tuning)
 0508: f5 d2 00  mov   a,$00d2+x
-050b: d6 dc 00  mov   $00dc+y,a
+050b: d6 dc 00  mov   $00dc+y,a         ; velocity (0-127)
 050e: f4 8c     mov   a,$8c+x
 0510: 28 04     and   a,#$04
 0512: d6 96 00  mov   $0096+y,a
 0515: 3f 50 05  call  $0550
-0518: f6 c5 01  mov   a,$01c5+y
+0518: f6 c5 01  mov   a,$01c5+y         ; $01c5 = 1, 2, 4, 8, ... ?
 051b: 48 ff     eor   a,#$ff
 051d: 24 16     and   a,$16
 051f: c4 16     mov   $16,a
@@ -287,24 +291,25 @@
 0527: f6 c5 01  mov   a,$01c5+y
 052a: 04 16     or    a,$16
 052c: c4 16     mov   $16,a
-052e: f5 2c 02  mov   a,$022c+x
+052e: f5 2c 02  mov   a,$022c+x         ; set duration
 0531: f0 05     beq   $0538
-0533: 13 43 01  bbc0  $43,$0537
+0533: 13 43 01  bbc0  $43,$0537         ; full resolution?
 0536: 5c        lsr   a
 0537: bc        inc   a
 0538: d6 b0 00  mov   $00b0+y,a
 053b: ee        pop   y
 053c: 6f        ret
 
-053d: f5 00 02  mov   a,$0200+x
-0540: 10 0a     bpl   $054c
+; set panpot for hardware channel
+053d: f5 00 02  mov   a,$0200+x         ; panpot (virtual)
+0540: 10 0a     bpl   $054c             ; negative = 16 steps random pan
 0542: 4d        push  x
 0543: e4 0a     mov   a,$0a
 0545: 28 0f     and   a,#$0f
 0547: 5d        mov   x,a
 0548: f5 24 10  mov   a,$1024+x
 054b: ce        pop   x
-054c: d6 0a 02  mov   $020a+y,a
+054c: d6 0a 02  mov   $020a+y,a         ; panpot (hardware)
 054f: 6f        ret
 
 0550: e8 80     mov   a,#$80
@@ -314,20 +319,21 @@
 055a: c4 13     mov   $13,a
 055c: 6f        ret
 
-055d: 8d 07     mov   y,#$07
+; determine if the next note needs to be tied
+; returns carry flag (true or false)
+055d: 8d 07     mov   y,#$07            ; process for ch7 to ch0
 055f: 7d        mov   a,x
 0560: 76 1c 02  cmp   a,$021c+y
-0563: d0 0c     bne   $0571
+0563: d0 0c     bne   $0571             ; next unless channel match
 0565: f6 b0 00  mov   a,$00b0+y
-0568: d0 07     bne   $0571
+0568: d0 07     bne   $0571             ; next if dutation != 0 (0 => full length => tie)
 056a: f6 64 02  mov   a,$0264+y
 056d: 64 33     cmp   a,$33
-056f: f0 05     beq   $0576
+056f: f0 05     beq   $0576             ; break if key matches to the target one
 0571: dc        dec   y
 0572: 10 eb     bpl   $055f
 0574: 60        clrc
 0575: 6f        ret
-
 0576: 80        setc
 0577: 6f        ret
 
@@ -355,23 +361,28 @@
 05a8: 2f 01     bra   $05ab
 05aa: 6f        ret
 
+; process envelope procedure
+; envelope procedure is fired by key-on, and runs simultaneously with main score.
+; used for SRCN/ADSR selection, volume/key adjusting, vibrato and such.
 05ab: 4d        push  x
 05ac: 7d        mov   a,x
 05ad: 60        clrc
-05ae: 88 0a     adc   a,#$0a
+05ae: 88 0a     adc   a,#$0a            ; channel number x += 10 (number of virtual channels)
 05b0: 5d        mov   x,a
-05b1: 9b 7a     dec   $7a+x
+05b1: 9b 7a     dec   $7a+x             ; decrease wait counter (tick)
 05b3: d0 25     bne   $05da
 05b5: f4 44     mov   a,$44+x
 05b7: c4 2d     mov   $2d,a
 05b9: f4 56     mov   a,$56+x
-05bb: c4 2e     mov   $2e,a
+05bb: c4 2e     mov   $2e,a             ; set vcmd read ptr (work)
 05bd: 8d 00     mov   y,#$00
 05bf: f7 2d     mov   a,($2d)+y         ; read vcmd byte
 05c1: 30 05     bmi   $05c8
+; 00-7f - wait
 05c3: d4 7a     mov   $7a+x,a
 05c5: fc        inc   y
 05c6: 2f 08     bra   $05d0
+; 80-ff - vcmd (80-bf should not be used, probably)
 05c8: fc        inc   y
 05c9: 3f 9d 06  call  $069d             ; dispatch vcmd (c0-ff)
 05cc: f4 7a     mov   a,$7a+x
@@ -385,10 +396,11 @@
 05da: ce        pop   x
 05db: 6f        ret
 
-05dc: f5 1c 02  mov   a,$021c+x
+; update hardware voice channel
+05dc: f5 1c 02  mov   a,$021c+x         ; current virtual channel #
 05df: 10 34     bpl   $0615
 05e1: 68 ff     cmp   a,#$ff
-05e3: d0 01     bne   $05e6
+05e3: d0 01     bne   $05e6             ; process unless $ff (not used)
 05e5: 6f        ret
 
 05e6: f4 a8     mov   a,$a8+x
@@ -398,9 +410,9 @@
 05ee: 53 34 03  bbc2  $34,$05f4
 05f1: 3f b5 0e  call  $0eb5
 05f4: 13 34 0d  bbc0  $34,$0604
-05f7: f5 88 02  mov   a,$0288+x
+05f7: f5 88 02  mov   a,$0288+x         ; fine tuning (fraction part of key)
 05fa: c4 31     mov   $31,a
-05fc: f5 76 02  mov   a,$0276+x
+05fc: f5 76 02  mov   a,$0276+x         ; key
 05ff: c4 32     mov   $32,a
 0601: 3f 59 0f  call  $0f59
 0604: 33 34 0d  bbc1  $34,$0614
@@ -426,25 +438,25 @@
 062a: 13 34 18  bbc0  $34,$0645
 062d: f5 1c 02  mov   a,$021c+x
 0630: fd        mov   y,a
-0631: f5 88 02  mov   a,$0288+x
+0631: f5 88 02  mov   a,$0288+x         ; fine tuning (fraction part of key)
 0634: 60        clrc
-0635: 96 b6 02  adc   a,$02b6+y
+0635: 96 b6 02  adc   a,$02b6+y         ; scaled pitch bend (fraction)
 0638: c4 31     mov   $31,a
-063a: f5 76 02  mov   a,$0276+x
-063d: 96 c0 02  adc   a,$02c0+y
+063a: f5 76 02  mov   a,$0276+x         ; key
+063d: 96 c0 02  adc   a,$02c0+y         ; scaled pitch bend (integer)
 0640: c4 32     mov   $32,a
 0642: 3f 59 0f  call  $0f59
 0645: 33 34 1a  bbc1  $34,$0662
 0648: f5 1c 02  mov   a,$021c+x
 064b: fd        mov   y,a
-064c: f6 90 02  mov   a,$0290+y
+064c: f6 90 02  mov   a,$0290+y         ; channel volume
 064f: fd        mov   y,a
-0650: f5 9a 02  mov   a,$029a+x
+0650: f5 9a 02  mov   a,$029a+x         ; instrument volume
 0653: cf        mul   ya
-0654: f5 dc 00  mov   a,$00dc+x
+0654: f5 dc 00  mov   a,$00dc+x         ; velocity (0-127)
 0657: 1c        asl   a
 0658: cf        mul   ya
-0659: e4 1f     mov   a,$1f
+0659: e4 1f     mov   a,$1f             ; master volume (0-127)
 065b: 1c        asl   a
 065c: cf        mul   ya
 065d: dd        mov   a,y
@@ -485,6 +497,7 @@
 0699: d5 d4 02  mov   $02d4+x,a
 069c: 6f        ret
 
+; dispatch vcmd
 069d: cb 02     mov   $02,y
 069f: 80        setc
 06a0: a8 c0     sbc   a,#$c0
@@ -497,14 +510,16 @@
 06ac: eb 02     mov   y,$02
 06ae: 6f        ret
 
+; vcmd dispatch table
+; command with * can be used by envelope procedure
 06af: dw $0704  ; c0 - set instrument
 06b1: dw $0735  ; c1 - set panpot
 06b3: dw $074c  ; c2
 06b5: dw $0754  ; c3 - set tempo
-06b7: dw $0763  ; c4
-06b9: dw $078f  ; c5 - set volume
-06bb: dw $075d  ; c6
-06bd: dw $08c7  ; c7
+06b7: dw $0763  ; c4 - transpose? (absolute)
+06b9: dw $078f  ; c5 - set volume *
+06bb: dw $075d  ; c6 - set priority
+06bd: dw $08c7  ; c7 - fine tuning (absolute) *
 06bf: dw $07a4  ; c8 - echo on
 06c1: dw $07ab  ; c9 - echo off
 06c3: dw $07b2  ; ca - set echo params
@@ -519,15 +534,15 @@
 06d5: dw $077b  ; d3 - octave down
 06d7: dw $06fd  ; d4 - rest
 06d9: dw $0884  ; d5
-06db: dw $0892  ; d6
-06dd: dw $0911  ; d7
-06df: dw $08f9  ; d8
-06e1: dw $08ce  ; d9
-06e3: dw $089d  ; da
-06e5: dw $0899  ; db
+06db: dw $0892  ; d6 - pitch bend range
+06dd: dw $0911  ; d7 - coarse tuning (absolute) *
+06df: dw $08f9  ; d8 - coarse tuning (relative) *
+06e1: dw $08ce  ; d9 - fine tuning (relative) *
+06e3: dw $089d  ; da - key on
+06e5: dw $0899  ; db - key off
 06e7: dw $0793  ; dc - add volume
 06e9: dw $08a1  ; dd - pitch bend
-06eb: dw $091e  ; de
+06eb: dw $091e  ; de - set waveform/envelope offset
 06ed: dw $094a  ; df
 06ef: dw $0958  ; e0
 06f1: dw $095c  ; e1
@@ -560,10 +575,10 @@
 071a: da 02     movw  $02,ya            ; address arg1/2 (relative)
 071c: f4 8c     mov   a,$8c+x
 071e: 28 fe     and   a,#$fe
-0720: 8d 00     mov   y,#$00
-0722: 17 02     or    a,($02)+y
+0720: 8d 00     mov   y,#$00            ; read first byte of instrument
+0722: 17 02     or    a,($02)+y         ; rhythm? (0: melody, 1: rhythm)
 0724: d4 8c     mov   $8c+x,a
-0726: 3a 02     incw  $02
+0726: 3a 02     incw  $02               ; point to next byte
 0728: e4 02     mov   a,$02
 072a: d5 36 02  mov   $0236+x,a         ; set instrument address (lo)
 072d: e4 03     mov   a,$03
@@ -572,7 +587,7 @@
 0734: 6f        ret
 
 ; vcmd c1 - set panpot
-0735: f7 2d     mov   a,($2d)+y
+0735: f7 2d     mov   a,($2d)+y         ; 00-20, or negative value (random pan)
 0737: 2f 08     bra   $0741
 ; vcmd e4 - set panpot from table
 0739: 6d        push  y
@@ -580,6 +595,7 @@
 073c: fd        mov   y,a
 073d: f6 dd 01  mov   a,$01dd+y
 0740: ee        pop   y
+; set panpot
 0741: d5 00 02  mov   $0200+x,a
 0744: f4 9e     mov   a,$9e+x
 0746: 08 02     or    a,#$02
@@ -600,13 +616,13 @@
 075b: fc        inc   y
 075c: 6f        ret
 
-; vcmd c6
+; vcmd c6 - set priority
 075d: f7 2d     mov   a,($2d)+y
 075f: d4 c0     mov   $c0+x,a
 0761: fc        inc   y
 0762: 6f        ret
 
-; vcmd c4
+; vcmd c4 - transpose? (absolute)
 0763: f7 2d     mov   a,($2d)+y
 0765: d5 6c 02  mov   $026c+x,a
 0768: fc        inc   y
@@ -810,17 +826,17 @@
 088f: d4 8c     mov   $8c+x,a
 0891: 6f        ret
 
-; vcmd d6
+; vcmd d6 - pitch bend range
 0892: f7 2d     mov   a,($2d)+y
 0894: fc        inc   y
 0895: d5 ac 02  mov   $02ac+x,a
 0898: 6f        ret
 
-; vcmd db
+; vcmd db - key off
 0899: 09 11 13  or    ($13),($11)
 089c: 6f        ret
 
-; vcmd da
+; vcmd da - key on
 089d: 09 11 12  or    ($12),($11)
 08a0: 6f        ret
 
@@ -837,21 +853,22 @@
 08b1: 7c        ror   a
 08b2: 6b 03     ror   $03
 08b4: 7c        ror   a
-08b5: c4 02     mov   $02,a
-08b7: f5 ac 02  mov   a,$02ac+x
+08b5: c4 02     mov   $02,a             ; $02 = pitch (-128..127 => -8192..8191)
+08b7: f5 ac 02  mov   a,$02ac+x         ; pitch bend range
 08ba: 3f 4f 0e  call  $0e4f
-08bd: d5 b6 02  mov   $02b6+x,a
+08bd: d5 b6 02  mov   $02b6+x,a         ; scaled pitch bend (fraction)
 08c0: dd        mov   a,y
-08c1: d5 c0 02  mov   $02c0+x,a
+08c1: d5 c0 02  mov   $02c0+x,a         ; scaled pitch bend (integer)
 08c4: ee        pop   y
 08c5: 2f 4f     bra   $0916
-; vcmd c7
+; vcmd c7 - fine tuning (absolute)
 08c7: f7 2d     mov   a,($2d)+y
-08c9: d5 7e 02  mov   $027e+x,a
+08c9: d5 7e 02  mov   $027e+x,a         ; unsigned, 1/256 semitones
 08cc: 2f 48     bra   $0916
-; vcmd d9
+; vcmd d9 - fine tuning (relative)
 08ce: f7 2d     mov   a,($2d)+y
 08d0: 30 10     bmi   $08e2
+; arg1 >= 0
 08d2: 60        clrc
 08d3: 95 7e 02  adc   a,$027e+x
 08d6: d5 7e 02  mov   $027e+x,a
@@ -859,6 +876,7 @@
 08db: f5 6c 02  mov   a,$026c+x
 08de: 88 00     adc   a,#$00
 08e0: 2f 31     bra   $0913
+; arg1 < 0
 08e2: 60        clrc
 08e3: 95 7e 02  adc   a,$027e+x
 08e6: d5 7e 02  mov   $027e+x,a
@@ -869,7 +887,7 @@
 08f2: e8 00     mov   a,#$00
 08f4: d5 7e 02  mov   $027e+x,a
 08f7: 2f 1a     bra   $0913
-; vcmd d8
+; vcmd d8 - coarse tuning (relative)
 08f9: f7 2d     mov   a,($2d)+y
 08fb: 60        clrc
 08fc: 95 6c 02  adc   a,$026c+x
@@ -883,22 +901,22 @@
 090b: f6 e1 01  mov   a,$01e1+y
 090e: ee        pop   y
 090f: 2f 02     bra   $0913
-; vcmd d7
+; vcmd d7 - coarse tuning (absolute)
 0911: f7 2d     mov   a,($2d)+y
-0913: d5 6c 02  mov   $026c+x,a
+0913: d5 6c 02  mov   $026c+x,a         ; coarse tuning (semitones, signed)
 0916: f4 9e     mov   a,$9e+x
 0918: 08 01     or    a,#$01
 091a: d4 9e     mov   $9e+x,a
 091c: fc        inc   y
 091d: 6f        ret
 
-; vcmd de
+; vcmd de - set waveform/envelope offset
 091e: 8f 5c f2  mov   $f2,#$5c
 0921: fa 11 f3  mov   ($f3),($11)       ; set KOF
 0924: dd        mov   a,y
 0925: 8d 00     mov   y,#$00
 0927: 7a 2d     addw  ya,$2d
-0929: da 2d     movw  $2d,ya
+0929: da 2d     movw  $2d,ya            ; flush vcmd ptr
 092b: 8d 00     mov   y,#$00
 092d: f7 2d     mov   a,($2d)+y
 092f: 3a 2d     incw  $2d
@@ -906,11 +924,11 @@
 0932: f7 2d     mov   a,($2d)+y
 0934: 3a 2d     incw  $2d
 0936: fd        mov   y,a
-0937: ae        pop   a
-0938: 7a 2d     addw  ya,$2d
-093a: d5 36 02  mov   $0236+x,a
+0937: ae        pop   a                 ; read waveform/envelope offset (2 bytes)
+0938: 7a 2d     addw  ya,$2d            ; offset to absolute address
+093a: d5 36 02  mov   $0236+x,a         ; $0240-10+x
 093d: dd        mov   a,y
-093e: d5 48 02  mov   $0248+x,a
+093e: d5 48 02  mov   $0248+x,a         ; $0252-10+x
 0941: f4 9e     mov   a,$9e+x
 0943: 08 04     or    a,#$04
 0945: d4 9e     mov   $9e+x,a
@@ -1463,20 +1481,21 @@
 
 0d41: 8d 07     mov   y,#$07
 0d43: 76 1c 02  cmp   a,$021c+y
-0d46: d0 09     bne   $0d51
+0d46: d0 09     bne   $0d51             ; next unless channel == A
 0d48: 2d        push  a
 0d49: f6 24 02  mov   a,$0224+y
 0d4c: 64 06     cmp   a,$06
-0d4e: f0 06     beq   $0d56
+0d4e: f0 06     beq   $0d56             ; break if $0224+y == $06
 0d50: ae        pop   a
 0d51: dc        dec   y
 0d52: 10 ef     bpl   $0d43
 0d54: 60        clrc
 0d55: 6f        ret
-
 0d56: ae        pop   a
 0d57: 6f        ret
 
+; get lowest priority voice
+; return { a: priority, y: channel # }
 0d58: 4d        push  x
 0d59: cd 07     mov   x,#$07
 0d5b: e8 ff     mov   a,#$ff
@@ -1507,6 +1526,8 @@
 0d84: d0 f8     bne   $0d7e
 0d86: 6f        ret
 
+; find unused hardware channel from ch0 to ch7
+; return { x: channel #, $11: channel mask }
 0d87: cd 00     mov   x,#$00
 0d89: 8f 01 11  mov   $11,#$01
 0d8c: f5 1c 02  mov   a,$021c+x
@@ -1611,6 +1632,7 @@
 
 0e4e: 6f        ret
 
+; s16 ($02) * u8 (a) multiplier
 0e4f: c4 04     mov   $04,a
 0e51: ba 02     movw  ya,$02
 0e53: 10 0e     bpl   $0e63
@@ -1622,6 +1644,7 @@
 0e60: 9a 06     subw  ya,$06
 0e62: 6f        ret
 
+; u16 (ya) * u8 ($04) multiplier
 0e63: 2d        push  a
 0e64: e4 04     mov   a,$04
 0e66: cf        mul   ya
@@ -1631,7 +1654,7 @@
 0e6c: cf        mul   ya
 0e6d: dd        mov   a,y
 0e6e: 8d 00     mov   y,#$00
-0e70: 7a 06     addw  ya,$06
+0e70: 7a 06     addw  ya,$06            ; ya = (ya * $04) >> 8
 0e72: 6f        ret
 
 0e73: e8 ff     mov   a,#$ff
@@ -1669,10 +1692,11 @@
 0eb2: c4 f3     mov   $f3,a             ; set EVOL(L)
 0eb4: 6f        ret
 
+; flush waveform/envelopes
 0eb5: 4d        push  x
-0eb6: f5 40 02  mov   a,$0240+x
+0eb6: f5 40 02  mov   a,$0240+x         ; $0236+10+x
 0eb9: c4 2f     mov   $2f,a
-0ebb: f5 52 02  mov   a,$0252+x
+0ebb: f5 52 02  mov   a,$0252+x         ; $0248+10+x
 0ebe: c4 30     mov   $30,a
 0ec0: 7d        mov   a,x
 0ec1: 9f        xcn   a
@@ -1688,22 +1712,23 @@
 0ed3: 4e 14 00  tclr1 $0014
 0ed6: f7 2f     mov   a,($2f)+y
 0ed8: d8 f2     mov   $f2,x
-0eda: c4 f3     mov   $f3,a             ; set SRCN
+0eda: c4 f3     mov   $f3,a             ; set SRCN, ADSR(1), ADSR(2), GAIN
 0edc: 3d        inc   x
 0edd: fc        inc   y
 0ede: ad 04     cmp   y,#$04
 0ee0: d0 f4     bne   $0ed6
 0ee2: ce        pop   x
 0ee3: f7 2f     mov   a,($2f)+y
-0ee5: d4 b8     mov   $b8+x,a
+0ee5: d4 b8     mov   $b8+x,a           ; key-off delay (ticks)
 0ee7: fc        inc   y
 0ee8: f7 2f     mov   a,($2f)+y
-0eea: d5 d5 01  mov   $01d5+x,a
+0eea: d5 d5 01  mov   $01d5+x,a         ; per-instrument coarse tuning
 0eed: fc        inc   y
 0eee: f7 2f     mov   a,($2f)+y
-0ef0: d5 cd 01  mov   $01cd+x,a
+0ef0: d5 cd 01  mov   $01cd+x,a         ; per-instrument fine tuning
 0ef3: 6f        ret
 
+; calculate hardware volume for channel x
 0ef4: 2d        push  a
 0ef5: f4 96     mov   a,$96+x
 0ef7: 28 10     and   a,#$10
@@ -1711,49 +1736,55 @@
 0efb: ae        pop   a
 0efc: 8d 00     mov   y,#$00
 0efe: 2f 2c     bra   $0f2c
-0f00: 33 0f 24  bbc1  $0f,$0f27
-0f03: f5 0a 02  mov   a,$020a+x
+0f00: 33 0f 24  bbc1  $0f,$0f27         ; mono?
+; stereo
+0f03: f5 0a 02  mov   a,$020a+x         ; panpot
 0f06: fd        mov   y,a
-0f07: f6 38 0f  mov   a,$0f38+y
+0f07: f6 38 0f  mov   a,$0f38+y         ; convert to volume
 0f0a: ee        pop   y
 0f0b: 6d        push  y
-0f0c: cf        mul   ya
+0f0c: cf        mul   ya                ; multiple given rate
 0f0d: 7d        mov   a,x
 0f0e: 9f        xcn   a
 0f0f: c4 f2     mov   $f2,a
-0f11: cb f3     mov   $f3,y             ; 
+0f11: cb f3     mov   $f3,y             ; VOL(L)
 0f13: e8 20     mov   a,#$20
 0f15: 80        setc
-0f16: b5 0a 02  sbc   a,$020a+x
+0f16: b5 0a 02  sbc   a,$020a+x         ; panpot (inverted)
 0f19: fd        mov   y,a
-0f1a: f6 38 0f  mov   a,$0f38+y
+0f1a: f6 38 0f  mov   a,$0f38+y         ; convert to volume
 0f1d: ee        pop   y
-0f1e: cf        mul   ya
+0f1e: cf        mul   ya                ; multiple given rate
 0f1f: 7d        mov   a,x
 0f20: 9f        xcn   a
 0f21: bc        inc   a
 0f22: c4 f2     mov   $f2,a
-0f24: cb f3     mov   $f3,y             ; 
+0f24: cb f3     mov   $f3,y             ; VOL(R)
 0f26: 6f        ret
-
+; mono
 0f27: ae        pop   a
-0f28: ec 48 0f  mov   y,$0f48
+0f28: ec 48 0f  mov   y,$0f48           ; volume rate for center
 0f2b: cf        mul   ya
 0f2c: 7d        mov   a,x
 0f2d: 9f        xcn   a
 0f2e: c4 f2     mov   $f2,a
-0f30: cb f3     mov   $f3,y             ; 
+0f30: cb f3     mov   $f3,y             ; VOL(L)
 0f32: bc        inc   a
 0f33: c4 f2     mov   $f2,a
-0f35: cb f3     mov   $f3,y             ; 
+0f35: cb f3     mov   $f3,y             ; VOL(R)
 0f37: 6f        ret
 
+; panpot to volume table
+; (*almost* approx of sine curve = SMF compatible)
 0f38: db $80,$80,$7f,$7f,$7e,$7d,$7c,$7a
 0f40: db $78,$76,$74,$71,$64,$6b,$68,$64
+;                        ~~~ this should be $6e!
 0f48: db $60,$5c,$57,$53,$4e,$49,$43,$3e
 0f50: db $38,$32,$2b,$25,$1e,$17,$10,$08
 0f58: db $00
 
+; flush channel pitch
+; $31/32 = key (integer + fraction)
 0f59: f5 d5 01  mov   a,$01d5+x
 0f5c: 68 80     cmp   a,#$80
 0f5e: f0 3e     beq   $0f9e
@@ -1801,6 +1832,7 @@
 0faa: fa 32 f3  mov   ($f3),($32)       ; set P(H)
 0fad: 6f        ret
 
+; step 16-bit RNG
 0fae: ba 0a     movw  ya,$0a
 0fb0: 0b 0a     asl   $0a
 0fb2: 2b 0b     rol   $0b
@@ -1858,6 +1890,7 @@
 1021: c4 35     mov   $35,a
 1023: 6f        ret
 
+; random panpot table
 1024: db $06,$08,$0a,$0c,$0d,$0e,$0f,$10
 102c: db $10,$11,$12,$13,$14,$16,$18,$1a
 
