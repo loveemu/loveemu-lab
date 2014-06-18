@@ -87,7 +87,7 @@
 0367: f6 38 02  mov   a,$0238+y
 036a: c4 a0     mov   $a0,a
 036c: f6 40 02  mov   a,$0240+y
-036f: c4 a1     mov   $a1,a
+036f: c4 a1     mov   $a1,a             ; $a0 = instrument entry addrss
 0371: f6 48 02  mov   a,$0248+y
 0374: 2f 1b     bra   $0391
 0376: f3 cb 08  bbc7  $cb,$0381
@@ -98,14 +98,14 @@
 0384: f5 38 02  mov   a,$0238+x
 0387: c4 a0     mov   $a0,a
 0389: f5 40 02  mov   a,$0240+x
-038c: c4 a1     mov   $a1,a
+038c: c4 a1     mov   $a1,a             ; $a0 = instrument entry addrss
 038e: f5 48 02  mov   a,$0248+x
 0391: 8d 07     mov   y,#$07
 0393: 3f 59 0d  call  $0d59             ; GAIN
 0396: 8d 01     mov   y,#$01
 0398: f7 a0     mov   a,($a0)+y
 039a: 8d 05     mov   y,#$05
-039c: 3f 59 0d  call  $0d59             ; ADSR(1)
+039c: 3f 59 0d  call  $0d59             ; [0x01] ADSR(1)
 039f: 0b c0     asl   $c0
 03a1: 0b cb     asl   $cb
 03a3: 0b c8     asl   $c8
@@ -193,12 +193,12 @@
 044e: 5f 59 0d  jmp   $0d59             ; ADSR(1)
 
 0451: 8d 03     mov   y,#$03
-0453: f6 63 04  mov   a,$0463+y
+0453: f6 63 04  mov   a,$0463+y         ; DSP reg initialize table -1 (address)
 0456: c5 f2 00  mov   $00f2,a
-0459: f6 66 04  mov   a,$0466+y
-045c: c5 f3 00  mov   $00f3,a
+0459: f6 66 04  mov   a,$0466+y         ; DSP reg initialize table -1 (value)
+045c: c5 f3 00  mov   $00f3,a           ; initialize DSP reg
 045f: fe f2     dbnz  y,$0453
-0461: 5f a1 0a  jmp   $0aa1
+0461: 5f a1 0a  jmp   $0aa1             ; initialize echo
 
 ; PMON,NON,DIR
 0464: db $2d,$3d,$5d
@@ -230,7 +230,7 @@
 0497: a5 00 1c  sbc   a,$1c00
 049a: 2f f5     bra   $0491
 049c: 8f 02 a2  mov   $a2,#$02
-049f: 8f 1c a3  mov   $a3,#$1c
+049f: 8f 1c a3  mov   $a3,#$1c          ; song list address = $1c02
 04a2: 1c        asl   a
 04a3: 90 02     bcc   $04a7
 04a5: ab a3     inc   $a3
@@ -238,15 +238,16 @@
 04a8: f7 a2     mov   a,($a2)+y
 04aa: c4 a1     mov   $a1,a
 04ac: fc        inc   y
-04ad: f7 a2     mov   a,($a2)+y
+04ad: f7 a2     mov   a,($a2)+y         ; read song header address from song list
 04af: c4 a0     mov   $a0,a
 04b1: 04 a1     or    a,$a1
-04b3: f0 d4     beq   $0489
+04b3: f0 d4     beq   $0489             ; return if song header address == $0000
 04b5: 8d 00     mov   y,#$00
-04b7: f7 a0     mov   a,($a0)+y
+04b7: f7 a0     mov   a,($a0)+y         ; read the first byte (priority?)
 04b9: d0 03     bne   $04be
 04bb: 5f a9 05  jmp   $05a9
 
+; when song header first byte != 0:
 04be: c4 a4     mov   $a4,a
 04c0: 8f 80 b3  mov   $b3,#$80
 04c3: cd 57     mov   x,#$57
@@ -370,8 +371,9 @@
 
 05a0: 3f ef 06  call  $06ef
 05a3: 8f 0d a1  mov   $a1,#$0d
-05a6: 8f af a0  mov   $a0,#$af          ; song address = $0daf(+1)
-;
+05a6: 8f af a0  mov   $a0,#$af          ; song address = $0daf (+1 for actual start address)
+; fall through...
+; or when song header first byte == 0:
 05a9: 3f 82 05  call  $0582
 05ac: 8d 00     mov   y,#$00
 05ae: dd        mov   a,y
@@ -380,18 +382,18 @@
 05b3: da d2     movw  $d2,ya
 05b5: 9c        dec   a
 05b6: c4 d0     mov   $d0,a
-05b8: 3f 97 06  call  $0697
-05bb: cd 07     mov   x,#$07            ; last voice first
+05b8: 3f 97 06  call  $0697             ; zero work registers
+05bb: cd 07     mov   x,#$07            ; voice index (initialize voices in reverse-order)
 05bd: 8d 00     mov   y,#$00
-05bf: 3a a0     incw  $a0
+05bf: 3a a0     incw  $a0               ; skip first byte (priority)
 05c1: f7 a0     mov   a,($a0)+y
-05c3: c4 a3     mov   $a3,a             ; hi-byte
+05c3: c4 a3     mov   $a3,a             ; starting address (hi-byte)
 05c5: 3a a0     incw  $a0
 05c7: f7 a0     mov   a,($a0)+y
-05c9: c4 a2     mov   $a2,a             ; lo-byte
+05c9: c4 a2     mov   $a2,a             ; starting address (lo-byte)
 05cb: f7 a2     mov   a,($a2)+y
 05cd: 68 17     cmp   a,#$17
-05cf: f0 15     beq   $05e6             ; next if ($a2) == $17
+05cf: f0 15     beq   $05e6             ; next if the first event byte == end of track ($17)
 05d1: ba a2     movw  ya,$a2
 05d3: db 08     mov   $08+x,y
 05d5: d4 00     mov   $00+x,a           ; set reading ptr
@@ -672,25 +674,26 @@
 07d5: 96 ab 08  adc   a,$08ab+y         ; octave correction
 07d8: e3 b0 03  bbs7  $b0,$07de
 07db: 60        clrc
-07dc: 84 d1     adc   a,$d1
+07dc: 84 d1     adc   a,$d1             ; global transpose
 07de: 60        clrc
-07df: 95 18 02  adc   a,$0218+x
+07df: 95 18 02  adc   a,$0218+x         ; per-voice transpose
 07e2: c4 a1     mov   $a1,a
-07e4: 8f 00 a0  mov   $a0,#$00
+07e4: 8f 00 a0  mov   $a0,#$00          ; convert to 16bit (8bit integer + 8bit fraction)
 07e7: 8d 00     mov   y,#$00
 07e9: f5 20 02  mov   a,$0220+x
 07ec: 10 01     bpl   $07ef
 07ee: dc        dec   y
-07ef: 7a a0     addw  ya,$a0
+07ef: 7a a0     addw  ya,$a0            ; tuning
 07f1: ad 61     cmp   y,#$61
 07f3: 90 02     bcc   $07f7
-07f5: 8d 60     mov   y,#$60
+07f5: 8d 60     mov   y,#$60            ; limit note number (max: 96)
+; apply pitch envelope (LFO, portamento, etc.)
 07f7: 40        setp
 07f8: da a2     movw  $a2,ya
-07fa: f4 00     mov   a,$00+x
+07fa: f4 00     mov   a,$00+x           ; LFO?
 07fc: c4 a4     mov   $a4,a
 07fe: 12 a4     clr0  $a4
-0800: f4 28     mov   a,$28+x
+0800: f4 28     mov   a,$28+x           ; portamento?
 0802: f0 08     beq   $080c
 0804: f4 40     mov   a,$40+x
 0806: f0 04     beq   $080c
@@ -713,9 +716,10 @@
 0827: e4 a2     mov   a,$a2
 0829: d4 48     mov   $48+x,a
 082b: ae        pop   a
-082c: db 30     mov   $30+x,y
-082e: d4 38     mov   $38+x,a
+082c: db 30     mov   $30+x,y           ; final note number $0130+x (integer)
+082e: d4 38     mov   $38+x,a           ; final note number $0138+x (fraction)
 0830: 20        clrp
+;
 0831: f4 10     mov   a,$10+x
 0833: 30 2a     bmi   $085f
 0835: f5 00 01  mov   a,$0100+x
@@ -775,7 +779,7 @@
 
 08bb: 3f d8 08  call  $08d8
 08be: 68 20     cmp   a,#$20
-08c0: b0 26     bcs   $08e8             ; ret if a >= $20
+08c0: b0 26     bcs   $08e8             ; return if vcmd >= $20
 08c2: c4 a7     mov   $a7,a             ; store vbyte into $a7
 08c4: 8d 08     mov   y,#$08
 08c6: 6d        push  y
@@ -890,11 +894,11 @@
 0977: da a0     movw  $a0,ya
 0979: 60        clrc
 097a: 98 ac a0  adc   $a0,#$ac
-097d: 98 47 a1  adc   $a1,#$47          ; $a0 = #$47ac + (a * 6)
+097d: 98 47 a1  adc   $a1,#$47          ; $a0 = instrument entry address (0x47ac + (patch * 6))
 0980: ba a0     movw  ya,$a0
 0982: d5 38 02  mov   $0238+x,a
 0985: dd        mov   a,y
-0986: d5 40 02  mov   $0240+x,a
+0986: d5 40 02  mov   $0240+x,a         ; save instrument entry address
 0989: 4d        push  x
 098a: 7d        mov   a,x
 098b: 9f        xcn   a
@@ -902,9 +906,9 @@
 098e: 08 04     or    a,#$04
 0990: 5d        mov   x,a
 0991: 8d 00     mov   y,#$00
-0993: f7 a0     mov   a,($a0)+y
+0993: f7 a0     mov   a,($a0)+y         ; [0x00..0x03]
 0995: c9 f2 00  mov   $00f2,x
-0998: c5 f3 00  mov   $00f3,a           ; ADSR(1),ADSR(2),GAIN,ENVX
+0998: c5 f3 00  mov   $00f3,a           ; SRCN,ADSR(1),ADSR(2),GAIN
 099b: 3d        inc   x
 099c: fc        inc   y
 099d: ad 04     cmp   y,#$04
@@ -1323,8 +1327,8 @@
 0c8c: 40        setp
 0c8d: f4 08     mov   a,$08+x
 0c8f: d0 06     bne   $0c97
-0c91: fb 30     mov   y,$30+x
-0c93: f4 38     mov   a,$38+x
+0c91: fb 30     mov   y,$30+x           ; final note number (integer)
+0c93: f4 38     mov   a,$38+x           ; final note number (fraction)
 0c95: 2f 2f     bra   $0cc6
 0c97: 1c        asl   a
 0c98: 8d 0c     mov   y,#$0c
@@ -1354,6 +1358,7 @@
 0cc0: 7a a0     addw  ya,$a0
 0cc2: 2f 02     bra   $0cc6
 0cc4: 9a a0     subw  ya,$a0
+;
 0cc6: 20        clrp
 0cc7: e3 b0 02  bbs7  $b0,$0ccc
 0cca: 7a d2     addw  ya,$d2
@@ -1382,7 +1387,7 @@
 0cee: f6 6c 0d  mov   a,$0d6c+y
 0cf1: c4 a3     mov   $a3,a
 0cf3: f6 6b 0d  mov   a,$0d6b+y
-0cf6: c4 a2     mov   $a2,a
+0cf6: c4 a2     mov   $a2,a             ; $a2 = base pitch for this note number (integer)
 0cf8: f6 6e 0d  mov   a,$0d6e+y
 0cfb: 2d        push  a
 0cfc: f6 6d 0d  mov   a,$0d6d+y
@@ -1392,10 +1397,10 @@
 0d04: cf        mul   ya
 0d05: dd        mov   a,y
 0d06: 8d 00     mov   y,#$00
-0d08: 7a a2     addw  ya,$a2
+0d08: 7a a2     addw  ya,$a2            ; add fractional part
 0d0a: cb a1     mov   $a1,y
 0d0c: 1c        asl   a
-0d0d: 2b a1     rol   $a1
+0d0d: 2b a1     rol   $a1               ; one octave up
 0d0f: c8 08     cmp   x,#$08
 0d11: f0 06     beq   $0d19
 0d13: 4b a1     lsr   $a1
@@ -1407,25 +1412,25 @@
 0d1c: f5 38 02  mov   a,$0238+x
 0d1f: c4 a4     mov   $a4,a
 0d21: f5 40 02  mov   a,$0240+x
-0d24: c4 a5     mov   $a5,a
+0d24: c4 a5     mov   $a5,a             ; $a4 = instrument entry address
 0d26: 8d 05     mov   y,#$05
-0d28: f7 a4     mov   a,($a4)+y
+0d28: f7 a4     mov   a,($a4)+y         ; [0x05] fraction part of per-instrument tuning
 0d2a: eb a1     mov   y,$a1
 0d2c: cf        mul   ya
 0d2d: da a2     movw  $a2,ya
 0d2f: 8d 05     mov   y,#$05
-0d31: f7 a4     mov   a,($a4)+y
+0d31: f7 a4     mov   a,($a4)+y         ; [0x05] fraction part of per-instrument tuning
 0d33: eb a0     mov   y,$a0
 0d35: cf        mul   ya
 0d36: 6d        push  y
 0d37: 8d 04     mov   y,#$04
-0d39: f7 a4     mov   a,($a4)+y
+0d39: f7 a4     mov   a,($a4)+y         ; [0x04] integer part of per-instrument tuning
 0d3b: eb a0     mov   y,$a0
 0d3d: cf        mul   ya
 0d3e: 7a a2     addw  ya,$a2
 0d40: da a2     movw  $a2,ya
 0d42: 8d 04     mov   y,#$04
-0d44: f7 a4     mov   a,($a4)+y
+0d44: f7 a4     mov   a,($a4)+y         ; [0x04] integer part of per-instrument tuning
 0d46: eb a1     mov   y,$a1
 0d48: cf        mul   ya
 0d49: fd        mov   y,a
@@ -1453,19 +1458,19 @@
 0d6a: 6f        ret
 
 ; pitch table
-0d6b: dw $085f
-0d6d: dw $08de
-0d6f: dw $0965
-0d71: dw $09f4
-0d73: dw $0a8c
-0d75: dw $0b2c
-0d77: dw $0bd6
-0d79: dw $0c8b
-0d7b: dw $0d4a
-0d7d: dw $0e14
-0d7f: dw $0eea
-0d81: dw $0fcd
-0d83: dw $10be
+0d6b: dw $085f  ; c
+0d6d: dw $08de  ; c+
+0d6f: dw $0965  ; d
+0d71: dw $09f4  ; d+
+0d73: dw $0a8c  ; e
+0d75: dw $0b2c  ; f
+0d77: dw $0bd6  ; f+
+0d79: dw $0c8b  ; g
+0d7b: dw $0d4a  ; g+
+0d7d: dw $0e14  ; a
+0d7f: dw $0eea  ; a+
+0d81: dw $0fcd  ; b
+0d83: dw $10be  ; c
 
 ; echo presets:
 ; MVOL(L/R) when echo disabled,MVOL(L),MVOL(R)

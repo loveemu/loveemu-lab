@@ -47,7 +47,7 @@
 0313: e3 cd 0c  bbs7  $cd,$0322
 0316: 8d 6c     mov   y,#$6c
 0318: e8 00     mov   a,#$00
-031a: 3f cf 0c  call  $0ccf
+031a: 3f cf 0c  call  $0ccf             ; FLG
 031d: 69 cd cc  cmp   ($cc),($cd)
 0320: f0 04     beq   $0326
 0322: ab cd     inc   $cd
@@ -57,13 +57,13 @@
 032a: 48 ff     eor   a,#$ff
 032c: 24 bc     and   a,$bc
 032e: 04 b7     or    a,$b7
-0330: 3f cf 0c  call  $0ccf
+0330: 3f cf 0c  call  $0ccf             ; EON
 0333: 8d 2c     mov   y,#$2c
 0335: e4 ce     mov   a,$ce
-0337: 3f cf 0c  call  $0ccf
+0337: 3f cf 0c  call  $0ccf             ; EVOL(L)
 033a: 8d 3c     mov   y,#$3c
 033c: e4 cf     mov   a,$cf
-033e: 3f cf 0c  call  $0ccf
+033e: 3f cf 0c  call  $0ccf             ; EVOL(R)
 0341: cd 07     mov   x,#$07
 0343: 8d 57     mov   y,#$57
 0345: e4 ba     mov   a,$ba
@@ -86,10 +86,10 @@
 036e: c4 a3     mov   $a3,a
 0370: f5 40 02  mov   a,$0240+x
 0373: 8d 07     mov   y,#$07
-0375: 3f c4 0c  call  $0cc4
+0375: 3f c4 0c  call  $0cc4             ; GAIN
 0378: 8d 05     mov   y,#$05
 037a: e4 a3     mov   a,$a3
-037c: 3f c4 0c  call  $0cc4
+037c: 3f c4 0c  call  $0cc4             ; ADSR(1)
 037f: 0b b5     asl   $b5
 0381: 0b bd     asl   $bd
 0383: 0b ba     asl   $ba
@@ -99,10 +99,11 @@
 0388: 10 c0     bpl   $034a
 038a: 8d 5c     mov   y,#$5c
 038c: e8 00     mov   a,#$00
-038e: 3f cf 0c  call  $0ccf
+038e: 3f cf 0c  call  $0ccf             ; KOF
 0391: ae        pop   a
 0392: 8d 4c     mov   y,#$4c
-0394: 5f cf 0c  jmp   $0ccf
+0394: 5f cf 0c  jmp   $0ccf             ; KON
+
 0397: f2 b0     clr7  $b0
 0399: c3 b0 39  bbs6  $b0,$03d5
 039c: 8f 80 b3  mov   $b3,#$80
@@ -162,21 +163,21 @@
 0413: 8d 5c     mov   y,#$5c
 0415: 8f 00 b6  mov   $b6,#$00
 0418: 8f 00 bb  mov   $bb,#$00
-041b: 5f cf 0c  jmp   $0ccf
+041b: 5f cf 0c  jmp   $0ccf             ; KOF
 041e: 8d 07     mov   y,#$07
 0420: e8 9e     mov   a,#$9e
-0422: 3f c4 0c  call  $0cc4
+0422: 3f c4 0c  call  $0cc4             ; GAIN
 0425: 8d 05     mov   y,#$05
 0427: f5 38 02  mov   a,$0238+x
 042a: 28 7f     and   a,#$7f
-042c: 5f c4 0c  jmp   $0cc4
+042c: 5f c4 0c  jmp   $0cc4             ; ADSR(1)
 042f: 8d 03     mov   y,#$03
-0431: f6 41 04  mov   a,$0441+y
+0431: f6 41 04  mov   a,$0441+y         ; DSP reg initialize table -1 (address)
 0434: c5 f2 00  mov   $00f2,a
-0437: f6 44 04  mov   a,$0444+y
-043a: c5 f3 00  mov   $00f3,a
+0437: f6 44 04  mov   a,$0444+y         ; DSP reg initialize table -1 (value)
+043a: c5 f3 00  mov   $00f3,a           ; initialize DSP reg
 043d: fe f2     dbnz  y,$0431
-043f: 5f 0e 0a  jmp   $0a0e
+043f: 5f 0e 0a  jmp   $0a0e             ; initialize echo
 
 ; PMON,NON,DIR
 0442: db $2d,$3d,$5d
@@ -208,28 +209,30 @@
 0478: 2f f5     bra   $046f
 047a: 1c        asl   a
 047b: 5d        mov   x,a
-047c: f5 22 0d  mov   a,$0d22+x
+047c: f5 22 0d  mov   a,$0d22+x         ; read song header address from song list
 047f: c4 a1     mov   $a1,a
 0481: f5 23 0d  mov   a,$0d23+x
 0484: c4 a0     mov   $a0,a
 0486: 04 a1     or    a,$a1
-0488: f0 dd     beq   $0467
+0488: f0 dd     beq   $0467             ; return if song header address == $0000
 048a: 8d 00     mov   y,#$00
-048c: f7 a0     mov   a,($a0)+y
+048c: f7 a0     mov   a,($a0)+y         ; read the first byte (priority?)
 048e: d0 03     bne   $0493
 0490: 5f 7a 05  jmp   $057a
+; when song header first byte != 0:
+; (in this game, a song seems to have $02 for this field)
 0493: c4 a4     mov   $a4,a
-0495: 8f 80 b3  mov   $b3,#$80
+0495: 8f 80 b3  mov   $b3,#$80          ; voice mask (initialize voices in reverse-order)
 0498: cd 57     mov   x,#$57
 049a: 8d 00     mov   y,#$00
 049c: 3a a0     incw  $a0
 049e: f7 a0     mov   a,($a0)+y
-04a0: c4 a3     mov   $a3,a
+04a0: c4 a3     mov   $a3,a             ; starting address (hi-byte)
 04a2: 3a a0     incw  $a0
 04a4: f7 a0     mov   a,($a0)+y
-04a6: c4 a2     mov   $a2,a
+04a6: c4 a2     mov   $a2,a             ; starting address (lo-byte)
 04a8: f7 a2     mov   a,($a2)+y
-04aa: 68 17     cmp   a,#$17
+04aa: 68 17     cmp   a,#$17            ; next if the first event byte == end of track ($17)
 04ac: f0 2e     beq   $04dc
 04ae: e4 a4     mov   a,$a4
 04b0: 75 50 02  cmp   a,$0250+x
@@ -241,7 +244,7 @@
 04c0: d5 50 02  mov   $0250+x,a
 04c3: ba a2     movw  ya,$a2
 04c5: db 08     mov   $08+x,y
-04c7: d4 00     mov   $00+x,a
+04c7: d4 00     mov   $00+x,a           ; set reading ptr
 04c9: e8 10     mov   a,#$10
 04cb: d5 00 01  mov   $0100+x,a
 04ce: e8 b8     mov   a,#$b8
@@ -338,7 +341,9 @@
 
 0571: 3f 60 06  call  $0660
 0574: 8f 0d a1  mov   $a1,#$0d
-0577: 8f 1f a0  mov   $a0,#$1f
+0577: 8f 1f a0  mov   $a0,#$1f          ; song address = $0d1f
+; fall through...
+; or when song header first byte == 0:
 057a: 3f 53 05  call  $0553
 057d: 8d 00     mov   y,#$00
 057f: dd        mov   a,y
@@ -348,20 +353,20 @@
 0586: 9c        dec   a
 0587: c4 c3     mov   $c3,a
 0589: 3f 4f 06  call  $064f
-058c: cd 07     mov   x,#$07
+058c: cd 07     mov   x,#$07            ; voice index (initialize voices in reverse-order)
 058e: 8d 00     mov   y,#$00
 0590: 3a a0     incw  $a0
 0592: f7 a0     mov   a,($a0)+y
-0594: c4 a3     mov   $a3,a
+0594: c4 a3     mov   $a3,a             ; starting address (hi-byte)
 0596: 3a a0     incw  $a0
 0598: f7 a0     mov   a,($a0)+y
-059a: c4 a2     mov   $a2,a
+059a: c4 a2     mov   $a2,a             ; starting address (lo-byte)
 059c: f7 a2     mov   a,($a2)+y
-059e: 68 17     cmp   a,#$17
+059e: 68 17     cmp   a,#$17            ; next if the first event byte == end of track ($17)
 05a0: f0 15     beq   $05b7
 05a2: ba a2     movw  ya,$a2
 05a4: db 08     mov   $08+x,y
-05a6: d4 00     mov   $00+x,a
+05a6: d4 00     mov   $00+x,a           ; set reading ptr
 05a8: e8 10     mov   a,#$10
 05aa: d5 00 01  mov   $0100+x,a
 05ad: e8 b8     mov   a,#$b8
@@ -667,12 +672,12 @@
 
 080d: 3f 2a 08  call  $082a
 0810: 68 20     cmp   a,#$20
-0812: b0 26     bcs   $083a
-0814: c4 a7     mov   $a7,a
+0812: b0 26     bcs   $083a             ; return if vcmd >= $20
+0814: c4 a7     mov   $a7,a             ; store vbyte into $a7
 0816: 8d 08     mov   y,#$08
 0818: 6d        push  y
 0819: 8d 0d     mov   y,#$0d
-081b: 6d        push  y
+081b: 6d        push  y                 ; set return address $0d08
 081c: 1c        asl   a
 081d: fd        mov   y,a
 081e: f6 3c 08  mov   a,$083c+y
@@ -680,7 +685,8 @@
 0822: f6 3b 08  mov   a,$083b+y
 0825: 2d        push  a
 0826: ad 08     cmp   y,#$08
-0828: 90 10     bcc   $083a
+0828: 90 10     bcc   $083a             ; don't read op1 if vbyte < $04
+;
 082a: fb 08     mov   y,$08+x
 082c: f4 00     mov   a,$00+x
 082e: da a0     movw  $a0,ya
@@ -801,7 +807,7 @@
 08ea: 5d        mov   x,a
 08eb: f7 a0     mov   a,($a0)+y
 08ed: c9 f2 00  mov   $00f2,x
-08f0: c5 f3 00  mov   $00f3,a           ; ADSR(1),ADSR(2),GAIN,ENVX
+08f0: c5 f3 00  mov   $00f3,a           ; SRCN,ADSR(1),ADSR(2),GAIN
 08f3: 3d        inc   x
 08f4: fc        inc   y
 08f5: ad 04     cmp   y,#$04
@@ -973,20 +979,20 @@
 0a01: 6f        ret
 
 ; vcmd 1b - echo params
-0a02: 3f 2a 08  call  $082a
+0a02: 3f 2a 08  call  $082a             ; arg2 = preset # (arg1 ignored?)
 0a05: 8d 08     mov   y,#$08
 0a07: cf        mul   ya
 0a08: 64 cb     cmp   a,$cb
-0a0a: f0 56     beq   $0a62
+0a0a: f0 56     beq   $0a62             ; ret if same preset
 0a0c: c4 cb     mov   $cb,a
 0a0e: 4d        push  x
 0a0f: 5d        mov   x,a
 0a10: 8d 0c     mov   y,#$0c
 0a12: f5 10 0d  mov   a,$0d10+x
-0a15: 3f cf 0c  call  $0ccf
+0a15: 3f cf 0c  call  $0ccf             ; MVOL(L)
 0a18: 8d 1c     mov   y,#$1c
 0a1a: f5 11 0d  mov   a,$0d11+x
-0a1d: 3f cf 0c  call  $0ccf
+0a1d: 3f cf 0c  call  $0ccf             ; MVOL(R)
 0a20: f5 12 0d  mov   a,$0d12+x
 0a23: c4 ce     mov   $ce,a
 0a25: f5 13 0d  mov   a,$0d13+x
@@ -994,7 +1000,7 @@
 0a2a: 3f 63 0a  call  $0a63
 0a2d: 8d 6d     mov   y,#$6d
 0a2f: f5 14 0d  mov   a,$0d14+x
-0a32: 3f cf 0c  call  $0ccf
+0a32: 3f cf 0c  call  $0ccf             ; ESA
 0a35: e8 7d     mov   a,#$7d
 0a37: c5 f2 00  mov   $00f2,a
 0a3a: e5 f3 00  mov   a,$00f3           ; EDL
@@ -1011,7 +1017,7 @@
 0a51: c4 cc     mov   $cc,a
 0a53: 8d 0d     mov   y,#$0d
 0a55: f5 16 0d  mov   a,$0d16+x
-0a58: 3f cf 0c  call  $0ccf
+0a58: 3f cf 0c  call  $0ccf             ; EFB
 0a5b: f5 17 0d  mov   a,$0d17+x
 0a5e: 3f 7d 0a  call  $0a7d
 0a61: ce        pop   x
@@ -1019,7 +1025,7 @@
 
 0a63: 8d 6c     mov   y,#$6c
 0a65: e8 20     mov   a,#$20
-0a67: 3f cf 0c  call  $0ccf
+0a67: 3f cf 0c  call  $0ccf             ; FLG
 0a6a: 8d 03     mov   y,#$03
 0a6c: f6 79 0a  mov   a,$0a79+y
 0a6f: c5 f2 00  mov   $00f2,a
@@ -1035,7 +1041,7 @@
 0a81: 5d        mov   x,a
 0a82: 8d 0f     mov   y,#$0f
 0a84: f5 94 0a  mov   a,$0a94+x
-0a87: 3f cf 0c  call  $0ccf
+0a87: 3f cf 0c  call  $0ccf             ; FIR
 0a8a: 3d        inc   x
 0a8b: dd        mov   a,y
 0a8c: 60        clrc
@@ -1168,7 +1174,7 @@
 0b88: cf        mul   ya                ; apply linear pan
 0b89: dd        mov   a,y
 0b8a: eb a5     mov   y,$a5
-0b8c: 3f c4 0c  call  $0cc4             ; VOL(L,R)
+0b8c: 3f c4 0c  call  $0cc4             ; VOL(L),VOL(R)
 0b8f: 8d 14     mov   y,#$14
 0b91: e8 00     mov   a,#$00
 0b93: 9a a0     subw  ya,$a0
@@ -1328,10 +1334,10 @@
 0cb8: 28 f0     and   a,#$f0
 0cba: 6d        push  y
 0cbb: 8d 02     mov   y,#$02
-0cbd: 3f c4 0c  call  $0cc4
+0cbd: 3f c4 0c  call  $0cc4             ; P(L)
 0cc0: ae        pop   a
 0cc1: fc        inc   y
-0cc2: 2f 0b     bra   $0ccf
+0cc2: 2f 0b     bra   $0ccf             ; P(H)
 ; write A to DSP reg Y of channel X
 0cc4: 2d        push  a
 0cc5: cb a6     mov   $a6,y

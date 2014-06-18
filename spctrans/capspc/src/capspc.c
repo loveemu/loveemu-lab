@@ -16,7 +16,7 @@
 
 #define APPNAME         "Capcom SPC2MIDI"
 #define APPSHORTNAME    "capspc"
-#define VERSION         "[2014-02-15]"
+#define VERSION         "[2014-06-18]"
 #define AUTHOR          "loveemu"
 #define WEBSITE         "http://loveemu.yh.land.to/"
 
@@ -79,6 +79,7 @@ typedef struct TagCapSpcVerInfo {
     int seqListAddr;
     int songIndex;
     int seqHeaderAddr;
+    int seqPriority;
     bool useSongList;
     CapSpcEvent event[256]; // vcmds
     PatchFixInfo patchFix[256];
@@ -316,6 +317,7 @@ static int capSpcCheckVer (CapSpcSeqStat *seq)
     seq->ver.seqListAddr = -1;
     seq->ver.songIndex = -1;
     seq->ver.seqHeaderAddr = -1;
+    seq->ver.seqPriority = -1;
 
     if (capSpcForceSongListAddr >= 0) {
         seq->ver.seqListAddr = capSpcForceSongListAddr;
@@ -372,8 +374,13 @@ static int capSpcCheckVer (CapSpcSeqStat *seq)
         songIndex += capSpcContConvCnt;
 
         if (useSongList) {
-            seq->ver.seqHeaderAddr = mget2b(&aRAM[seq->ver.seqListAddr + songIndex * 2]) + 1;
-            if (seq->ver.seqHeaderAddr == 1) {
+            seq->ver.seqHeaderAddr = mget2b(&aRAM[seq->ver.seqListAddr + songIndex * 2]);
+            if (seq->ver.seqHeaderAddr != 0) {
+                seq->ver.seqPriority = aRAM[seq->ver.seqHeaderAddr];
+                seq->ver.seqHeaderAddr++;
+            }
+            else
+            {
                 version = SPC_VER_UNKNOWN;
             }
         }
@@ -478,6 +485,8 @@ static void printHtmlInfoList (CapSpcSeqStat *seq)
     myprintf("          <li>Song Entry: $%04X", seq->ver.seqHeaderAddr);
     if (seq->ver.useSongList)
         myprintf(" (Song $%02x)", seq->ver.songIndex);
+    if (seq->ver.seqPriority >= 0)
+        myprintf("          <li>Song Priority (?): $%02X</li>\n", seq->ver.seqPriority);
     myprintf("</li>\n");
 }
 

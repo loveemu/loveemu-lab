@@ -125,13 +125,15 @@
 03f6: 5d        mov   x,a
 03f7: f5 03 0e  mov   a,$0e03+x
 03fa: c4 c0     mov   $c0,a
-03fc: f5 02 0e  mov   a,$0e02+x         ; song list
+03fc: f5 02 0e  mov   a,$0e02+x         ; read song header address from song list
 03ff: c4 c1     mov   $c1,a
 0401: 04 c0     or    a,$c0
-0403: f0 dd     beq   $03e2
+0403: f0 dd     beq   $03e2             ; return if song header address == $0000
 0405: 8d 00     mov   y,#$00
-0407: f7 c0     mov   a,($c0)+y
-0409: d0 48     bne   $0453
+0407: f7 c0     mov   a,($c0)+y         ; read the first byte (priority?)
+0409: d0 48     bne   $0453             ; branch if first byte != 0
+; when song header first byte == 0:
+; (in this game, a song seems to have $00 for this field)
 040b: 3f 5d 05  call  $055d
 040e: 8d 01     mov   y,#$01
 0410: e8 99     mov   a,#$99
@@ -141,16 +143,16 @@
 041a: e5 01 0e  mov   a,$0e01
 041d: 1c        asl   a
 041e: c4 d6     mov   $d6,a
-0420: cd 0f     mov   x,#$0f
+0420: cd 0f     mov   x,#$0f             ; voice index *2-1 (initialize voices in reverse-order)
 0422: 8d 00     mov   y,#$00
 0424: 3a c0     incw  $c0
 0426: f7 c0     mov   a,($c0)+y
-0428: c4 c3     mov   $c3,a
+0428: c4 c3     mov   $c3,a              ; starting address (hi-byte)
 042a: 3a c0     incw  $c0
 042c: f7 c0     mov   a,($c0)+y
-042e: c4 c2     mov   $c2,a
+042e: c4 c2     mov   $c2,a              ; starting address (lo-byte)
 0430: f7 c2     mov   a,($c2)+y
-0432: 68 17     cmp   a,#$17
+0432: 68 17     cmp   a,#$17             ; next if the first event byte == end of track ($17)
 0434: f0 18     beq   $044e
 0436: e4 c3     mov   a,$c3
 0438: d4 10     mov   $10+x,a
@@ -169,20 +171,20 @@
 044f: 1d        dec   x
 0450: 10 d0     bpl   $0422
 0452: 6f        ret
-
+; when song header first byte != 0:
 0453: c4 c4     mov   $c4,a
 0455: 8f 80 cd  mov   $cd,#$80
-0458: 8f 07 cc  mov   $cc,#$07
+0458: 8f 07 cc  mov   $cc,#$07           ; voice index (initialize voices in reverse-order)
 045b: cd 0e     mov   x,#$0e
 045d: 8d 00     mov   y,#$00
 045f: 3a c0     incw  $c0
 0461: f7 c0     mov   a,($c0)+y
-0463: c4 c3     mov   $c3,a
+0463: c4 c3     mov   $c3,a              ; starting address (hi-byte)
 0465: 3a c0     incw  $c0
 0467: f7 c0     mov   a,($c0)+y
-0469: c4 c2     mov   $c2,a
+0469: c4 c2     mov   $c2,a              ; starting address (lo-byte)
 046b: f7 c2     mov   a,($c2)+y
-046d: 68 17     cmp   a,#$17
+046d: 68 17     cmp   a,#$17             ; next if the first event byte == end of track ($17)
 046f: f0 6d     beq   $04de
 0471: eb cc     mov   y,$cc
 0473: e4 c4     mov   a,$c4
@@ -462,7 +464,7 @@
 
 069b: 3f e9 09  call  $09e9
 069e: 68 20     cmp   a,#$20
-06a0: b0 05     bcs   $06a7
+06a0: b0 05     bcs   $06a7             ; return if vcmd >= $20
 06a2: 3f d2 07  call  $07d2
 06a5: 2f f4     bra   $069b
 06a7: 2d        push  a
@@ -721,7 +723,7 @@
 0895: 8d 00     mov   y,#$00
 0897: f7 c0     mov   a,($c0)+y
 0899: c9 f2 00  mov   $00f2,x
-089c: c5 f3 00  mov   $00f3,a           ; ADSR(1),ADSR(2),GAIN,ENVX
+089c: c5 f3 00  mov   $00f3,a           ; SRCN,ADSR(1),ADSR(2),GAIN
 089f: 3d        inc   x
 08a0: fc        inc   y
 08a1: ad 03     cmp   y,#$03
@@ -910,7 +912,7 @@
 09bd: 6f        ret
 
 ; vcmd 1b - nop (echo params)
-09be: 3f e9 09  call  $09e9
+09be: 3f e9 09  call  $09e9             ; skip param byte
 09c1: 6f        ret
 
 ; vcmd 1c - nop (echo on/off)
@@ -1100,16 +1102,16 @@
 0b23: d5 00 02  mov   $0200+x,a
 0b26: 3d        inc   x
 0b27: d0 fa     bne   $0b23
-0b29: f5 f9 0b  mov   a,$0bf9+x
+0b29: f5 f9 0b  mov   a,$0bf9+x         ; DSP reg initialize table (address)
 0b2c: fd        mov   y,a
-0b2d: f5 05 0c  mov   a,$0c05+x
-0b30: 3f f2 0b  call  $0bf2
+0b2d: f5 05 0c  mov   a,$0c05+x         ; DSP reg initialize table (value)
+0b30: 3f f2 0b  call  $0bf2             ; initialize DSP reg
 0b33: 3d        inc   x
 0b34: c8 0c     cmp   x,#$0c
 0b36: d0 f1     bne   $0b29
 0b38: cd 00     mov   x,#$00
 0b3a: 8d 0f     mov   y,#$0f
-0b3c: f5 11 0c  mov   a,$0c11+x
+0b3c: f5 11 0c  mov   a,$0c11+x         ; initialize echo FIR
 0b3f: 3f f2 0b  call  $0bf2
 0b42: 3d        inc   x
 0b43: dd        mov   a,y
@@ -1227,6 +1229,7 @@
 0bf9: db $4d,$0d,$2c,$3c,$6c,$7d,$6d,$5d,$0c,$1c,$2d,$3d
 0c05: db $00,$00,$00,$00,$20,$00,$0d,$58,$7f,$7f,$00,$00
 
+; FIR
 0c11: db $7f,$00,$00,$00,$00,$00,$00,$00
 
 0c19: dw $085f
