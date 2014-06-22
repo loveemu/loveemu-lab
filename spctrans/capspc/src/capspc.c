@@ -344,112 +344,129 @@ static int capSpcCheckVer (CapSpcSeqStat *seq)
         int seqListAddr;
         bool useSongList;
 
+        seqListAddr = addr2;
         if (pos1 >= 0) {
+            bool validBGMEntry = true;
+
             version= SPC_VER_2;
 
-            if (pos1 + 16 > pos2) {
-                // Fixed BGM address is not used, apparently.
+            if (addr1 <= addr2 && addr1 + 16 > addr2) {
                 // - The Magical Quest Starring Mickey Mouse
-                // - Captain Commando
-                seqListAddr = addr2;
+                validBGMEntry = false;
+            }
+
+            // - Captain Commando
+            if (addr1 + 16 <= 0x10000) {
+                for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
+                    int seqTrackAddr = mget2b(&aRAM[addr1 + (tr * 2)]);
+                    if ((seqTrackAddr & 0xff00) == 0) {
+                        validBGMEntry = false;
+                        break;
+                    }
+                }
+            }
+            else {
+                validBGMEntry = false;
+            }
+
+            if (!validBGMEntry) {
                 useSongList = true;
             }
             else {
                 seq->ver.seqHeaderAddr = addr1;
-                seqListAddr = addr1;
                 useSongList = false;
             }
         }
         else {
             version = SPC_VER_1;
-            seqListAddr = addr2;
             useSongList = true;
         }
 
         if (capSpcForceSongListAddr < 0) {
             seq->ver.seqListAddr = seqListAddr;
         }
-        else
-            useSongList = true;
-
-        if (capSpcForceSongIndex >= 0) {
-            songIndex = capSpcForceSongIndex;
-        }
         else {
-            int candidateIndex;
-            int candidateScore = INT_MAX;
-
-            songIndex = 0;
-            for (candidateIndex = 1; candidateIndex <= 0x7f; candidateIndex++) {
-                int seqHeaderAddr;
-                bool seqInvalid = false;
-                int seqScore = 0;
-                int seqValidTracks = 0;
-
-                if (seqListAddr + candidateIndex * 2 + 2 > 0x10000) {
-                    break;
-                }
-
-                seqHeaderAddr = mget2b(&aRAM[seqListAddr + candidateIndex * 2]);
-                if (seqHeaderAddr == 0) {
-                    continue;
-                }
-                if (seqHeaderAddr + 1 + 16 > 0x10000) {
-                    break;
-                }
-
-                for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
-                    int seqTrackAddr = mget2b(&aRAM[seqHeaderAddr + 1 + (tr * 2)]);
-                    if ((seqTrackAddr & 0xff00) == 0) {
-                        seqInvalid = true;
-                        break;
-                    }
-                }
-                if (seqInvalid) {
-                    break;
-                }
-
-                for (tr = SPC_TRACK_MAX - 1; tr >= 0; tr--) {
-                    int seqTrackAddr = mget2b(&aRAM[seqHeaderAddr + 1 + ((7 - tr) * 2)]);
- 
-                    int currTrackAddr;;
-                    if (version == SPC_VER_1) {
-                        currTrackAddr = aRAM[0x00 + tr * 2 + 1] | (aRAM[0x10 + tr * 2 + 1] << 8);
-                    }
-                    else {
-                        currTrackAddr = aRAM[0x00 + tr] | (aRAM[0x08 + tr] << 8);
-                    }
-
-                    if (currTrackAddr == 0) {
-                        continue;
-                    }
-
-                    if (currTrackAddr < seqTrackAddr) {
-                        seqValidTracks = 0;
-                        break;
-                    }
-
-                    seqScore += (currTrackAddr - seqTrackAddr);
-                    seqValidTracks++;
-                }
-
-                if (seqValidTracks > 0) {
-                    seqScore = seqScore * 8 / seqValidTracks;
-
-                    if (candidateScore > seqScore) {
-                        songIndex = candidateIndex;
-                        candidateScore = seqScore;
-                    }
-                }
-            }
-
-            if (songIndex == 0) {
-                songIndex = 1;
-            }
+            useSongList = true;
         }
-        songIndex += capSpcContConvCnt;
 
         if (useSongList) {
+            if (capSpcForceSongIndex >= 0) {
+                songIndex = capSpcForceSongIndex;
+            }
+            else {
+                int candidateIndex;
+                int candidateScore = INT_MAX;
+
+                songIndex = 0;
+                for (candidateIndex = 1; candidateIndex <= 0x7f; candidateIndex++) {
+                    int seqHeaderAddr;
+                    bool seqInvalid = false;
+                    int seqScore = 0;
+                    int seqValidTracks = 0;
+
+                    if (seqListAddr + candidateIndex * 2 + 2 > 0x10000) {
+                        break;
+                    }
+
+                    seqHeaderAddr = mget2b(&aRAM[seqListAddr + candidateIndex * 2]);
+                    if (seqHeaderAddr == 0) {
+                        continue;
+                    }
+                    if (seqHeaderAddr + 1 + 16 > 0x10000) {
+                        break;
+                    }
+
+                    for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
+                        int seqTrackAddr = mget2b(&aRAM[seqHeaderAddr + 1 + (tr * 2)]);
+                        if ((seqTrackAddr & 0xff00) == 0) {
+                            seqInvalid = true;
+                            break;
+                        }
+                    }
+                    if (seqInvalid) {
+                        break;
+                    }
+
+                    for (tr = SPC_TRACK_MAX - 1; tr >= 0; tr--) {
+                        int seqTrackAddr = mget2b(&aRAM[seqHeaderAddr + 1 + ((7 - tr) * 2)]);
+
+                        int currTrackAddr;;
+                        if (version == SPC_VER_1) {
+                            currTrackAddr = aRAM[0x00 + tr * 2 + 1] | (aRAM[0x10 + tr * 2 + 1] << 8);
+                        }
+                        else {
+                            currTrackAddr = aRAM[0x00 + tr] | (aRAM[0x08 + tr] << 8);
+                        }
+
+                        if (currTrackAddr == 0) {
+                            continue;
+                        }
+
+                        if (currTrackAddr < seqTrackAddr) {
+                            seqValidTracks = 0;
+                            break;
+                        }
+    
+                        seqScore += (currTrackAddr - seqTrackAddr);
+                        seqValidTracks++;
+                    }
+
+                    if (seqValidTracks > 0) {
+                        seqScore = seqScore * 8 / seqValidTracks;
+    
+                        if (candidateScore > seqScore) {
+                            songIndex = candidateIndex;
+                            candidateScore = seqScore;
+                        }
+                    }
+                }
+
+                if (songIndex == 0) {
+                    songIndex = 1;
+                }
+            }
+            songIndex += capSpcContConvCnt;
+
             seq->ver.seqHeaderAddr = mget2b(&aRAM[seq->ver.seqListAddr + songIndex * 2]);
             if (seq->ver.seqHeaderAddr != 0) {
                 seq->ver.seqPriority = aRAM[seq->ver.seqHeaderAddr];
@@ -466,8 +483,7 @@ static int capSpcCheckVer (CapSpcSeqStat *seq)
     else if (pos1 >= 0) {
         version= SPC_VER_3;
         if (capSpcForceSongListAddr < 0) {
-            seq->ver.seqListAddr = addr1;
-            seq->ver.seqHeaderAddr = seq->ver.seqListAddr;
+            seq->ver.seqHeaderAddr = addr1;
         }
     }
 
@@ -556,8 +572,8 @@ static void printHtmlInfoList (CapSpcSeqStat *seq)
         return;
 
     myprintf("          <li>Version: %s</li>\n", capSpcVerToStrHtml(seq));
-    if (seq->ver.useSongList)
-        myprintf("          <li>Song List: $%04X</li>\n", seq->ver.seqListAddr);
+    if (seq->ver.seqListAddr != -1)
+        myprintf("          <li>Song / SFX List: $%04X</li>\n", seq->ver.seqListAddr);
     myprintf("          <li>Song Entry: $%04X", seq->ver.seqHeaderAddr);
     if (seq->ver.useSongList)
         myprintf(" (Song $%02x)", seq->ver.songIndex);
