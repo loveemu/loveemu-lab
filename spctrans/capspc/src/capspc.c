@@ -9,6 +9,7 @@
 #include <malloc.h>
 #include <string.h>
 #include <math.h>
+#include <limits.h>
 #include <assert.h>
 
 #include "spcseq.h"
@@ -16,7 +17,7 @@
 
 #define APPNAME         "Capcom SPC2MIDI"
 #define APPSHORTNAME    "capspc"
-#define VERSION         "[2014-06-18]"
+#define VERSION         "[2014-06-21]"
 #define AUTHOR          "loveemu"
 #define WEBSITE         "http://loveemu.yh.land.to/"
 
@@ -328,52 +329,144 @@ static int capSpcCheckVer (CapSpcSeqStat *seq)
 
     pos1 = indexOfHexPat(aRAM, (const byte *) "\x6f\x3f..\x8f..\x8f..\x3f..\x8d\\\x00\xdd", SPC_ARAM_SIZE, NULL);
     pos2 = indexOfHexPat(aRAM, (const byte *) "\x1c\x5d\\\xf5..\xc4.\\\xf5..\xc4.\x04.\\\xf0.", SPC_ARAM_SIZE, NULL);
-    if (pos1 >= 0)
+
+    if (pos1 >= 0) {
+        // Fixed BGM address
         addr1 = ((aRAM[pos1 + 5] << 8) | aRAM[pos1 + 8]) + 1;
-    if (pos2 >= 0)
+    }
+    if (pos2 >= 0) {
+        // BGM/SFX list
         addr2 = min(mget2l(&aRAM[pos2 + 3]), mget2l(&aRAM[pos2 + 8]));
+    }
 
     if (pos2 >= 0) {
         int songIndex;
         int seqListAddr;
         bool useSongList;
 
+        seqListAddr = addr2;
         if (pos1 >= 0) {
-            version= SPC_VER_2;
-            seqListAddr = addr1;
-            seq->ver.seqHeaderAddr = addr1;
-            useSongList = false;
+            bool validBGMEntry = true;
 
-            // assume song entry doesn't have $0000
-            for (tr = SPC_TRACK_MAX - 1; tr >= 0; tr--) {
-                if (mget2b(&aRAM[addr1 + tr * 2]) == 0) {
-                    seqListAddr = addr2;
-                    useSongList = true;
-                    break;
+            version= SPC_VER_2;
+
+            if (addr1 <= addr2 && addr1 + 16 > addr2) {
+                // - The Magical Quest Starring Mickey Mouse
+                validBGMEntry = false;
+            }
+
+            // - Captain Commando
+            if (addr1 + 16 <= 0x10000) {
+                for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
+                    int seqTrackAddr = mget2b(&aRAM[addr1 + (tr * 2)]);
+                    if ((seqTrackAddr & 0xff00) == 0) {
+                        validBGMEntry = false;
+                        break;
+                    }
                 }
+            }
+            else {
+                validBGMEntry = false;
+            }
+
+            if (!validBGMEntry) {
+                useSongList = true;
+            }
+            else {
+                seq->ver.seqHeaderAddr = addr1;
+                useSongList = false;
             }
         }
         else {
-            version= SPC_VER_1;
-            seqListAddr = addr2;
+            version = SPC_VER_1;
             useSongList = true;
         }
 
         if (capSpcForceSongListAddr < 0) {
             seq->ver.seqListAddr = seqListAddr;
         }
-        else
-            useSongList = true;
-
-        if (capSpcForceSongIndex >= 0) {
-            songIndex = capSpcForceSongIndex;
-        }
         else {
-            songIndex = 1; // TODO: NYI: autosearch
+            useSongList = true;
         }
-        songIndex += capSpcContConvCnt;
 
         if (useSongList) {
+            if (capSpcForceSongIndex >= 0) {
+                songIndex = capSpcForceSongIndex;
+            }
+            else {
+                int candidateIndex;
+                int candidateScore = INT_MAX;
+
+                songIndex = 0;
+                for (candidateIndex = 1; candidateIndex <= 0x7f; candidateIndex++) {
+                    int seqHeaderAddr;
+                    bool seqInvalid = false;
+                    int seqScore = 0;
+                    int seqValidTracks = 0;
+
+                    if (seqListAddr + candidateIndex * 2 + 2 > 0x10000) {
+                        break;
+                    }
+
+                    seqHeaderAddr = mget2b(&aRAM[seqListAddr + candidateIndex * 2]);
+                    if (seqHeaderAddr == 0) {
+                        continue;
+                    }
+                    if (seqHeaderAddr + 1 + 16 > 0x10000) {
+                        break;
+                    }
+
+                    for (tr = 0; tr < SPC_TRACK_MAX; tr++) {
+                        int seqTrackAddr = mget2b(&aRAM[seqHeaderAddr + 1 + (tr * 2)]);
+                        if ((seqTrackAddr & 0xff00) == 0) {
+                            seqInvalid = true;
+                            break;
+                        }
+                    }
+                    if (seqInvalid) {
+                        break;
+                    }
+
+                    for (tr = SPC_TRACK_MAX - 1; tr >= 0; tr--) {
+                        int seqTrackAddr = mget2b(&aRAM[seqHeaderAddr + 1 + ((7 - tr) * 2)]);
+
+                        int currTrackAddr;;
+                        if (version == SPC_VER_1) {
+                            currTrackAddr = aRAM[0x00 + tr * 2 + 1] | (aRAM[0x10 + tr * 2 + 1] << 8);
+                        }
+                        else {
+                            currTrackAddr = aRAM[0x00 + tr] | (aRAM[0x08 + tr] << 8);
+                        }
+
+                        if (currTrackAddr == 0) {
+                            continue;
+                        }
+
+                        if (currTrackAddr < seqTrackAddr) {
+                            seqValidTracks = 0;
+                            break;
+                        }
+    
+                        seqScore += (currTrackAddr - seqTrackAddr);
+                        seqValidTracks++;
+                    }
+
+                    if (seqValidTracks > 0) {
+                        seqScore = seqScore * 8 / seqValidTracks;
+    
+                        if (candidateScore > seqScore) {
+                            songIndex = candidateIndex;
+                            candidateScore = seqScore;
+                        }
+                    }
+                }
+
+                if (songIndex == 0) {
+                    songIndex = 1;
+                }
+            }
+            songIndex += capSpcContConvCnt;
+
             seq->ver.seqHeaderAddr = mget2b(&aRAM[seq->ver.seqListAddr + songIndex * 2]);
             if (seq->ver.seqHeaderAddr != 0) {
                 seq->ver.seqPriority = aRAM[seq->ver.seqHeaderAddr];
@@ -390,8 +483,7 @@ static int capSpcCheckVer (CapSpcSeqStat *seq)
     else if (pos1 >= 0) {
         version= SPC_VER_3;
         if (capSpcForceSongListAddr < 0) {
-            seq->ver.seqListAddr = addr1;
-            seq->ver.seqHeaderAddr = seq->ver.seqListAddr;
+            seq->ver.seqHeaderAddr = addr1;
         }
     }
 
@@ -480,13 +572,13 @@ static void printHtmlInfoList (CapSpcSeqStat *seq)
         return;
 
     myprintf("          <li>Version: %s</li>\n", capSpcVerToStrHtml(seq));
-    if (seq->ver.useSongList)
-        myprintf("          <li>Song List: $%04X</li>\n", seq->ver.seqListAddr);
+    if (seq->ver.seqListAddr != -1)
+        myprintf("          <li>Song / SFX List: $%04X</li>\n", seq->ver.seqListAddr);
     myprintf("          <li>Song Entry: $%04X", seq->ver.seqHeaderAddr);
     if (seq->ver.useSongList)
         myprintf(" (Song $%02x)", seq->ver.songIndex);
     if (seq->ver.seqPriority >= 0)
-        myprintf("          <li>Song Priority (?): $%02X</li>\n", seq->ver.seqPriority);
+        myprintf("          <li>Song Priority: $%02X</li>\n", seq->ver.seqPriority);
     myprintf("</li>\n");
 }
 
@@ -1039,16 +1131,15 @@ static void capSpcEventTuning (CapSpcSeqStat *seq, SeqEventReport *ev)
     arg1 = utos1(seq->aRAM[*p]);
     (*p)++;
 
-    sprintf(ev->note, "Tuning, key = %d", arg1);
+    sprintf(ev->note, "Tuning, key = %d / 128", arg1);
     strcat(ev->classStr, " ev-tuning");
 
     //if (!capSpcLessTextInSMF)
     //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 
-    // TODO: is it correct?
     smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNM, 0);
     smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_RPNL, 1);
-    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_DATAENTRYM, 64 + (arg1 / 2));
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_DATAENTRYM, 64 + (arg1 / 4));
     smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_DATAENTRYL, 0);
 }
 

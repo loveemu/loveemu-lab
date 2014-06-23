@@ -14,10 +14,17 @@ void getNoteName (char *name, int note)
 {
     //char *nameTable[] = { "C ", "C#", "D ", "D#", "E ", "F ", "F#", "G ", "G#", "A ", "A#", "B " };
     char *nameTable[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
-    int n = note % 12;
-    int oct = note / 12;
+    int oct = -1;
+    int n;
 
-    oct--;
+    while (note < 0)
+    {
+        note += 12;
+        oct--;
+    }
+
+    oct += (note / 12);
+    n = note % 12;
     sprintf(name, "%s%d", nameTable[n], oct);
 }
 

@@ -21,7 +21,7 @@
 02db: d0 f8     bne   $02d5
 02dd: 3f 51 04  call  $0451
 02e0: e8 40     mov   a,#$40
-02e2: c5 fa 00  mov   $00fa,a
+02e2: c5 fa 00  mov   $00fa,a           ; timer 0 frequency = 8 ms
 02e5: e8 f1     mov   a,#$f1
 02e7: c5 f1 00  mov   $00f1,a
 02ea: e8 01     mov   a,#$01
@@ -33,11 +33,11 @@
 02f6: fd        mov   y,a
 02f7: da dd     movw  $dd,ya
 02f9: 3f 6a 04  call  $046a
-02fc: e5 fd 00  mov   a,$00fd
+02fc: e5 fd 00  mov   a,$00fd           ; timer 0 counter
 02ff: 60        clrc
 0300: 84 b1     adc   a,$b1
 0302: c4 b1     mov   $b1,a
-0304: f0 f3     beq   $02f9
+0304: f0 f3     beq   $02f9             ; wait for timer 0 tick (8 ms)
 0306: 8b b1     dec   $b1
 0308: 8d 02     mov   y,#$02
 030a: e8 f9     mov   a,#$f9
@@ -45,8 +45,8 @@
 030d: 2d        push  a
 030e: 60        clrc
 030f: 98 80 b0  adc   $b0,#$80
-0312: 10 03     bpl   $0317
-0314: 5f b7 03  jmp   $03b7
+0312: 10 03     bpl   $0317             ; update dsp voice regs
+0314: 5f b7 03  jmp   $03b7             ; else, process score data and voices
 
 0317: 69 b7 b6  cmp   ($b6),($b7)
 031a: f0 15     beq   $0331
@@ -99,7 +99,7 @@
 0387: c4 a0     mov   $a0,a
 0389: f5 40 02  mov   a,$0240+x
 038c: c4 a1     mov   $a1,a             ; $a0 = instrument entry addrss
-038e: f5 48 02  mov   a,$0248+x
+038e: f5 48 02  mov   a,$0248+x         ; release rate
 0391: 8d 07     mov   y,#$07
 0393: 3f 59 0d  call  $0d59             ; GAIN
 0396: 8d 01     mov   y,#$01
@@ -124,18 +124,20 @@
 03b9: c3 b0 56  bbs6  $b0,$0412
 03bc: 8f 80 b3  mov   $b3,#$80
 03bf: fa c3 c4  mov   ($c4),($c3)
-03c2: ba cc     movw  ya,$cc
-03c4: 7a ce     addw  ya,$ce
-03c6: da a8     movw  $a8,ya
-03c8: cd 07     mov   x,#$07
+03c2: ba cc     movw  ya,$cc            ; tempo
+03c4: 7a ce     addw  ya,$ce            ; tempo (relative)
+03c6: da a8     movw  $a8,ya            ; final tempo
+;
+03c8: cd 07     mov   x,#$07            ; voice #
 03ca: f4 08     mov   a,$08+x
 03cc: 14 00     or    a,$00+x
-03ce: f0 03     beq   $03d3
+03ce: f0 03     beq   $03d3             ; next if voice is not active
 03d0: 3f 4a 07  call  $074a             ; process voice stream
 03d3: 1d        dec   x
 03d4: 0b c4     asl   $c4
-03d6: 4b b3     lsr   $b3
+03d6: 4b b3     lsr   $b3               ; voice bit mask
 03d8: d0 f0     bne   $03ca
+;
 03da: ba d5     movw  ya,$d5
 03dc: 7a d7     addw  ya,$d7
 03de: 90 0d     bcc   $03ed
@@ -400,7 +402,7 @@
 05d7: e8 10     mov   a,#$10
 05d9: d5 00 01  mov   $0100+x,a
 05dc: e8 b8     mov   a,#$b8
-05de: d5 48 02  mov   $0248+x,a
+05de: d5 48 02  mov   $0248+x,a         ; release rate
 05e1: e8 80     mov   a,#$80
 05e3: d5 30 02  mov   $0230+x,a
 05e6: 1d        dec   x
@@ -590,26 +592,29 @@
 0746: cc f4 00  mov   $00f4,y
 0749: 6f        ret
 
+; process voice stream
+; x = voice #, $b3 = voice mask, $a8 = tempo
 074a: fa b3 b4  mov   ($b4),($b3)
-074d: 58 ff b4  eor   $b4,#$ff
+074d: 58 ff b4  eor   $b4,#$ff          ; inverted voice mask
 0750: f5 10 02  mov   a,$0210+x
 0753: 15 08 02  or    a,$0208+x
-0756: f0 3b     beq   $0793
+0756: f0 3b     beq   $0793             ; process next vcmd if delta time == 0
 0758: 3f 5d 0b  call  $0b5d
 075b: f4 28     mov   a,$28+x
 075d: 14 20     or    a,$20+x
-075f: f0 17     beq   $0778
+075f: f0 17     beq   $0778             ; skip if duration counter == 0
 0761: fb 28     mov   y,$28+x
 0763: f4 20     mov   a,$20+x
-0765: 9a a8     subw  ya,$a8
-0767: f0 02     beq   $076b
-0769: b0 09     bcs   $0774
+0765: 9a a8     subw  ya,$a8            ; if (duration counter - tempo)
+0767: f0 02     beq   $076b             ;   <= 0: note off, update counter to 0
+0769: b0 09     bcs   $0774             ;   else: just update the counter
 076b: e3 c4 03  bbs7  $c4,$0771
-076e: 3f 4a 04  call  $044a
+076e: 3f 4a 04  call  $044a             ; switch to GAIN mode
 0771: 8d 00     mov   y,#$00
-0773: dd        mov   a,y
+0773: dd        mov   a,y               ; clip to 0 if necessary
 0774: db 28     mov   $28+x,y
-0776: d4 20     mov   $20+x,a
+0776: d4 20     mov   $20+x,a           ; update duration counter
+;
 0778: f5 10 02  mov   a,$0210+x
 077b: fd        mov   y,a
 077c: f5 08 02  mov   a,$0208+x
@@ -617,19 +622,19 @@
 0781: 0d        push  psw
 0782: d5 08 02  mov   $0208+x,a
 0785: dd        mov   a,y
-0786: d5 10 02  mov   $0210+x,a
+0786: d5 10 02  mov   $0210+x,a         ; delta time -= tempo
 0789: 8e        pop   psw
-078a: f0 07     beq   $0793
-078c: 90 05     bcc   $0793
+078a: f0 07     beq   $0793             ; branch if
+078c: 90 05     bcc   $0793             ;   delta time <= 0
 078e: ad c1     cmp   y,#$c1
-0790: b0 01     bcs   $0793
+0790: b0 01     bcs   $0793             ;   or delta time >= 0xc100 (think it as negative value)
 0792: 6f        ret
 
 0793: 8d 07     mov   y,#$07
 0795: e8 9c     mov   a,#$9c
 0797: 6d        push  y
-0798: 2d        push  a
-0799: 5f bb 08  jmp   $08bb             ; set return address $079c
+0798: 2d        push  a                 ; set return address $079c (note vcmd)
+0799: 5f bb 08  jmp   $08bb
 ; vcmd branch 20-ff - note
 079c: 2d        push  a
 079d: 9f        xcn   a
@@ -657,7 +662,7 @@
 ; set duration from table
 07c0: 60        clrc
 07c1: 95 10 02  adc   a,$0210+x
-07c4: d5 10 02  mov   $0210+x,a
+07c4: d5 10 02  mov   $0210+x,a         ; add to delta time (higher byte)
 07c7: ae        pop   a
 07c8: 28 1f     and   a,#$1f
 07ca: d0 01     bne   $07cd             ; process lower-5bit if non zero
@@ -755,17 +760,17 @@
 0879: 8d 00     mov   y,#$00
 087b: dd        mov   a,y
 087c: 2f 13     bra   $0891
-087e: fb 18     mov   y,$18+x
-0880: f5 08 02  mov   a,$0208+x
+087e: fb 18     mov   y,$18+x           ; duration rate
+0880: f5 08 02  mov   a,$0208+x         ; delta time (lower byte)
 0883: cf        mul   ya
 0884: cb a0     mov   $a0,y
 0886: 8f 00 a1  mov   $a1,#$00
 0889: fb 18     mov   y,$18+x
-088b: f5 10 02  mov   a,$0210+x
+088b: f5 10 02  mov   a,$0210+x         ; delta time (higher byte)
 088e: cf        mul   ya
-088f: 7a a0     addw  ya,$a0
+088f: 7a a0     addw  ya,$a0            ; delta time (16bit) *= duration rate, then >> 8
 0891: db 28     mov   $28+x,y
-0893: d4 20     mov   $20+x,a
+0893: d4 20     mov   $20+x,a           ; update duration counter
 0895: 6f        ret
 
 ; duration table
@@ -859,10 +864,12 @@
 093f: 3f d8 08  call  $08d8
 0942: ee        pop   y
 0943: f3 b0 08  bbc7  $b0,$094e
+; SFX
 0946: d5 58 02  mov   $0258+x,a
 0949: dd        mov   a,y
 094a: d5 60 02  mov   $0260+x,a
 094d: 6f        ret
+; BGM
 094e: da cc     movw  $cc,ya
 0950: 6f        ret
 
