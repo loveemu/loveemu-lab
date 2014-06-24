@@ -16,7 +16,7 @@
 
 #define APPNAME "Konami SPC2MIDI"
 #define APPSHORTNAME "konspc"
-#define VERSION "[2014-02-15]"
+#define VERSION "[2014-06-14]"
 
 static int konamiSpcLoopMax = 2;            // maximum loop count of parser
 static int konamiSpcTextLoopMax = 1;        // maximum loop count of text output
@@ -47,6 +47,7 @@ static const char *mycssfile = APPSHORTNAME ".css";
 
 enum {
     SPC_VER_UNKNOWN = 0,
+    SPC_VER_PNTB,
     SPC_VER_GG4,
 };
 
@@ -230,6 +231,8 @@ bool konamiSpcImportPatchFixFile (const char *filename)
 static const char *konamiSpcVerToStrHtml (KonamiSpcSeqStat *seq)
 {
     switch (seq->ver.id) {
+    case SPC_VER_PNTB:
+        return "Pop 'N' Twinbee";
     case SPC_VER_GG4:
         return "goemon 4";
     default:
@@ -307,6 +310,7 @@ static int konamiSpcCheckVer (KonamiSpcSeqStat *seq)
 {
     int version = SPC_VER_UNKNOWN;
     int songLdCodeAddr;
+    int songLdCodeAddrOld;
     int vcmdCallCodeAddr;
     int evtIndex;
 
@@ -322,7 +326,18 @@ static int konamiSpcCheckVer (KonamiSpcSeqStat *seq)
     // mov   $0b,#$..
     // mov   x,#$00
     songLdCodeAddr = indexOfHexPat(seq->aRAM, "\x8f.\x06\x8f.\x0a\x8f.\x0b\xcd\\\x00", SPC_ARAM_SIZE, NULL);
-    if (songLdCodeAddr != -1)
+    if (songLdCodeAddr == -1)
+    {
+        // 0abd: c4 0c     mov   $0c,a
+        // 0abf: 8f 1b 04  mov   $04,#$1b
+        // 0ac2: 8f 05 05  mov   $05,#$05
+        // 0ac5: 8d 05     mov   y,#$05
+        // 0ac7: cf        mul   ya
+        // 0ac8: 7a 04     addw  ya,$04            ; $04/5 = 0x051b + (y * 5)
+        // 0aca: da 04     movw  $04,ya
+        songLdCodeAddrOld = indexOfHexPat(seq->aRAM, "\xc4\x0c\x8f.\x04\x8f.\x05\x8d\x05\xcf\x7a\x04\xda\x04", SPC_ARAM_SIZE, NULL);
+    }
+    if (songLdCodeAddr != -1 || songLdCodeAddrOld != -1)
     {
         // asl   a
         // mov   y,a
@@ -337,9 +352,39 @@ static int konamiSpcCheckVer (KonamiSpcSeqStat *seq)
         {
             int vcmdLenTableAddr = mget2l(&seq->aRAM[vcmdCallCodeAddr + 11]);
 
-            seq->ver.seqHeaderAddr = seq->aRAM[songLdCodeAddr + 4] | (seq->aRAM[songLdCodeAddr + 7] << 8); // $0a/b
+            if (songLdCodeAddr != -1)
+            {
+                seq->ver.seqHeaderAddr = seq->aRAM[songLdCodeAddr + 4] | (seq->aRAM[songLdCodeAddr + 7] << 8); // $0a/b
+                version = SPC_VER_GG4;
+            }
+            else
+            {
+                int songIndexReg;
+                int addrSongEntry;
+
+                seq->ver.seqListAddr = seq->aRAM[songLdCodeAddrOld + 3] | (seq->aRAM[songLdCodeAddrOld + 6] << 8); // $04/5
+                songIndexReg = seq->aRAM[songLdCodeAddrOld + 1];
+
+                if (konamiSpcForceSongListAddr != -1)
+                {
+                    seq->ver.seqListAddr = konamiSpcForceSongListAddr;
+                }
+
+                seq->ver.songIndex = seq->aRAM[songIndexReg];
+                addrSongEntry = seq->ver.seqListAddr + (seq->ver.songIndex * 5);
+
+                if (konamiSpcForceSongIndex != -1)
+                {
+                    seq->ver.songIndex = konamiSpcForceSongIndex;
+                }
+
+                if (addrSongEntry + 5 <= 0x10000)
+                {
+                    seq->ver.seqHeaderAddr = seq->aRAM[addrSongEntry + 3] | (seq->aRAM[addrSongEntry + 4] << 8); // $0a/b
+                    version = SPC_VER_PNTB;
+                }
+            }
             seq->ver.vcmdLenTableAddr = vcmdLenTableAddr;
-            version = SPC_VER_GG4;
 
             // verify length table
             for (evtIndex = 0; evtIndex < countof(GG4_EVENT_LENGTH_TABLE); evtIndex++)
@@ -444,10 +489,16 @@ static void printHtmlInfoList (KonamiSpcSeqStat *seq)
     if (seq->ver.id == SPC_VER_UNKNOWN)
         return;
 
-    //myprintf("          <li>Song List: $%04X</li>\n", seq->ver.seqListAddr);
+    if (seq->ver.seqListAddr != -1)
+    {
+        myprintf("          <li>Song List: $%04X</li>\n", seq->ver.seqListAddr);
+    }
     myprintf("          <li>Song Entry: $%04X", seq->ver.seqHeaderAddr);
     myprintf("          <li>Voice Cmd Length Table: $%04X", seq->ver.vcmdLenTableAddr);
-    //myprintf(" (Song $%02x)", seq->ver.songIndex);
+    if (seq->ver.songIndex != -1) 
+    {
+        myprintf(" (Song $%02x)", seq->ver.songIndex);
+    }
     myprintf("</li>\n");
 }
 

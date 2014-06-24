@@ -1201,7 +1201,7 @@
 1a8c: dd        mov   a,y
 1a8d: 1c        asl   a                 ; ?
 1a8e: fd        mov   y,a
-1a8f: f6 00 03  mov   a,$0300+y
+1a8f: f6 00 03  mov   a,$0300+y         ; pitch table
 1a92: c4 06     mov   $06,a
 1a94: f6 01 03  mov   a,$0301+y
 1a97: c4 07     mov   $07,a
