@@ -1,3 +1,5 @@
+; Ganbare Goemon 4 (one of primary ASMs for konspc)
+
 10e9: e4 2c     mov   a,$2c
 10eb: d0 06     bne   $10f3
 10ed: 8f 04 2c  mov   $2c,#$04
@@ -1256,8 +1258,8 @@
 1af1: dw $1fe0  ; fb
 1af3: dw $1feb  ; fc - set volume and instrument
 1af5: dw $1ff8  ; fd - goto
-1af7: dw $2006  ; fe
-1af9: dw $201f  ; ff
+1af7: dw $2006  ; fe - call subroutine
+1af9: dw $201f  ; ff - end of track / end subroutine
 
 ; vcmd length table (e0-ff)
 ; this table only suggests which vcmd will not take any parameters.
@@ -1289,10 +1291,10 @@
 1b5f: d0 01     bne   $1b62
 1b61: bc        inc   a
 1b62: d4 61     mov   $61+x,a
+; if the next is vcmd f3, handle it here somehow
 1b64: e7 30     mov   a,($30+x)
 1b66: 68 f3     cmp   a,#$f3
 1b68: d0 2a     bne   $1b94
-; if the next is vcmd f3, handle it here somehow
 1b6a: 92 20     clr4  $20
 1b6c: 3f 58 19  call  $1958             ; strip $f3
 1b6f: 3f 56 19  call  $1956             ; arg1
