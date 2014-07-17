@@ -3,6 +3,8 @@
  * http://loveemu.yh.land.to/
  */
 
+#define _USE_MATH_DEFINES
+
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -17,7 +19,7 @@
 
 #define APPNAME         "Capcom SPC2MIDI"
 #define APPSHORTNAME    "capspc"
-#define VERSION         "[2014-06-21]"
+#define VERSION         "[2014-07-17]"
 #define AUTHOR          "loveemu"
 #define WEBSITE         "http://loveemu.yh.land.to/"
 
@@ -27,6 +29,7 @@ static double capSpcTimeLimit = 2400;       // time limit of conversion (for saf
 static bool capSpcLessTextInSMF = false;    // decreases amount of texts in SMF output
 
 static bool capSpcVolIsLinear = false;      // assumes volume curve between SPC and MIDI is linear
+static bool capSpcPanIsLinear = false;      // assumes pan curve between SPC and MIDI is linear
 static bool capSpcUsePitchBend = false;     // use pitchbend for portamento (both true and false are incomplete)
 static bool capSpcNoRelRate = false;        // do not output release rate to smf
 
@@ -654,12 +657,99 @@ static bool capSpcInsertRelRate (CapSpcSeqStat *seq, int tick, int track, int am
 }
 
 /** convert SPC channel volume into MIDI one. */
-static int capSpcMidiVolOf (int value)
+static int capSpcMidiVolOf (int version_id, byte value)
 {
-    if (capSpcVolIsLinear)
-        return value/2; // linear
+    const byte volume_lookups[] = {
+        0x00, 0x0c, 0x19, 0x26, 0x33, 0x40, 0x4c, 0x59,
+        0x66, 0x73, 0x80, 0x8c, 0x99, 0xb3, 0xcc, 0xe6,
+        0xff,
+    };
+    byte midi_volume;
+
+    if (version_id == SPC_VER_1)
+    {
+        // linear volume
+        midi_volume = (byte) value;
+    }
     else
-        return (int) floor(sqrt((double) value/255) * 127 + 0.5); // more similar with MIDI?
+    {
+        // use volume table (with linear interpolation)
+        byte volume_index = (value * 16) >> 8;
+        byte volume_rate = (value * 16) & 0xff;
+        midi_volume = volume_lookups[volume_index] + ((volume_lookups[volume_index + 1] - volume_lookups[volume_index]) * volume_rate >> 8);
+    }
+
+    if (capSpcVolIsLinear)
+    {
+        midi_volume >>= 1;
+    }
+    else
+    {
+        midi_volume = (byte) floor(sqrt(midi_volume / 255.0) * 127.0 + 0.5);
+    }
+
+    return midi_volume;
+}
+
+/** convert SPC channel panpot into MIDI one. */
+static int capSpcMidiPanOf (int version_id, byte value, int * midi_volume_scale)
+{
+    const byte pan_lookups[] = {
+        0x00, 0x01, 0x03, 0x07, 0x0d, 0x15, 0x1e, 0x29,
+        0x34, 0x42, 0x51, 0x5e, 0x67, 0x6e, 0x73, 0x77,
+        0x7a, 0x7c, 0x7d, 0x7e, 0x7f, 0x7f,
+    };
+
+    byte midi_pan;
+    double volume_scale;
+
+    // signed -> unsigned
+    value += 0x80;
+
+    if (version_id == SPC_VER_1)
+    {
+        midi_pan = value >> 1;
+    }
+    else
+    {
+        // use pan table (with linear interpolation)
+        byte pan_index = (value * 20) >> 8;
+        byte pan_rate = (value * 20) & 0xff;
+        midi_pan = pan_lookups[pan_index] + ((pan_lookups[pan_index + 1] - pan_lookups[pan_index]) * pan_rate >> 8);
+    }
+
+    if (capSpcPanIsLinear)
+    {
+        volume_scale = 1.0;
+    }
+    else
+    {
+        double panPI2;
+        double linear_pan;
+        double curved_pan;
+
+        linear_pan = midi_pan / 127.0;
+        panPI2 = atan2(linear_pan, 1.0 - linear_pan);
+        curved_pan = panPI2 / M_PI_2;
+        volume_scale = 1.0 / (cos(panPI2) + sin(panPI2));
+
+        if (midi_pan != 0)
+        {
+            midi_pan = (int) floor(curved_pan * 126.0 + 0.5) + 1;
+        }
+    }
+
+    if (!capSpcVolIsLinear)
+    {
+        volume_scale = sqrt(volume_scale);
+    }
+
+    if (midi_volume_scale != NULL)
+    {
+        *midi_volume_scale = (int) floor(volume_scale * 127.0 + 0.5);
+    }
+
+    return midi_pan;
 }
 
 /** create new smf object and link to spc seq. */
@@ -1046,8 +1136,7 @@ static void capSpcEventVolume (CapSpcSeqStat *seq, SeqEventReport *ev)
     //if (!capSpcLessTextInSMF)
     //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 
-    // TODO: is it correct?
-    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_VOLUME, capSpcMidiVolOf(arg1));
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_VOLUME, capSpcMidiVolOf(seq->ver.id, arg1));
 }
 
 /** vcmd: set instrument. */
@@ -1174,6 +1263,10 @@ static void capSpcEventLoopInline (CapSpcSeqStat *seq, SeqEventReport *ev, int i
     (*p) += 2;
 
     if (!br && tr->loopCount[index] == 0) {
+        if (arg1 == 0) {
+            capSpcAddTrackLoopCount(seq, ev->track, 1);
+        }
+
         tr->loopCount[index] = arg1;
         jump = true;
     }
@@ -1285,6 +1378,7 @@ static void capSpcEventEndOfTrack (CapSpcSeqStat *seq, SeqEventReport *ev)
 static void capSpcEventPan (CapSpcSeqStat *seq, SeqEventReport *ev)
 {
     int arg1;
+    int volume_scale;
     int *p = &seq->track[ev->track].pos;
 
     ev->size++;
@@ -1297,8 +1391,8 @@ static void capSpcEventPan (CapSpcSeqStat *seq, SeqEventReport *ev)
     //if (!capSpcLessTextInSMF)
     //    smfInsertMetaText(seq->smf, ev->tick, ev->track, SMF_META_TEXT, ev->note);
 
-    // TODO: is it correct?
-    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_PANPOT, 64 + (arg1 / 2));
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_PANPOT, capSpcMidiPanOf(seq->ver.id, arg1, &volume_scale));
+    smfInsertControl(seq->smf, ev->tick, ev->track, ev->track, SMF_CONTROL_EXPRESSION, volume_scale);
 }
 
 /** vcmd: master volume. */
