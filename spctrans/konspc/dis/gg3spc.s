@@ -1329,7 +1329,7 @@
 1791: f6 bc 07  mov   a,$07bc+y
 1794: c4 04     mov   $04,a
 1796: f6 bd 07  mov   a,$07bd+y
-1799: c4 05     mov   $05,a             ; $04 = *(u16)($07bc + patch * 2)
+1799: c4 05     mov   $05,a             ; $04 = *(u16)($07bc + $25 * 2)
 179b: ae        pop   a
 179c: 3f cb 17  call  $17cb
 179f: 5f dc 14  jmp   $14dc
@@ -1351,6 +1351,7 @@
 17bf: 3f e1 17  call  $17e1
 17c2: 5f dc 14  jmp   $14dc
 
+; load instrument for percussive note
 17c5: 8f 4b 04  mov   $04,#$4b
 17c8: 8f 0a 05  mov   $05,#$0a          ; $04 = #$0a4b
 

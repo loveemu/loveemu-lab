@@ -1332,7 +1332,7 @@
 1bb4: f6 20 0a  mov   a,$0a20+y
 1bb7: c4 04     mov   $04,a
 1bb9: f6 21 0a  mov   a,$0a21+y
-1bbc: c4 05     mov   $05,a             ; $04 = *(u16)($0a20 + patch * 2)
+1bbc: c4 05     mov   $05,a             ; $04 = *(u16)($0a20 + $25 * 2)
 1bbe: ae        pop   a
 1bbf: 3f ee 1b  call  $1bee
 1bc2: 5f e2 18  jmp   $18e2
@@ -1354,6 +1354,7 @@
 1be2: 3f 04 1c  call  $1c04
 1be5: 5f e2 18  jmp   $18e2
 
+; load instrument for percussive note
 1be8: 8f e6 04  mov   $04,#$e6
 1beb: 8f 0d 05  mov   $05,#$0d          ; $04 = #$0de6
 

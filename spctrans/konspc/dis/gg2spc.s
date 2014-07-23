@@ -1196,7 +1196,7 @@
 1635: f6 be 06  mov   a,$06be+y
 1638: c4 04     mov   $04,a
 163a: f6 bf 06  mov   a,$06bf+y
-163d: c4 05     mov   $05,a             ; $04 = *(u16)($06be + patch * 2)
+163d: c4 05     mov   $05,a             ; $04 = *(u16)($06be + $25 * 2)
 163f: ae        pop   a
 1640: 3f 70 16  call  $1670
 1643: 5f 9b 13  jmp   $139b
@@ -1220,6 +1220,7 @@
 1664: 3f 86 16  call  $1686
 1667: 5f 9b 13  jmp   $139b
 
+; load instrument for percussive note
 166a: 8f 56 04  mov   $04,#$56
 166d: 8f 09 05  mov   $05,#$09          ; $04 = #$0956
 
