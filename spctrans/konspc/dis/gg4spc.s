@@ -1,5 +1,20 @@
 ; Ganbare Goemon 4 (one of primary ASMs for konspc)
 
+10cd: dw $114d  ; e2
+10cf: dw $115b  ; e3
+10d1: dw $10e9  ; e4
+10d3: dw $10f4  ; e5
+10d5: dw $1101  ; e6
+10d7: dw $110e  ; e7
+10d9: dw $111c  ; e8
+10db: dw $111f  ; e9
+10dd: dw $118a  ; ea
+10df: dw $118a  ; eb
+10e1: dw $118a  ; ec
+10e3: dw $118a  ; ed
+10e5: dw $1122  ; ee
+10e7: dw $115b  ; ef
+
 10e9: e4 2c     mov   a,$2c
 10eb: d0 06     bne   $10f3
 10ed: 8f 04 2c  mov   $2c,#$04
