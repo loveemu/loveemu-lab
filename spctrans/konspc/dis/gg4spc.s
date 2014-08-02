@@ -1,5 +1,103 @@
 ; Ganbare Goemon 4 (one of primary ASMs for konspc)
 
+; pitch table
+0300: dw $0042
+0302: dw $0046
+0304: dw $004b
+0306: dw $004f
+0308: dw $0054
+030a: dw $0059
+030c: dw $005e
+030e: dw $0064
+0310: dw $006a
+0312: dw $0070
+0314: dw $0077
+0316: dw $007e
+0318: dw $0085
+031a: dw $008d
+031c: dw $0096
+031e: dw $009f
+0320: dw $00a8
+0322: dw $00b2
+0324: dw $00bd
+0326: dw $00c8
+0328: dw $00d4
+032a: dw $00e1
+032c: dw $00ee
+032e: dw $00fc
+0330: dw $010b
+0332: dw $011b
+0334: dw $012c
+0336: dw $013e
+0338: dw $0151
+033a: dw $0165
+033c: dw $017a
+033e: dw $0191
+0340: dw $01a9
+0342: dw $01c2
+0344: dw $01dd
+0346: dw $01f9
+0348: dw $0217
+034a: dw $0237
+034c: dw $0259
+034e: dw $027d
+0350: dw $02a3
+0352: dw $02cb
+0354: dw $02f5
+0356: dw $0322
+0358: dw $0352
+035a: dw $0385
+035c: dw $03ba
+035e: dw $03f3
+0360: dw $042f
+0362: dw $046f
+0364: dw $04b2
+0366: dw $04fa
+0368: dw $0546
+036a: dw $0596
+036c: dw $05eb
+036e: dw $0645
+0370: dw $06a5
+0372: dw $070a
+0374: dw $0775
+0376: dw $07e6
+0378: dw $085f
+037a: dw $08de
+037c: dw $0965
+037e: dw $09f4
+0380: dw $0a8c
+0382: dw $0b2c
+0384: dw $0bd6
+0386: dw $0c8b
+0388: dw $0d4a
+038a: dw $0e14
+038c: dw $0eea
+038e: dw $0fcd
+0390: dw $10be
+0392: dw $11bd
+0394: dw $12cb
+0396: dw $13e9
+0398: dw $1518
+039a: dw $1659
+039c: dw $17ad
+039e: dw $1916
+03a0: dw $1a94
+03a2: dw $1c28
+03a4: dw $1dd5
+03a6: dw $1f9b
+03a8: dw $217c
+03aa: dw $237a
+03ac: dw $2596
+03ae: dw $27d2
+03b0: dw $2a30
+03b2: dw $2cb2
+03b4: dw $2f5a
+03b6: dw $322c
+03b8: dw $3528
+03ba: dw $3850
+03bc: dw $3bac
+03be: dw $3f36
+
 10cd: dw $114d  ; e2
 10cf: dw $115b  ; e3
 10d1: dw $10e9  ; e4
@@ -901,16 +999,16 @@
 1800: c4 04     mov   $04,a
 1802: f5 01 02  mov   a,$0201+x
 1805: c4 05     mov   $05,a
-1807: f5 a1 02  mov   a,$02a1+x
+1807: f5 a1 02  mov   a,$02a1+x         ; panpot
 180a: fd        mov   y,a
 180b: f5 a0 02  mov   a,$02a0+x
 180e: 3f 46 20  call  $2046
 1811: d5 a0 02  mov   $02a0+x,a
 1814: dd        mov   a,y
-1815: d5 a1 02  mov   $02a1+x,a
+1815: d5 a1 02  mov   $02a1+x,a         ; panpot
 1818: e4 04     mov   a,$04
 181a: d4 70     mov   $70+x,a
-181c: f5 c0 01  mov   a,$01c0+x
+181c: f5 c0 01  mov   a,$01c0+x         ; tempo fade speed
 181f: f0 19     beq   $183a
 1821: c4 04     mov   $04,a
 1823: f5 50 02  mov   a,$0250+x
@@ -972,7 +1070,7 @@
 18a1: cf        mul   ya
 18a2: dd        mov   a,y
 18a3: 80        setc
-18a4: b5 b0 01  sbc   a,$01b0+x
+18a4: b5 b0 01  sbc   a,$01b0+x         ; instrument-specific volume
 18a7: b0 02     bcs   $18ab
 18a9: e8 00     mov   a,#$00
 18ab: fd        mov   y,a
@@ -980,13 +1078,13 @@
 18af: c4 05     mov   $05,a
 18b1: e8 14     mov   a,#$14
 18b3: 03 1f 09  bbs0  $1f,$18bf
-18b6: f5 a1 02  mov   a,$02a1+x
+18b6: f5 a1 02  mov   a,$02a1+x         ; panpot
 18b9: 68 29     cmp   a,#$29
 18bb: 90 02     bcc   $18bf
 18bd: e8 28     mov   a,#$28
 18bf: c4 04     mov   $04,a
 18c1: fd        mov   y,a
-18c2: f6 bd 22  mov   a,$22bd+y
+18c2: f6 bd 22  mov   a,$22bd+y         ; pan table
 18c5: eb 05     mov   y,$05
 18c7: cf        mul   ya
 18c8: e8 00     mov   a,#$00
@@ -1243,34 +1341,34 @@
 1aba: 6f        ret
 
 ; vcmd dispatch table (e0-ff)
-1abb: dw $1b3b  ; e0
-1abd: dw $1b4f  ; e1
+1abb: dw $1b3b  ; e0 - rest
+1abd: dw $1b4f  ; e1 - rest with duration
 1abf: dw $1b95  ; e2 - set instrument
-1ac1: dw $1c4f  ; e3
-1ac3: dw $1c6b  ; e4
-1ac5: dw $1ccd  ; e5
+1ac1: dw $1c4f  ; e3 - set panpot
+1ac3: dw $1c6b  ; e4 - vibrato
+1ac5: dw $1ccd  ; e5 - random pitch envelope
 1ac7: dw $1ce6  ; e6 - start loop
 1ac9: dw $1cf3  ; e7 - end loop
 1acb: dw $1d64  ; e8 - start loop #2
 1acd: dw $1d81  ; e9 - end loop #2
-1acf: dw $1de2  ; ea - set tempo (per track)
-1ad1: dw $1dec  ; eb
+1acf: dw $1de2  ; ea - tempo (per track)
+1ad1: dw $1dec  ; eb - tempo fade
 1ad3: dw $1dfd  ; ec - per-voice transpose
-1ad5: dw $1fca  ; ed
-1ad7: dw $1e03  ; ee - set volume
-1ad9: dw $1e0d  ; ef
-1adb: dw $1e1d  ; f0
-1add: dw $1e24  ; f1
+1ad5: dw $1fca  ; ed - set ADSR(1)
+1ad7: dw $1e03  ; ee - volume
+1ad9: dw $1e0d  ; ef - volume fade
+1adb: dw $1e1d  ; f0 - portamento
+1add: dw $1e24  ; f1 - pitch envelope
 1adf: dw $1e42  ; f2 - tuning
-1ae1: dw $1e5d  ; f3
-1ae3: dw $1e6c  ; f4
-1ae5: dw $1e92  ; f5 - set echo params
+1ae1: dw $1e5d  ; f3 - pitch slide
+1ae3: dw $1e6c  ; f4 - echo on/off
+1ae5: dw $1e92  ; f5 - echo params
 1ae7: dw $1f2d  ; f6 - start complexed loop
 1ae9: dw $1f3f  ; f7 - end complexed loop
-1aeb: dw $1f76  ; f8
-1aed: dw $1cb2  ; f9
-1aef: dw $1f86  ; fa
-1af1: dw $1fe0  ; fb
+1aeb: dw $1f76  ; f8 - panpot fade
+1aed: dw $1cb2  ; f9 - vibrato depth fade length
+1aef: dw $1f86  ; fa - set ADSR(1)/ADSR(2)/GAIN
+1af1: dw $1fe0  ; fb - set ADSR(2)
 1af3: dw $1feb  ; fc - set volume and instrument
 1af5: dw $1ff8  ; fd - goto
 1af7: dw $2006  ; fe - call subroutine
@@ -1284,7 +1382,7 @@
 1b1b: dw $0001,$0003,$0001,$0003,$0003,$0003,$0000,$0000 ; f0-f7
 1b2b: dw $0002,$0001,$0003,$0001,$0001,$0002,$0002,$0000 ; f8-ff
 
-; vcmd e0
+; vcmd e0 - rest
 1b3b: d5 30 02  mov   $0230+x,a
 1b3e: d4 60     mov   $60+x,a
 1b40: 09 11 10  or    ($10),($11)
@@ -1294,7 +1392,7 @@
 1b4a: d5 b1 01  mov   $01b1+x,a
 1b4d: 2f 15     bra   $1b64
 
-; vcmd e1
+; vcmd e1 - rest with duration
 1b4f: d5 30 02  mov   $0230+x,a
 1b52: d4 60     mov   $60+x,a
 1b54: 3f 56 19  call  $1956             ; arg2
@@ -1312,20 +1410,20 @@
 1b68: d0 2a     bne   $1b94
 1b6a: 92 20     clr4  $20
 1b6c: 3f 58 19  call  $1958             ; strip $f3
-1b6f: 3f 56 19  call  $1956             ; arg1
+1b6f: 3f 56 19  call  $1956             ; arg1 - pitch slide delay
 1b72: d4 81     mov   $81+x,a
-1b74: 3f 56 19  call  $1956             ; arg2
+1b74: 3f 56 19  call  $1956             ; arg2 - pitch slide length
 1b77: d4 80     mov   $80+x,a
-1b79: 3f 56 19  call  $1956             ; arg3
+1b79: 3f 56 19  call  $1956             ; arg3 - note number after the slide
 1b7c: 60        clrc
 1b7d: 95 21 02  adc   a,$0221+x
 1b80: d5 c1 02  mov   $02c1+x,a
 1b83: e8 00     mov   a,#$00
 1b85: d5 c0 02  mov   $02c0+x,a
-1b88: 3f 56 19  call  $1956             ; arg4
-1b8b: d5 b0 02  mov   $02b0+x,a
-1b8e: 3f 56 19  call  $1956             ; arg5
-1b91: d5 b1 02  mov   $02b1+x,a
+1b88: 3f 56 19  call  $1956
+1b8b: d5 b0 02  mov   $02b0+x,a         ; arg4
+1b8e: 3f 56 19  call  $1956
+1b91: d5 b1 02  mov   $02b1+x,a         ; arg4/arg5 - pitch delta (semitones, signed 8 bit int + fraction)
 1b94: 6f        ret
 
 ; vcmd e2 - set instrument
@@ -1415,15 +1513,15 @@
 1c3b: fc        inc   y
 1c3c: 63 20 09  bbs3  $20,$1c48
 1c3f: f7 04     mov   a,($04)+y
-1c41: d5 a1 02  mov   $02a1+x,a         ; [5] ?
+1c41: d5 a1 02  mov   $02a1+x,a         ; [5] panpot
 1c44: e8 00     mov   a,#$00
 1c46: d4 70     mov   $70+x,a
 1c48: fc        inc   y
 1c49: f7 04     mov   a,($04)+y
-1c4b: d5 b0 01  mov   $01b0+x,a         ; [6] ?
+1c4b: d5 b0 01  mov   $01b0+x,a         ; [6] volume delta (decreased)
 1c4e: 6f        ret
 
-; vcmd e3
+; vcmd e3 - set panpot
 1c4f: 68 2a     cmp   a,#$2a
 1c51: f0 0e     beq   $1c61
 1c53: 68 2c     cmp   a,#$2c
@@ -1439,9 +1537,9 @@
 1c66: 72 20     clr3  $20
 1c68: 5f e2 18  jmp   $18e2
 
-; vcmd e4
+; vcmd e4 - vibrato
 1c6b: 2d        push  a
-1c6c: 3f 56 19  call  $1956
+1c6c: 3f 56 19  call  $1956             ; arg2 - vibrato rate
 1c6f: 68 80     cmp   a,#$80
 1c71: b0 13     bcs   $1c86
 1c73: 1c        asl   a
@@ -1449,57 +1547,58 @@
 1c76: 1c        asl   a
 1c77: 30 05     bmi   $1c7e
 1c79: 1c        asl   a
-1c7a: 8d 01     mov   y,#$01
+1c7a: 8d 01     mov   y,#$01            ; arg2 is in 0x00..0x1f
 1c7c: 2f 10     bra   $1c8e
-1c7e: 8d 02     mov   y,#$02
+1c7e: 8d 02     mov   y,#$02            ; arg2 is in 0x20..0x3f
 1c80: 2f 0c     bra   $1c8e
-1c82: 8d 04     mov   y,#$04
+1c82: 8d 04     mov   y,#$04            ; arg2 is in 0x40..0x7f
 1c84: 2f 08     bra   $1c8e
-1c86: 8d 08     mov   y,#$08
+1c86: 8d 08     mov   y,#$08            ; arg2 is in 0x80..0xfe
 1c88: 68 ff     cmp   a,#$ff
 1c8a: d0 02     bne   $1c8e
-1c8c: 8d 10     mov   y,#$10
+1c8c: 8d 10     mov   y,#$10            ; arg2 == 0xff
 1c8e: d4 b1     mov   $b1+x,a
 1c90: db c0     mov   $c0+x,y
-1c92: 3f 56 19  call  $1956
+1c92: 3f 56 19  call  $1956             ; arg3 - vibrato depth
 1c95: d5 20 02  mov   $0220+x,a
 1c98: ae        pop   a
-1c99: 68 c8     cmp   a,#$c8
+1c99: 68 c8     cmp   a,#$c8            ; arg1 - vibrato delay or vibrato fade length
 1c9b: b0 0b     bcs   $1ca8
-1c9d: d5 10 02  mov   $0210+x,a
+; if arg1 < 200
+1c9d: d5 10 02  mov   $0210+x,a         ; set vibrato delay
 1ca0: e8 00     mov   a,#$00
-1ca2: d5 11 02  mov   $0211+x,a
+1ca2: d5 11 02  mov   $0211+x,a         ; zero vibrato depth fade length
 1ca5: 5f e2 18  jmp   $18e2
-
+; else # arg1 >= 200
 1ca8: fd        mov   y,a
 1ca9: e8 00     mov   a,#$00
-1cab: d5 10 02  mov   $0210+x,a
+1cab: d5 10 02  mov   $0210+x,a         ; zero vibrato delay
 1cae: dd        mov   a,y
 1caf: 80        setc
-1cb0: a8 c7     sbc   a,#$c7
+1cb0: a8 c7     sbc   a,#$c7            ; vibrato depth fade length = arg1 - 199
 
-; vcmd f9
-1cb2: d5 11 02  mov   $0211+x,a
+; vcmd f9 - vibrato depth fade length
+1cb2: d5 11 02  mov   $0211+x,a         ; arg1 - vibrato depth fade length
 1cb5: 2d        push  a
 1cb6: 8d 00     mov   y,#$00
-1cb8: f5 20 02  mov   a,$0220+x
+1cb8: f5 20 02  mov   a,$0220+x         ; vibrato depth
 1cbb: ce        pop   x
 1cbc: 9e        div   ya,x
 1cbd: 2d        push  a
 1cbe: e8 00     mov   a,#$00
 1cc0: 9e        div   ya,x
 1cc1: f8 22     mov   x,$22
-1cc3: d5 e0 02  mov   $02e0+x,a
+1cc3: d5 e0 02  mov   $02e0+x,a         ; ((vibrato_depth / vibrato_depth_fade_length) << 8) / vibrato_depth_fade_length
 1cc6: ae        pop   a
-1cc7: d5 e1 02  mov   $02e1+x,a
+1cc7: d5 e1 02  mov   $02e1+x,a         ; vibrato_depth / vibrato_depth_fade_length
 1cca: 5f e2 18  jmp   $18e2
 
-; vcmd e5
-1ccd: d5 d1 01  mov   $01d1+x,a
+; vcmd e5 - random pitch envelope
+1ccd: d5 d1 01  mov   $01d1+x,a         ; arg1 - envelope speed
 1cd0: 3f 56 19  call  $1956
-1cd3: d5 f1 02  mov   $02f1+x,a
+1cd3: d5 f1 02  mov   $02f1+x,a         ; arg2 - delta pitch mask bits (low)
 1cd6: 3f 56 19  call  $1956
-1cd9: d5 f0 02  mov   $02f0+x,a
+1cd9: d5 f0 02  mov   $02f0+x,a         ; arg3 - delta pitch mask bits (high)
 1cdc: e8 00     mov   a,#$00
 1cde: d4 d1     mov   $d1+x,a
 1ce0: d5 d0 01  mov   $01d0+x,a
@@ -1528,7 +1627,8 @@
 1d0f: d5 31 01  mov   $0131+x,a
 1d12: 5f e2 18  jmp   $18e2
 ; repeat again
-1d15: 3f 56 19  call  $1956
+; adjust volume by repeat count
+1d15: 3f 56 19  call  $1956             ; get arg2 (delta volume, signed)
 1d18: 8d 00     mov   y,#$00
 1d1a: 08 00     or    a,#$00
 1d1c: f0 15     beq   $1d33
@@ -1590,7 +1690,8 @@
 1d8d: 3f 58 19  call  $1958
 1d90: 5f e2 18  jmp   $18e2
 ; repeat again
-1d93: 3f 56 19  call  $1956
+; adjust volume by repeat count
+1d93: 3f 56 19  call  $1956             ; get arg2 (delta volume, signed)
 1d96: 8d 00     mov   y,#$00
 1d98: 08 00     or    a,#$00
 1d9a: f0 15     beq   $1db1
@@ -1629,54 +1730,54 @@
 1ddd: d4 31     mov   $31+x,a           ; back to return address
 1ddf: 5f e2 18  jmp   $18e2
 
-; vcmd ea - set tempo (per track)
+; vcmd ea - tempo (per track)
 1de2: d4 41     mov   $41+x,a
 1de4: e8 00     mov   a,#$00
 1de6: d5 c0 01  mov   $01c0+x,a
 1de9: 5f e2 18  jmp   $18e2
 
-; vcmd eb
-1dec: d5 50 02  mov   $0250+x,a
+; vcmd eb - tempo fade
+1dec: d5 50 02  mov   $0250+x,a         ; final tempo value
 1def: 3f 56 19  call  $1956
-1df2: d5 c0 01  mov   $01c0+x,a
+1df2: d5 c0 01  mov   $01c0+x,a         ; tempo fade speed
 1df5: e8 00     mov   a,#$00
-1df7: d5 51 02  mov   $0251+x,a
+1df7: d5 51 02  mov   $0251+x,a         ; tempo fade counter
 1dfa: 5f e2 18  jmp   $18e2
 
 ; vcmd ec - per-voice transpose
 1dfd: d5 21 02  mov   $0221+x,a
 1e00: 5f e2 18  jmp   $18e2
 
-; vcmd ee - set volume
+; vcmd ee - volume
 1e03: d5 91 02  mov   $0291+x,a
 1e06: e8 00     mov   a,#$00
 1e08: d4 71     mov   $71+x,a
 1e0a: 5f e2 18  jmp   $18e2
 
-; vcmd ef
-1e0d: d5 00 02  mov   $0200+x,a
+; vcmd ef - volume fade
+1e0d: d5 00 02  mov   $0200+x,a         ; final volume value
 1e10: 3f 56 19  call  $1956
-1e13: d4 71     mov   $71+x,a
+1e13: d4 71     mov   $71+x,a           ; volume fade speed
 1e15: e8 00     mov   a,#$00
 1e17: d5 90 02  mov   $0290+x,a
 1e1a: 5f e2 18  jmp   $18e2
 
-; vcmd f0
-1e1d: d4 90     mov   $90+x,a
+; vcmd f0 - portamento
+1e1d: d4 90     mov   $90+x,a           ; portamento speed
 1e1f: 82 20     set4  $20
 1e21: 5f e2 18  jmp   $18e2
 
-; vcmd f1
+; vcmd f1 - pitch envelope
 1e24: 92 20     clr4  $20
-1e26: d4 91     mov   $91+x,a           ; arg1: ?
+1e26: d4 91     mov   $91+x,a           ; arg1: envelope delay
 1e28: 3f 56 19  call  $1956
-1e2b: d4 90     mov   $90+x,a           ; arg2: ?
+1e2b: d4 90     mov   $90+x,a           ; arg2: envelope length (pitch will be restored to regular note when envelope phase gets done)
 1e2d: 3f 56 19  call  $1956
-1e30: d5 60 02  mov   $0260+x,a         ; arg3: ?
+1e30: d5 60 02  mov   $0260+x,a         ; arg3: initial pitch (semitones, signed), will be *negated* and added to note number
 1e33: 3f 56 19  call  $1956
-1e36: d5 b0 02  mov   $02b0+x,a         ; arg4: ?
+1e36: d5 b0 02  mov   $02b0+x,a         ; arg4: pitch delta (fraction)
 1e39: 3f 56 19  call  $1956
-1e3c: d5 b1 02  mov   $02b1+x,a         ; arg5: ?
+1e3c: d5 b1 02  mov   $02b1+x,a         ; arg5: pitch delta (semitones, signed)
 1e3f: 5f e2 18  jmp   $18e2
 
 ; vcmd f2 - tuning
@@ -1684,13 +1785,13 @@
 1e43: b0 08     bcs   $1e4d
 ; when arg1 >= 0
 1e45: 8d 00     mov   y,#$00
-1e47: 1c        asl   a
+1e47: 1c        asl   a                 ; *= 2
 1e48: 90 09     bcc   $1e53
 1e4a: fc        inc   y
 1e4b: 2f 06     bra   $1e53
 ; when arg1 < 0
 1e4d: 8d ff     mov   y,#$ff
-1e4f: 1c        asl   a
+1e4f: 1c        asl   a                 ; *= 2
 1e50: b0 01     bcs   $1e53
 1e52: dc        dec   y
 ;
@@ -1699,32 +1800,32 @@
 1e57: d5 81 02  mov   $0281+x,a         ; $0280/1+x = arg1 * 4
 1e5a: 5f e2 18  jmp   $18e2
 
-; vcmd f3
+; vcmd f3 - pitch slide
 1e5d: 3f 58 19  call  $1958
 1e60: 3f 58 19  call  $1958
 1e63: 3f 58 19  call  $1958
 1e66: 3f 58 19  call  $1958
 1e69: 5f e2 18  jmp   $18e2
 
-; vcmd f4
-1e6c: 08 00     or    a,#$00
+; vcmd f4 - echo on/off
+1e6c: 08 00     or    a,#$00            ; arg1 - EON
 1e6e: f0 16     beq   $1e86
 1e70: b2 13     clr5  $13
 1e72: c4 14     mov   $14,a
 1e74: 8f 4d f2  mov   $f2,#$4d
 1e77: c4 f3     mov   $f3,a             ; set EON
 1e79: 3f 56 19  call  $1956
-1e7c: c4 15     mov   $15,a
+1e7c: c4 15     mov   $15,a             ; arg2 - EVOL(L)
 1e7e: 3f 56 19  call  $1956
-1e81: c4 16     mov   $16,a
+1e81: c4 16     mov   $16,a             ; arg3 - EVOL(R)
 1e83: 5f e2 18  jmp   $18e2
 
-1e86: 3f f4 1e  call  $1ef4
+1e86: 3f f4 1e  call  $1ef4             ; disable echo
 1e89: 3f 58 19  call  $1958
 1e8c: 3f 58 19  call  $1958
 1e8f: 5f e2 18  jmp   $18e2
 
-; vcmd f5 - set echo params
+; vcmd f5 - echo params
 1e92: 78 00 14  cmp   $14,#$00
 1e95: f0 f2     beq   $1e89
 1e97: 28 0f     and   a,#$0f
@@ -1842,16 +1943,16 @@
 1f71: d4 31     mov   $31+x,a           ; back to $0180/1
 1f73: 5f e2 18  jmp   $18e2
 
-; vcmd f8
-1f76: d5 01 02  mov   $0201+x,a
+; vcmd f8 - panpot fade
+1f76: d5 01 02  mov   $0201+x,a         ; final panpot value
 1f79: 3f 56 19  call  $1956
-1f7c: d4 70     mov   $70+x,a
+1f7c: d4 70     mov   $70+x,a           ; panpot fade speed
 1f7e: e8 00     mov   a,#$00
 1f80: d5 a0 02  mov   $02a0+x,a
 1f83: 5f e2 18  jmp   $18e2
 
-; vcmd fa
-1f86: d5 70 02  mov   $0270+x,a
+; vcmd fa - set ADSR(1)/ADSR(2)/GAIN
+1f86: d5 70 02  mov   $0270+x,a         ; arg1 - ADSR(1)
 1f89: fd        mov   y,a
 1f8a: e8 05     mov   a,#$05
 1f8c: 04 23     or    a,$23
@@ -1860,36 +1961,41 @@
 1f92: bc        inc   a
 1f93: ad 80     cmp   y,#$80
 1f95: 90 09     bcc   $1fa0
+; ADSR mode
 1f97: c4 f2     mov   $f2,a
-1f99: 3f 56 19  call  $1956
+1f99: 3f 56 19  call  $1956             ; arg2 - ADSR(2)
 1f9c: c4 f3     mov   $f3,a             ; set ADSR(2)
 1f9e: 2f 0b     bra   $1fab
+; GAIN mode
 1fa0: bc        inc   a
 1fa1: c4 f2     mov   $f2,a
-1fa3: 3f 56 19  call  $1956
+1fa3: 3f 56 19  call  $1956             ; arg2 - GAIN
 1fa6: c4 f3     mov   $f3,a             ; set GAIN
 1fa8: d5 71 02  mov   $0271+x,a
-; vcmd 62
-1fab: 3f 56 19  call  $1956             ; read a byte
+; vcmd 62 - set GAIN
+1fab: 3f 56 19  call  $1956             ; arg1 - GAIN amount
 1fae: 68 c8     cmp   a,#$c8
 1fb0: b0 0c     bcs   $1fbe
 1fb2: 68 64     cmp   a,#$64
 1fb4: 90 0e     bcc   $1fc4
+; arg1 === 100..199: linear decrease
 1fb6: a8 64     sbc   a,#$64
 1fb8: 28 1f     and   a,#$1f
-1fba: 08 80     or    a,#$80
+1fba: 08 80     or    a,#$80            ; linear decrease
 1fbc: 2f 06     bra   $1fc4
+; arg1 === 200..255: exponential decrease
 1fbe: a8 c8     sbc   a,#$c8
 1fc0: 28 1f     and   a,#$1f
-1fc2: 08 a0     or    a,#$a0
+1fc2: 08 a0     or    a,#$a0            ; exponential decrease
+; otherwise, direct GAIN
 1fc4: d5 c1 01  mov   $01c1+x,a
 1fc7: 5f e2 18  jmp   $18e2
 
-; vcmd ed
+; vcmd ed - set ADSR(1)
 1fca: 2d        push  a
 1fcb: f5 70 02  mov   a,$0270+x
 1fce: ae        pop   a
-1fcf: 10 0c     bpl   $1fdd
+1fcf: 10 0c     bpl   $1fdd             ; return if saved ADSR(1) is GAIN mode
 1fd1: d5 70 02  mov   $0270+x,a
 1fd4: fd        mov   y,a
 1fd5: e8 05     mov   a,#$05
@@ -1898,13 +2004,13 @@
 1fdb: cb f3     mov   $f3,y             ; set ADSR(1)
 1fdd: 5f e2 18  jmp   $18e2
 
-; vcmd fb
+; vcmd fb - set ADSR(2)
 1fe0: 2d        push  a
 1fe1: f5 70 02  mov   a,$0270+x
 1fe4: ee        pop   y
 1fe5: 10 f6     bpl   $1fdd
 1fe7: e8 06     mov   a,#$06
-1fe9: 2f ec     bra   $1fd7
+1fe9: 2f ec     bra   $1fd7             ; set ADSR(2)
 
 ; vcmd fc - set volume and instrument
 1feb: d5 91 02  mov   $0291+x,a
@@ -2210,6 +2316,7 @@
 22ad: db $ff,$f8,$f4,$f0,$e8,$e0,$d0,$c0
 22b5: db $b0,$a0,$90,$80,$68,$50,$38,$20
 
+; pan table
 22bd: db $00,$04,$08,$0e,$14,$1a,$20,$28
 22c5: db $30,$38,$40,$48,$50,$5a,$64,$6e
 22cd: db $78,$82,$8c,$96,$a0,$a8,$b0,$b8
@@ -2220,3 +2327,132 @@
 22e7: db $0f,$1f,$2f,$3f,$4f,$5f,$6f,$7f
 
 22ef: db $7f,$00,$00,$00,$00,$00,$00,$00
+
+22f7: dw $3c9f
+22f9: dw $52b2
+22fb: dw $45af
+22fd: dw $89c7
+22ff: dw $7f10
+2301: dw $9de0
+2303: dw $1fdc
+2305: dw $1661
+2307: dw $c939
+2309: dw $eb9c
+230b: dw $0857
+230d: dw $f866
+230f: dw $245a
+2311: dw $0ebf
+2313: dw $153e
+2315: dw $db4b
+2317: dw $f5ab
+2319: dw $0c31
+231b: dw $0243
+231d: dw $de55
+231f: dw $da41
+2321: dw $aebd
+2323: dw $b019
+2325: dw $5748
+2327: dw $a3ba
+2329: dw $0b36
+232b: dw $dff9
+232d: dw $a817
+232f: dw $0c04
+2331: dw $91e0
+2333: dw $5d18
+2335: dw $d3dd
+2337: dw $8a28
+2339: dw $11f2
+233b: dw $6f59
+233d: dw $0a06
+233f: dw $2a34
+2341: dw $ac79
+2343: dw $a75e
+2345: dw $c683
+2347: dw $c139
+2349: dw $3ab4
+234b: dw $fe3f
+234d: dw $ef4f
+234f: dw $001f
+2351: dw $9930
+2353: dw $284c
+2355: dw $ed83
+2357: dw $2f8a
+2359: dw $662c
+235b: dw $d63f
+235d: dw $b76c
+235f: dw $2249
+2361: dw $65bc
+2363: dw $cffa
+2365: dw $b102
+2367: dw $f046
+2369: dw $d79a
+236b: dw $0fe2
+236d: dw $c511
+236f: dw $f674
+2371: dw $2c7a
+2373: dw $fb8f
+2375: dw $6a19
+2377: dw $7ae5
+2379: dw $fc23
+237b: dw $04bc
+237d: dw $1a3a
+237f: dw $7f7f
+2381: dw $d3fb
+2383: dw $28e1
+2385: dw $ff7f
+2387: dw $2389
+2389: dw $78ea
+238b: dw $eefc
+238d: dw $3a00
+238f: dw $7d14
+2391: dw $ed7f
+2393: dw $ba86
+2395: dw $baff
+2397: dw $bae9
+2399: dw $bad5
+239b: dw $bac1
+239d: dw $ffad
+239f: dw $23a1
+23a1: dw $78ea
+23a3: dw $d6fc
+23a5: dw $ed01
+23a7: dw $e48b
+23a9: dw $3500
+23ab: dw $3d7f
+23ad: dw $7d12
+23af: dw $bd7f
+23b1: dw $bde9
+23b3: dw $bdd5
+23b5: dw $bdc1
+23b7: dw $ffad
+23b9: dw $23bb
+23bb: dw $a0ea
+23bd: dw $d0fc
+23bf: dw $290c
+23c1: dw $7f05
+23c3: dw $2f7f
+23c5: dw $7d20
+23c7: dw $fb7f
+23c9: dw $29d2
+23cb: dw $7f05
+23cd: dw $2f41
+23cf: dw $7d20
+23d1: dw $ff41
+23d3: dw $23d5
+23d5: dw $c8fc
+23d7: dw $3a01
+23d9: dw $7d11
+23db: dw $ed7f
+23dd: dw $ba8a
+23df: dw $ffad
+23e1: dw $23e3
+23e3: dw $e0fc
+23e5: dw $3c0e
+23e7: dw $7d11
+23e9: dw $ed7f
+23eb: dw $bc8a
+23ed: dw $ffad
+23ef: dw $23f1
+23f1: dw $cefc
+23f3: dw $390f
+23f5: dw $7d0c
