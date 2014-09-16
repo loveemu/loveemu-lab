@@ -135,9 +135,9 @@
 07f3: 84 40     adc   a,$40             ; add global transpose
 07f5: 60        clrc
 07f6: 95 01 01  adc   a,$0101+x         ; add per-voice transpose
-07f9: d4 91     mov   $91+x,a
+07f9: d4 91     mov   $91+x,a           ; save note number (integer)
 07fb: f5 c1 02  mov   a,$02c1+x
-07fe: d4 90     mov   $90+x,a
+07fe: d4 90     mov   $90+x,a           ; save note number (fraction)
 0800: f5 21 01  mov   a,$0121+x
 0803: 5c        lsr   a
 0804: e8 00     mov   a,#$00
@@ -163,7 +163,7 @@
 0832: d4 91     mov   $91+x,a
 0834: f5 e1 02  mov   a,$02e1+x
 0837: 60        clrc
-; set DSP pitch from $1c/d
+; set DSP pitch from $1c/d (note number fraction/integer)
 0838: 94 91     adc   a,$91+x
 083a: 3f 31 0d  call  $0d31
 083d: 3f 48 0d  call  $0d48
@@ -179,15 +179,15 @@
 0850: dc        dec   y
 0851: 1c        asl   a
 0852: 7a 1c     addw  ya,$1c
-0854: da 1c     movw  $1c,ya
+0854: da 1c     movw  $1c,ya            ; note number (fraction)
 0856: 4d        push  x
-0857: e4 1d     mov   a,$1d
-; get pitch from note number in A (with octave correction)
+0857: e4 1d     mov   a,$1d             ; note number (integer)
+; get pitch from note number
 0859: 1c        asl   a
 085a: 8d 00     mov   y,#$00
 085c: cd 18     mov   x,#$18
-085e: 9e        div   ya,x
-085f: 5d        mov   x,a
+085e: 9e        div   ya,x              ; y = (note_number % 12) * 2
+085f: 5d        mov   x,a               ; save octave
 0860: f6 b6 10  mov   a,$10b6+y
 0863: c4 11     mov   $11,a
 0865: f6 b5 10  mov   a,$10b5+y
@@ -198,7 +198,7 @@
 0871: ee        pop   y
 0872: 9a 10     subw  ya,$10
 0874: eb 1c     mov   y,$1c
-0876: cf        mul   ya
+0876: cf        mul   ya                ; linear interpolation for sub-note
 0877: dd        mov   a,y
 0878: 8d 00     mov   y,#$00
 087a: 7a 10     addw  ya,$10
@@ -207,13 +207,15 @@
 087f: 2b 11     rol   $11
 0881: c4 10     mov   $10,a
 0883: 2f 04     bra   $0889
+; octave correction
 0885: 4b 11     lsr   $11
 0887: 7c        ror   a
 0888: 3d        inc   x
 0889: c8 06     cmp   x,#$06
 088b: d0 f8     bne   $0885
-088d: c4 10     mov   $10,a
-088f: ce        pop   x
+088d: c4 10     mov   $10,a             ; write the pitch back
+088f: ce        pop   x                 ; restore channel #
+; apply instrument-specific pitch multiplier
 0890: f5 20 02  mov   a,$0220+x
 0893: eb 11     mov   y,$11
 0895: cf        mul   ya
@@ -233,16 +235,17 @@
 08af: fd        mov   y,a
 08b0: ae        pop   a
 08b1: 7a 12     addw  ya,$12
-08b3: da 12     movw  $12,ya
+08b3: da 12     movw  $12,ya            ; multiplied pitch frequency
+; write the final pitch to DSP
 08b5: 7d        mov   a,x               ; set voice X pitch DSP reg from $12/3
 08b6: 9f        xcn   a                 ;  (if vbit clear in $17)
 08b7: 5c        lsr   a
 08b8: 08 02     or    a,#$02
 08ba: fd        mov   y,a               ; Y = voice X pitch DSP reg
-08bb: e4 12     mov   a,$12
+08bb: e4 12     mov   a,$12             ; write $12 to P(L)
 08bd: 3f c3 08  call  $08c3
 08c0: fc        inc   y
-08c1: e4 13     mov   a,$13
+08c1: e4 13     mov   a,$13             ; write $13 to P(R) as well
 ; write A to DSP reg Y if vbit clear in $17
 08c3: 2d        push  a
 08c4: e4 38     mov   a,$38
@@ -600,10 +603,10 @@
 0b50: d0 f4     bne   $0b46             ; set SRCN, ADSR1/2, GAIN from table
 0b52: ce        pop   x
 0b53: f7 10     mov   a,($10)+y
-0b55: d5 21 02  mov   $0221+x,a
+0b55: d5 21 02  mov   $0221+x,a         ; set pitch multiplier (integer) (i.e. unity key)
 0b58: fc        inc   y
 0b59: f7 10     mov   a,($10)+y
-0b5b: d5 20 02  mov   $0220+x,a         ; set pitch multiplier
+0b5b: d5 20 02  mov   $0220+x,a         ; set pitch multiplier (fraction) (i.e. fine tune)
 0b5e: 6f        ret
 
 ; reset voice params
@@ -640,19 +643,19 @@
 0b9d: 6f        ret
 
 ; vcmd e3 - vibrato on
-0b9e: d5 00 01  mov   $0100+x,a
+0b9e: d5 00 01  mov   $0100+x,a         ; vibrato delay
 0ba1: 3f b6 0a  call  $0ab6
-0ba4: d5 f1 02  mov   $02f1+x,a
+0ba4: d5 f1 02  mov   $02f1+x,a         ; vibrato rate
 0ba7: 3f b6 0a  call  $0ab6
 ; vcmd e4 - vibrato off
-0baa: d4 a1     mov   $a1+x,a
-0bac: d5 30 01  mov   $0130+x,a
+0baa: d4 a1     mov   $a1+x,a           ; vibrato depth
+0bac: d5 30 01  mov   $0130+x,a         ; vibrato depth
 0baf: e8 00     mov   a,#$00
 0bb1: d5 21 01  mov   $0121+x,a
 0bb4: 6f        ret
 
 ; vcmd f0 - vibrato fade
-0bb5: d5 21 01  mov   $0121+x,a
+0bb5: d5 21 01  mov   $0121+x,a         ; vibrato fade length
 0bb8: 2d        push  a
 0bb9: 8d 00     mov   y,#$00
 0bbb: f4 a1     mov   a,$a1+x
@@ -704,12 +707,12 @@
 0bfb: 6f        ret
 
 ; vcmd eb - tremolo on
-0bfc: d5 20 01  mov   $0120+x,a
+0bfc: d5 20 01  mov   $0120+x,a         ; tremolo delay
 0bff: 3f b6 0a  call  $0ab6
-0c02: d5 11 01  mov   $0111+x,a
+0c02: d5 11 01  mov   $0111+x,a         ; tremolo rate
 0c05: 3f b6 0a  call  $0ab6
 ; vcmd ec - tremolo off
-0c08: d4 b1     mov   $b1+x,a
+0c08: d4 b1     mov   $b1+x,a           ; tremolo depth
 0c0a: 6f        ret
 
 ; vcmd f1 - pitch envelope (release)
@@ -890,9 +893,10 @@
 0d44: d5 b1 02  mov   $02b1+x,a         ; portamento delta
 0d47: 6f        ret
 
-0d48: f4 91     mov   a,$91+x
+; get the current note number in ya and $1c/d
+0d48: f4 91     mov   a,$91+x           ; note number (integer)
 0d4a: fd        mov   y,a
-0d4b: f4 90     mov   a,$90+x
+0d4b: f4 90     mov   a,$90+x           ; note number (fraction)
 0d4d: da 1c     movw  $1c,ya
 0d4f: 6f        ret
 
@@ -935,7 +939,7 @@
 0d94: fb b1     mov   y,$b1+x
 0d96: f0 23     beq   $0dbb
 0d98: f5 20 01  mov   a,$0120+x
-0d9b: de b0 1b  cbne  $b0+x,$0db9
+0d9b: de b0 1b  cbne  $b0+x,$0db9       ; check for tremolo delay
 0d9e: 09 38 4e  or    ($4e),($38)
 0da1: f5 10 01  mov   a,$0110+x
 0da4: 10 07     bpl   $0dad
@@ -979,6 +983,7 @@
 0dfd: fd        mov   y,a
 0dfe: f5 80 02  mov   a,$0280+x
 0e01: da 1c     movw  $1c,ya
+; update volume dsp regs
 0e03: 3f 16 0e  call  $0e16
 0e06: d4 d0     mov   $d0+x,a           ; VOL(L)
 0e08: 8d 14     mov   y,#$14
@@ -1096,7 +1101,7 @@
 0ed4: f4 a1     mov   a,$a1+x
 0ed6: f0 49     beq   $0f21
 0ed8: f5 00 01  mov   a,$0100+x
-0edb: de a0 41  cbne  $a0+x,$0f1f
+0edb: de a0 41  cbne  $a0+x,$0f1f       ; check for vibrato delay
 0ede: f4 c0     mov   a,$c0+x
 0ee0: 75 21 01  cmp   a,$0121+x
 0ee3: d0 05     bne   $0eea
@@ -1113,6 +1118,7 @@
 0efa: 60        clrc
 0efb: 95 f1 02  adc   a,$02f1+x
 0efe: d5 f0 02  mov   $02f0+x,a
+;
 0f01: c4 1e     mov   $1e,a
 0f03: 1c        asl   a
 0f04: 1c        asl   a
@@ -1140,7 +1146,7 @@
 0f27: f4 b1     mov   a,$b1+x
 0f29: f0 09     beq   $0f34
 0f2b: f5 20 01  mov   a,$0120+x
-0f2e: de b0 03  cbne  $b0+x,$0f34
+0f2e: de b0 03  cbne  $b0+x,$0f34       ; check for tremolo delay
 0f31: 3f 9e 0f  call  $0f9e             ; voice vol calculations
 0f34: f5 81 02  mov   a,$0281+x
 0f37: fd        mov   y,a
@@ -1153,21 +1159,21 @@
 0f45: f5 90 02  mov   a,$0290+x         ; pan fade delta
 0f48: 3f 80 0f  call  $0f80             ; add delta (with mutations)?
 0f4b: f3 1f 03  bbc7  $1f,$0f51
-0f4e: 3f 03 0e  call  $0e03
+0f4e: 3f 03 0e  call  $0e03             ; update channel volume and balance if required
 0f51: f2 1f     clr7  $1f
-0f53: 3f 48 0d  call  $0d48
+0f53: 3f 48 0d  call  $0d48             ; get note number into $1c/d
 0f56: f4 80     mov   a,$80+x
 0f58: f0 0e     beq   $0f68
 0f5a: f4 81     mov   a,$81+x
 0f5c: d0 0a     bne   $0f68
 0f5e: f5 b1 02  mov   a,$02b1+x
 0f61: fd        mov   y,a
-0f62: f5 b0 02  mov   a,$02b0+x
-0f65: 3f 80 0f  call  $0f80
+0f62: f5 b0 02  mov   a,$02b0+x         ; portamento delta
+0f65: 3f 80 0f  call  $0f80             ; add delta (with mutations)?
 0f68: f4 a1     mov   a,$a1+x
-0f6a: f0 b5     beq   $0f21
+0f6a: f0 b5     beq   $0f21             ; check for vibrato depth?
 0f6c: f5 00 01  mov   a,$0100+x
-0f6f: de a0 af  cbne  $a0+x,$0f21
+0f6f: de a0 af  cbne  $a0+x,$0f21       ; check for vibrato delay
 0f72: eb 41     mov   y,$41
 0f74: f5 f1 02  mov   a,$02f1+x
 0f77: cf        mul   ya
@@ -1176,6 +1182,7 @@
 0f7a: 95 f0 02  adc   a,$02f0+x
 0f7d: 5f 01 0f  jmp   $0f01
 
+; add delta (with mutations)?
 0f80: e2 1f     set7  $1f
 0f82: cb 1e     mov   $1e,y
 0f84: 3f 62 0d  call  $0d62
