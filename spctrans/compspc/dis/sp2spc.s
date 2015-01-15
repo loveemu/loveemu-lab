@@ -1952,14 +1952,14 @@
 131b: c4 36     mov   $36,a
 131d: fc        inc   y
 131e: f7 50     mov   a,($50)+y
-1320: c4 37     mov   $37,a
+1320: c4 37     mov   $37,a             ; set song header address to $36/7 from $50/1
 1322: 8d 00     mov   y,#$00
 1324: f7 36     mov   a,($36)+y
 1326: fc        inc   y
-1327: c4 39     mov   $39,a
+1327: c4 39     mov   $39,a             ; header+0: number of tracks
 1329: f7 36     mov   a,($36)+y
 132b: fc        inc   y
-132c: 5d        mov   x,a
+132c: 5d        mov   x,a               ; +00 channel #
 132d: f7 36     mov   a,($36)+y
 132f: d0 07     bne   $1338
 1331: d4 80     mov   $80+x,a
@@ -1991,49 +1991,49 @@
 136b: e4 38     mov   a,$38
 136d: d5 f0 01  mov   $01f0+x,a
 1370: f7 36     mov   a,($36)+y
-1372: d4 80     mov   $80+x,a
+1372: d4 80     mov   $80+x,a           ; +01 flags
 1374: fc        inc   y
 1375: f7 36     mov   a,($36)+y
-1377: d5 20 03  mov   $0320+x,a
+1377: d5 20 03  mov   $0320+x,a         ; +02 volume
 137a: fc        inc   y
 137b: f7 36     mov   a,($36)+y
-137d: d5 30 03  mov   $0330+x,a
+137d: d5 30 03  mov   $0330+x,a         ; +03 envelope #
 1380: fc        inc   y
 1381: f7 36     mov   a,($36)+y
-1383: d5 40 03  mov   $0340+x,a
+1383: d5 40 03  mov   $0340+x,a         ; +04 vibrato
 1386: fc        inc   y
 1387: f7 36     mov   a,($36)+y
 1389: 60        clrc
 138a: 84 3d     adc   a,$3d
-138c: d5 50 03  mov   $0350+x,a
+138c: d5 50 03  mov   $0350+x,a         ; +05 transpose
 138f: fc        inc   y
 1390: f7 36     mov   a,($36)+y
-1392: d5 60 03  mov   $0360+x,a
+1392: d5 60 03  mov   $0360+x,a         ; +06 tempo
 1395: fc        inc   y
 1396: f7 36     mov   a,($36)+y
-1398: d5 70 03  mov   $0370+x,a
+1398: d5 70 03  mov   $0370+x,a         ; +07 variable for conditional branch? (channel #)
 139b: bc        inc   a
 139c: 28 07     and   a,#$07
 139e: d5 40 04  mov   $0440+x,a
 13a1: fc        inc   y
 13a2: f7 36     mov   a,($36)+y
-13a4: d5 80 03  mov   $0380+x,a
+13a4: d5 80 03  mov   $0380+x,a         ; +08 voice reading ptr (lo)
 13a7: fc        inc   y
 13a8: f7 36     mov   a,($36)+y
-13aa: d5 90 03  mov   $0390+x,a
+13aa: d5 90 03  mov   $0390+x,a         ; +09 voice reading ptr (hi)
 13ad: fc        inc   y
 13ae: f7 36     mov   a,($36)+y
-13b0: d5 a0 03  mov   $03a0+x,a
+13b0: d5 a0 03  mov   $03a0+x,a         ; +10 SRCN
 13b3: fc        inc   y
 13b4: f7 36     mov   a,($36)+y
-13b6: d5 b0 03  mov   $03b0+x,a
+13b6: d5 b0 03  mov   $03b0+x,a         ; +11 ADSR pattern #
 13b9: fc        inc   y
 13ba: e4 01     mov   a,$01
 13bc: 28 04     and   a,#$04
 13be: f0 02     beq   $13c2
 13c0: f7 36     mov   a,($36)+y
-13c2: d5 c0 03  mov   $03c0+x,a
-13c5: fc        inc   y
+13c2: d5 c0 03  mov   $03c0+x,a         ; +12 panpot
+13c5: fc        inc   y                 ; +13 (not used)
 13c6: fc        inc   y
 13c7: f5 a0 03  mov   a,$03a0+x
 13ca: 3f b7 0b  call  $0bb7
