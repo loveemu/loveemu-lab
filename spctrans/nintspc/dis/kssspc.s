@@ -1044,7 +1044,7 @@
 0e67: 68 ef     cmp   a,#$ef
 0e69: f0 27     beq   $0e92             ; subroutine
 0e6b: 68 e0     cmp   a,#$e0
-0e6d: 90 2e     bcc   $0e9d             ; instrument (key-off)
+0e6d: 90 2e     bcc   $0e9d             ; next note (key-off the current note)
 0e6f: 6d        push  y
 0e70: fd        mov   y,a
 0e71: ae        pop   a
@@ -1075,7 +1075,7 @@
 0e99: fd        mov   y,a
 0e9a: ae        pop   a
 0e9b: 2f b5     bra   $0e52             ; jump and continue (no return address saved)
-; readahead: key-off voice (instrument / block end)
+; readahead: key-off voice (note / block end)
 0e9d: e4 38     mov   a,$38
 0e9f: 8d 5c     mov   y,#$5c            ; KOF
 0ea1: 3f c3 08  call  $08c3             ; set DSP reg
