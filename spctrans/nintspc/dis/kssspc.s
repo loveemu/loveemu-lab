@@ -1019,52 +1019,54 @@
 0e3c: 6f        ret
 
 ; do readahead
-0e3d: f4 61     mov   a,$61+x
+0e3d: f4 61     mov   a,$61+x           ; actual key-off dur counter
 0e3f: f0 63     beq   $0ea4
 0e41: 9b 61     dec   $61+x
-0e43: f0 05     beq   $0e4a
+0e43: f0 05     beq   $0e4a             ; going to key-off
 0e45: e8 02     mov   a,#$02
-0e47: de 60 5a  cbne  $60+x,$0ea4
+0e47: de 60 5a  cbne  $60+x,$0ea4       ; go through if dur counter == 2
+; begin readahead
 0e4a: f4 c1     mov   a,$c1+x
-0e4c: c4 13     mov   $13,a
+0e4c: c4 13     mov   $13,a             ; save repeat count
 0e4e: f4 20     mov   a,$20+x
 0e50: fb 21     mov   y,$21+x
-0e52: da 10     movw  $10,ya
+0e52: da 10     movw  $10,ya            ; set current voice read ptr to $10/1
 0e54: 8d 00     mov   y,#$00
-0e56: f7 10     mov   a,($10)+y
-0e58: f0 1e     beq   $0e78
+0e56: f7 10     mov   a,($10)+y         ; get vcmd byte
+0e58: f0 1e     beq   $0e78             ; end?
 0e5a: 30 07     bmi   $0e63
-0e5c: fc        inc   y
+0e5c: fc        inc   y                 ; note info
 0e5d: 30 3e     bmi   $0e9d
 0e5f: f7 10     mov   a,($10)+y
-0e61: 10 f9     bpl   $0e5c
+0e61: 10 f9     bpl   $0e5c             ; skip parameter bytes (00 should not come)
 0e63: 68 c8     cmp   a,#$c8
-0e65: f0 3d     beq   $0ea4             ; tie?
+0e65: f0 3d     beq   $0ea4             ; tie (skip key-off)
 0e67: 68 ef     cmp   a,#$ef
-0e69: f0 27     beq   $0e92
+0e69: f0 27     beq   $0e92             ; subroutine
 0e6b: 68 e0     cmp   a,#$e0
-0e6d: 90 2e     bcc   $0e9d
+0e6d: 90 2e     bcc   $0e9d             ; instrument (key-off)
 0e6f: 6d        push  y
 0e70: fd        mov   y,a
 0e71: ae        pop   a
-0e72: 96 16 0a  adc   a,$0a16+y         ; vcmd lengths
+0e72: 96 16 0a  adc   a,$0a16+y         ; vcmd lengths ($0af6) (skip vcmd by using oplens table)
 0e75: fd        mov   y,a
-0e76: 2f de     bra   $0e56
-0e78: e4 13     mov   a,$13
+0e76: 2f de     bra   $0e56             ; continue
+; readahead: end of block / pattern
+0e78: e4 13     mov   a,$13             ; test saved repeat counter
 0e7a: f0 21     beq   $0e9d
 0e7c: 8b 13     dec   $13
 0e7e: d0 09     bne   $0e89
-; read $0230/1+X into YA
+; readahead: repeat again
 0e80: f5 31 02  mov   a,$0231+x
 0e83: fd        mov   y,a
 0e84: f5 30 02  mov   a,$0230+x
 0e87: 2f c9     bra   $0e52
-; read $0240/1+X into YA
+; readahead: repeat over
 0e89: f5 41 02  mov   a,$0241+x
 0e8c: fd        mov   y,a
 0e8d: f5 40 02  mov   a,$0240+x
 0e90: 2f c0     bra   $0e52
-;
+; readahead: subroutine
 0e92: fc        inc   y
 0e93: f7 10     mov   a,($10)+y
 0e95: 2d        push  a
@@ -1072,17 +1074,20 @@
 0e97: f7 10     mov   a,($10)+y
 0e99: fd        mov   y,a
 0e9a: ae        pop   a
-0e9b: 2f b5     bra   $0e52
+0e9b: 2f b5     bra   $0e52             ; jump and continue (no return address saved)
+; readahead: key-off voice (instrument / block end)
 0e9d: e4 38     mov   a,$38
-0e9f: 8d 5c     mov   y,#$5c
-0ea1: 3f c3 08  call  $08c3
+0e9f: 8d 5c     mov   y,#$5c            ; KOF
+0ea1: 3f c3 08  call  $08c3             ; set DSP reg
+; realtime note performance
 0ea4: f2 1f     clr7  $1f
 0ea6: f4 80     mov   a,$80+x
-0ea8: f0 27     beq   $0ed1
+0ea8: f0 27     beq   $0ed1             ; branch if portamento is not active
 0eaa: f4 81     mov   a,$81+x
-0eac: f0 04     beq   $0eb2
+0eac: f0 04     beq   $0eb2             ; branch if pitch slide is not active
 0eae: 9b 81     dec   $81+x
 0eb0: 2f 1f     bra   $0ed1
+; portamento
 0eb2: e2 1f     set7  $1f
 0eb4: 9b 80     dec   $80+x
 0eb6: d0 0a     bne   $0ec2
@@ -1097,6 +1102,7 @@
 0eca: f4 91     mov   a,$91+x
 0ecc: 95 b1 02  adc   a,$02b1+x
 0ecf: d4 91     mov   $91+x,a
+; normal or pitch slide
 0ed1: 3f 48 0d  call  $0d48
 0ed4: f4 a1     mov   a,$a1+x
 0ed6: f0 49     beq   $0f21
