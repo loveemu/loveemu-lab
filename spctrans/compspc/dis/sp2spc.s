@@ -475,15 +475,15 @@
 08fa: e5 03 18  mov   a,$1803
 08fd: c4 53     mov   $53,a             ; set duration table address to $52/3
 08ff: 88 00     adc   a,#$00
-0901: c4 55     mov   $55,a             ; set percussion table address to $54/5
+0901: c4 55     mov   $55,a             ; set percussion table address to $54/5 (8 bytes * 30 notes)
 0903: e5 04 18  mov   a,$1804
 0906: c4 56     mov   $56,a
 0908: e5 05 18  mov   a,$1805
-090b: c4 57     mov   $57,a             ; set $56/7 to $1804/5
+090b: c4 57     mov   $57,a             ; set envelope table address to $56/7
 090d: e5 06 18  mov   a,$1806
 0910: c4 58     mov   $58,a
 0912: e5 07 18  mov   a,$1807
-0915: c4 59     mov   $59,a             ; set $58/9 to $1806/7
+0915: c4 59     mov   $59,a             ; set vibrato table address to $58/9
 0917: e5 08 18  mov   a,$1808
 091a: c4 5a     mov   $5a,a
 091c: e5 09 18  mov   a,$1809
@@ -498,13 +498,13 @@
 0933: c4 5f     mov   $5f,a             ; set ADSR pattern table address to $5e/f
 0935: 8f 5d f2  mov   $f2,#$5d
 0938: e5 0e 18  mov   a,$180e
-093b: c4 f3     mov   $f3,a             ; set $180E to SRCN
+093b: c4 f3     mov   $f3,a             ; set $180E to DIR
 093d: e5 0f 18  mov   a,$180f
-0940: c4 3d     mov   $3d,a             ; set $3D to $180F
+0940: c4 3d     mov   $3d,a             ; set global transpose?
 0942: e5 12 18  mov   a,$1812
 0945: c4 62     mov   $62,a
 0947: e5 13 18  mov   a,$1813
-094a: c4 63     mov   $63,a             ; set $62/3 to $1812/3
+094a: c4 63     mov   $63,a             ; set instrument region table address to $62/3 (2 bytes / sample, index by SRCN)
 094c: e5 14 18  mov   a,$1814
 094f: c4 64     mov   $64,a
 0951: e5 15 18  mov   a,$1815
@@ -512,14 +512,14 @@
 0956: e5 16 18  mov   a,$1816
 0959: c4 66     mov   $66,a
 095b: e5 17 18  mov   a,$1817
-095e: c4 67     mov   $67,a             ; set $66/7 to $1816/7
+095e: c4 67     mov   $67,a             ; set customized pitch table lookups
 0960: 8d 00     mov   y,#$00
 0962: e8 00     mov   a,#$00
 0964: d6 00 02  mov   $0200+y,a         ; zero voice vol L
 0967: d6 01 02  mov   $0201+y,a         ; zero voice vol R
-096a: d6 02 02  mov   $0202+y,a
+096a: d6 02 02  mov   $0202+y,a         ; zero pitch value (lo)
 096d: d6 04 02  mov   $0204+y,a         ; zero source number
-0970: d6 05 02  mov   $0205+y,a
+0970: d6 05 02  mov   $0205+y,a         ; zero ADSR(1)
 0973: d6 07 02  mov   $0207+y,a         ; zero envelope
 0976: e8 10     mov   a,#$10
 0978: d6 03 02  mov   $0203+y,a         ; clear pitch (#$1000)
@@ -531,7 +531,7 @@
 0982: 4d        push  x
 0983: cd 0f     mov   x,#$0f
 0985: e8 00     mov   a,#$00
-0987: d4 80     mov   $80+x,a
+0987: d4 80     mov   $80+x,a           ; inactivate all tracks
 0989: 1d        dec   x
 098a: 10 f9     bpl   $0985
 098c: ce        pop   x
@@ -907,28 +907,28 @@
 0bb3: 6f        ret
 
 ; change voice X sample to A
-0bb4: d5 a0 03  mov   $03a0+x,a
+0bb4: d5 a0 03  mov   $03a0+x,a         ; SRCN
 ;
 0bb7: 1c        asl   a
 0bb8: 6d        push  y
 0bb9: fd        mov   y,a
 0bba: fc        inc   y
-0bbb: f7 62     mov   a,($62)+y
-0bbd: d0 0c     bne   $0bcb
+0bbb: f7 62     mov   a,($62)+y         ; read higher byte (pitch table index)
+0bbd: d0 0c     bne   $0bcb             ; pitch table index is set
 0bbf: e8 03     mov   a,#$03
 0bc1: d5 70 01  mov   $0170+x,a
 0bc4: e8 14     mov   a,#$14
-0bc6: d5 80 01  mov   $0180+x,a
+0bc6: d5 80 01  mov   $0180+x,a         ; set fixed pitch table address
 0bc9: ee        pop   y
 0bca: 6f        ret
-
+; set customized pitch table address
 0bcb: 1c        asl   a
 0bcc: fd        mov   y,a
 0bcd: f7 66     mov   a,($66)+y
 0bcf: d5 70 01  mov   $0170+x,a
 0bd2: fc        inc   y
 0bd3: f7 66     mov   a,($66)+y
-0bd5: d5 80 01  mov   $0180+x,a
+0bd5: d5 80 01  mov   $0180+x,a         ; set customized pitch table address
 0bd8: ee        pop   y
 0bd9: 6f        ret
 
@@ -1098,7 +1098,7 @@
 0ce8: 6d        push  y
 0ce9: fd        mov   y,a
 0cea: f7 54     mov   a,($54)+y
-0cec: 75 a0 03  cmp   a,$03a0+x
+0cec: 75 a0 03  cmp   a,$03a0+x         ; +0 SRCN
 0cef: f0 03     beq   $0cf4
 0cf1: 3f b4 0b  call  $0bb4
 0cf4: e4 3a     mov   a,$3a
@@ -1106,16 +1106,16 @@
 0cf8: c4 3a     mov   $3a,a
 0cfa: fc        inc   y
 0cfb: f7 54     mov   a,($54)+y
-0cfd: d5 b0 03  mov   $03b0+x,a
+0cfd: d5 b0 03  mov   $03b0+x,a         ; +1 ADSR pattern
 0d00: fc        inc   y
 0d01: f7 54     mov   a,($54)+y
-0d03: d5 30 03  mov   $0330+x,a
+0d03: d5 30 03  mov   $0330+x,a         ; +2 volume envelope #
 0d06: fc        inc   y
 0d07: f7 54     mov   a,($54)+y
-0d09: c4 38     mov   $38,a
+0d09: c4 38     mov   $38,a             ; +3 note number?
 0d0b: fc        inc   y
 0d0c: f7 54     mov   a,($54)+y
-0d0e: c4 39     mov   $39,a
+0d0e: c4 39     mov   $39,a             ; +4 flags and something?
 0d10: 28 1f     and   a,#$1f
 0d12: d5 60 01  mov   $0160+x,a
 0d15: e4 39     mov   a,$39
@@ -1149,11 +1149,11 @@
 0d4a: 28 04     and   a,#$04
 0d4c: f0 02     beq   $0d50
 0d4e: f7 54     mov   a,($54)+y
-0d50: d5 c0 03  mov   $03c0+x,a
-0d53: fc        inc   y
+0d50: d5 c0 03  mov   $03c0+x,a         ; +5 panpot
+0d53: fc        inc   y                 ; +6 not used?
 0d54: fc        inc   y
 0d55: f7 54     mov   a,($54)+y
-0d57: d0 11     bne   $0d6a
+0d57: d0 11     bne   $0d6a             ; +7
 0d59: c4 39     mov   $39,a
 0d5b: ee        pop   y
 0d5c: fc        inc   y
@@ -1291,7 +1291,7 @@
 0e61: 6f        ret
 
 ; calculate pitch value for note in A
-0e62: d4 c0     mov   $c0+x,a
+0e62: d4 c0     mov   $c0+x,a           ; note number
 0e64: 28 ff     and   a,#$ff
 0e66: d0 03     bne   $0e6b             ; note (not rest)
 0e68: d4 d0     mov   $d0+x,a           ; zero $C0/D0+X
@@ -1311,25 +1311,25 @@
 0e80: d5 60 01  mov   $0160+x,a
 0e83: 6f        ret
 
-0e84: f4 c0     mov   a,$c0+x
+0e84: f4 c0     mov   a,$c0+x           ; note number
 0e86: 60        clrc
 0e87: 95 50 03  adc   a,$0350+x         ; add transpose
 0e8a: c4 38     mov   $38,a
 0e8c: 6d        push  y
-0e8d: f5 a0 03  mov   a,$03a0+x
+0e8d: f5 a0 03  mov   a,$03a0+x         ; SRCN
 0e90: 1c        asl   a
 0e91: fd        mov   y,a
-0e92: f7 62     mov   a,($62)+y
-0e94: 84 38     adc   a,$38             ;; add 
-0e96: f0 25     beq   $0ebd
+0e92: f7 62     mov   a,($62)+y         ; get lower byte (per-voice transpose)
+0e94: 84 38     adc   a,$38
+0e96: f0 25     beq   $0ebd             ; invalid note < 0, rest
 0e98: 68 79     cmp   a,#$79
-0e9a: b0 21     bcs   $0ebd             ; limits note range (01-79)
+0e9a: b0 21     bcs   $0ebd             ; invalid note > 79, rest
 0e9c: 1c        asl   a
 0e9d: fd        mov   y,a
 0e9e: f5 70 01  mov   a,$0170+x
 0ea1: c4 36     mov   $36,a
 0ea3: f5 80 01  mov   a,$0180+x
-0ea6: c4 37     mov   $37,a             ; set $36/7 to pitch table
+0ea6: c4 37     mov   $37,a             ; pitch table address
 0ea8: f5 20 04  mov   a,$0420+x
 0eab: 97 36     adc   a,($36)+y         ; add tuning value to pitch value (lo)
 0ead: d4 c0     mov   $c0+x,a           ; set pitch value (lo)
@@ -1341,7 +1341,7 @@
 0eb9: d4 d0     mov   $d0+x,a           ; set pitch value (hi)
 0ebb: ee        pop   y
 0ebc: 6f        ret
-
+; nullify invalid note (work as rest)
 0ebd: e8 00     mov   a,#$00
 0ebf: d4 c0     mov   $c0+x,a
 0ec1: d4 d0     mov   $d0+x,a           ; zero $C0/D0+X
@@ -1391,7 +1391,7 @@
 0f0a: 6f        ret
 
 ; process software envelope
-0f0b: f5 30 03  mov   a,$0330+x         ; envelope #
+0f0b: f5 30 03  mov   a,$0330+x         ; volume envelope #
 0f0e: d0 06     bne   $0f16
 0f10: f5 20 03  mov   a,$0320+x
 0f13: c4 2a     mov   $2a,a             ; constant volume
@@ -1997,7 +1997,7 @@
 1377: d5 20 03  mov   $0320+x,a         ; +02 volume
 137a: fc        inc   y
 137b: f7 36     mov   a,($36)+y
-137d: d5 30 03  mov   $0330+x,a         ; +03 envelope #
+137d: d5 30 03  mov   $0330+x,a         ; +03 volume envelope #
 1380: fc        inc   y
 1381: f7 36     mov   a,($36)+y
 1383: d5 40 03  mov   $0340+x,a         ; +04 vibrato
