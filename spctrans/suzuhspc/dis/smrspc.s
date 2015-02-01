@@ -1246,7 +1246,7 @@
 0c55: e2 27     set7  $27
 0c57: f3 27 05  bbc7  $27,$0c5f
 0c5a: f2 27     clr7  $27
-0c5c: 3f 73 0f  call  $0f73
+0c5c: 3f 73 0f  call  $0f73             ; update pitch reg value
 0c5f: e4 28     mov   a,$28
 0c61: 28 59     and   a,#$59
 0c63: f0 7d     beq   $0ce2
@@ -1462,14 +1462,14 @@
 0e2b: f5 91 01  mov   a,$0191+x
 0e2e: fd        mov   y,a
 0e2f: f5 90 01  mov   a,$0190+x
-0e32: 7a 08     addw  ya,$08
+0e32: 7a 08     addw  ya,$08            ; add per-instrument tuning
 0e34: da 2b     movw  $2b,ya
 0e36: f5 ed 19  mov   a,$19ed+x
 0e39: fd        mov   y,a
 0e3a: f5 ec 19  mov   a,$19ec+x
-0e3d: 7a 2b     addw  ya,$2b
+0e3d: 7a 2b     addw  ya,$2b            ; add channel transpose/tuning
 0e3f: da 2b     movw  $2b,ya
-0e41: 3f 73 0f  call  $0f73
+0e41: 3f 73 0f  call  $0f73             ; update pitch reg value
 0e44: f8 1e     mov   x,$1e
 0e46: 43 26 38  bbs2  $26,$0e81
 0e49: e4 20     mov   a,$20
@@ -1618,24 +1618,25 @@
 0f6d: fd        mov   y,a
 0f6e: f5 84 18  mov   a,$1884+x
 0f71: da 2b     movw  $2b,ya
+; calculate final pitch reg value ($2b = note number)
 0f73: e4 20     mov   a,$20
 0f75: 24 22     and   a,$22
-0f77: f0 6f     beq   $0fe8
+0f77: f0 6f     beq   $0fe8             ; skip if not changed
 0f79: ba 2b     movw  ya,$2b
-0f7b: 7a 30     addw  ya,$30
-0f7d: da 02     movw  $02,ya
+0f7b: 7a 30     addw  ya,$30            ; add global tuning?
+0f7d: da 02     movw  $02,ya            ; $03 = note number, $02 = fraction
 0f7f: cd 0c     mov   x,#$0c
 0f81: 8d 00     mov   y,#$00
 0f83: e4 03     mov   a,$03
 0f85: 60        clrc
 0f86: 9e        div   ya,x
-0f87: c4 08     mov   $08,a
-0f89: dd        mov   a,y
+0f87: c4 08     mov   $08,a             ; octave
+0f89: dd        mov   a,y               ; key
 0f8a: 1c        asl   a
 0f8b: 5d        mov   x,a
 0f8c: f5 03 18  mov   a,$1803+x
 0f8f: fd        mov   y,a
-0f90: f5 02 18  mov   a,$1802+x
+0f90: f5 02 18  mov   a,$1802+x         ; pitch table
 0f93: da 0a     movw  $0a,ya
 0f95: da 04     movw  $04,ya
 0f97: f5 05 18  mov   a,$1805+x
@@ -1644,7 +1645,7 @@
 0f9e: 9a 0a     subw  ya,$0a
 0fa0: cb 0b     mov   $0b,y
 0fa2: eb 02     mov   y,$02
-0fa4: cf        mul   ya
+0fa4: cf        mul   ya                ; interpolate by note number fraction
 0fa5: 8f 00 0d  mov   $0d,#$00
 0fa8: cb 0c     mov   $0c,y
 0faa: eb 02     mov   y,$02
@@ -1653,14 +1654,14 @@
 0faf: 7a 0c     addw  ya,$0c
 0fb1: 7a 04     addw  ya,$04
 0fb3: da 0c     movw  $0c,ya
-0fb5: e4 08     mov   a,$08
+0fb5: e4 08     mov   a,$08             ; octave
 0fb7: 28 07     and   a,#$07
 0fb9: c4 0a     mov   $0a,a
 0fbb: 1c        asl   a
-0fbc: 84 0a     adc   a,$0a
-0fbe: c5 c3 0f  mov   $0fc3,a
+0fbc: 84 0a     adc   a,$0a             ; $0a *= 3 (lsr + ror = 3 bytes)
+0fbe: c5 c3 0f  mov   $0fc3,a           ; self-modifying code!
 0fc1: dd        mov   a,y
-0fc2: 2f 09     bra   $0fcd         ; note: destination changes dynamically by the code above!
+0fc2: 2f 09     bra   $0fcd             ; note: destination changes dynamically by the code above!
 0fc4: 5c        lsr   a
 0fc5: 6b 0c     ror   $0c
 0fc7: 5c        lsr   a
@@ -1682,7 +1683,7 @@
 0fe0: fa 0c f3  mov   ($f3),($0c)
 0fe3: bc        inc   a
 0fe4: c4 f2     mov   $f2,a
-0fe6: cb f3     mov   $f3,y
+0fe6: cb f3     mov   $f3,y             ; set voice $21 pitch from $0C/Y
 0fe8: 6f        ret
 
 0fe9: e4 09     mov   a,$09
@@ -1746,11 +1747,11 @@
 ; vcmd c7 - nop
 1048: 6f        ret
 
-; vcmd c8
+; vcmd c8 - set noise freq
 1049: e4 0e     mov   a,$0e
 104b: 2f 05     bra   $1052
 
-; vcmd df
+; vcmd df - change noise freq
 104d: e4 0e     mov   a,$0e
 104f: 60        clrc
 1050: 84 38     adc   a,$38
@@ -1760,14 +1761,14 @@
 1059: c4 38     mov   $38,a
 105b: 8f 6c f2  mov   $f2,#$6c
 105e: c4 f3     mov   $f3,a
-; vcmd c9
+; vcmd c9 - noise on
 1060: e3 26 05  bbs7  $26,$1068
 1063: 09 20 5b  or    ($5b),($20)
 1066: 2f 16     bra   $107e
 1068: 09 20 4c  or    ($4c),($20)
 106b: 2f 11     bra   $107e
 
-; vcmd ca
+; vcmd ca - noise off
 106d: e4 20     mov   a,$20
 106f: 48 ff     eor   a,#$ff
 1071: e3 26 06  bbs7  $26,$107a
@@ -1784,7 +1785,7 @@
 1089: c4 f3     mov   $f3,a
 108b: 6f        ret
 
-; vcmd cb
+; vcmd cb - pitchmod on
 108c: e3 26 05  bbs7  $26,$1094
 108f: 09 20 5c  or    ($5c),($20)
 1092: 2f 19     bra   $10ad
@@ -1792,7 +1793,7 @@
 1097: 09 20 4d  or    ($4d),($20)
 109a: 2f 11     bra   $10ad
 
-; vcmd cc
+; vcmd cc - pitchmod off
 109c: e4 20     mov   a,$20
 109e: 48 ff     eor   a,#$ff
 10a0: e3 26 06  bbs7  $26,$10a9
@@ -1828,23 +1829,25 @@
 10d4: c4 2a     mov   $2a,a
 10d6: 6f        ret
 
-; vcmd cf
-10d7: e4 0e     mov   a,$0e
+; vcmd cf - transpose (absolute, signed, 16 = 1 semitone)
+10d7: e4 0e     mov   a,$0e             ; signed
+; divide by 4 (arithmetic)
 10d9: 30 05     bmi   $10e0
 10db: 9f        xcn   a
-10dc: 28 0f     and   a,#$0f
+10dc: 28 0f     and   a,#$0f            ; higher 4 bits
 10de: 2f 03     bra   $10e3
 10e0: 9f        xcn   a
-10e1: 08 f0     or    a,#$f0
+10e1: 08 f0     or    a,#$f0            ; negative padding
+; update transpose
 10e3: eb 1f     mov   y,$1f
-10e5: d6 ed 19  mov   $19ed+y,a
+10e5: d6 ed 19  mov   $19ed+y,a         ; transpose
 10e8: e4 0e     mov   a,$0e
 10ea: 9f        xcn   a
-10eb: 28 f0     and   a,#$f0
-10ed: d6 ec 19  mov   $19ec+y,a
+10eb: 28 f0     and   a,#$f0            ; lower 4 bits
+10ed: d6 ec 19  mov   $19ec+y,a         ; transpose (fraction)
 10f0: 6f        ret
 
-; vcmd d0 - back to loop point
+; vcmd d0 - end/return
 10f1: f8 1f     mov   x,$1f
 10f3: f5 2d 1c  mov   a,$1c2d+x
 10f6: c4 2a     mov   $2a,a
@@ -1882,11 +1885,11 @@
 1135: c4 4f     mov   $4f,a
 1137: 6f        ret
 
-; vcmd d2
+; vcmd d2 - set timer 1 freq
 1138: fa 0e 69  mov   ($69),($0e)
 113b: 6f        ret
 
-; vcmd d3
+; vcmd d3 - change timer 1 freq
 113c: 60        clrc
 113d: 89 0e 69  adc   ($69),($0e)
 1140: 6f        ret
@@ -1961,7 +1964,7 @@
 11be: d5 2d 1c  mov   $1c2d+x,a
 11c1: 6f        ret
 
-; vcmd d8
+; vcmd d8 - default ADSR
 11c2: f6 24 18  mov   a,$1824+y
 11c5: 5d        mov   x,a
 11c6: f5 80 46  mov   a,$4680+x
@@ -2046,28 +2049,28 @@
 1252: cb f3     mov   $f3,y
 1254: 6f        ret
 
-; vcmd dd
+; vcmd dd - duration rate
 1255: e4 0e     mov   a,$0e
 1257: d6 6c 18  mov   $186c+y,a
 125a: 6f        ret
 
 ; vcmd de - set instrument
 125b: e4 0e     mov   a,$0e
-125d: d6 24 18  mov   $1824+y,a
+125d: d6 24 18  mov   $1824+y,a         ; save instrument #
 1260: 5d        mov   x,a
-1261: f5 80 46  mov   a,$4680+x
+1261: f5 80 46  mov   a,$4680+x         ; SRCN table
 1264: 1c        asl   a
 1265: 5d        mov   x,a
 1266: f5 01 47  mov   a,$4701+x
-1269: d6 48 01  mov   $0148+y,a
+1269: d6 48 01  mov   $0148+y,a         ; volume
 126c: eb 1f     mov   y,$1f
-126e: f5 40 47  mov   a,$4740+x
+126e: f5 40 47  mov   a,$4740+x         ; ADSR(1)
 1271: d6 60 01  mov   $0160+y,a
-1274: f5 41 47  mov   a,$4741+x
+1274: f5 41 47  mov   a,$4741+x         ; ADSR(2)
 1277: d6 61 01  mov   $0161+y,a
-127a: f5 80 47  mov   a,$4780+x
+127a: f5 80 47  mov   a,$4780+x         ; coarse tuning
 127d: d6 90 01  mov   $0190+y,a
-1280: f5 81 47  mov   a,$4781+x
+1280: f5 81 47  mov   a,$4781+x         ; fine tuning
 1283: d6 91 01  mov   $0191+y,a
 1286: 09 20 24  or    ($24),($20)
 1289: 92 26     clr4  $26
@@ -2082,7 +2085,7 @@
 1298: 82 26     set4  $26
 129a: 6f        ret
 
-; vcmd e2
+; vcmd e2 - volume
 129b: e4 0e     mov   a,$0e
 129d: f8 1f     mov   x,$1f
 129f: d5 35 1a  mov   $1a35+x,a
@@ -2091,7 +2094,7 @@
 12a7: f6 48 01  mov   a,$0148+y
 12aa: 5f 3a 15  jmp   $153a
 
-; vcmd e3
+; vcmd e3 - change volume
 12ad: e4 0e     mov   a,$0e
 12af: f8 1f     mov   x,$1f
 12b1: 60        clrc
@@ -2101,7 +2104,7 @@
 12ba: f6 48 01  mov   a,$0148+y
 12bd: 5f 3a 15  jmp   $153a
 
-; vcmd e4
+; vcmd e4 - volume fade
 12c0: e4 0e     mov   a,$0e
 12c2: f0 36     beq   $12fa
 12c4: c4 0c     mov   $0c,a
@@ -2131,7 +2134,7 @@
 12f8: 62 28     set3  $28
 12fa: 6f        ret
 
-; vcmd e5
+; vcmd e5 - portamento
 12fb: fa 0e 0a  mov   ($0a),($0e)
 12fe: fa 0f 0b  mov   ($0b),($0f)
 1301: e4 0a     mov   a,$0a
@@ -2177,7 +2180,7 @@
 1352: 62 27     set3  $27
 1354: 6f        ret
 
-; vcmd e6
+; vcmd e6 - portamento toggle
 1355: a3 27 03  bbs5  $27,$135b
 1358: a2 27     set5  $27
 135a: 6f        ret
@@ -2186,7 +2189,7 @@
 135d: 72 27     clr3  $27
 135f: 6f        ret
 
-; vcmd e7
+; vcmd e7 - panpot
 1360: 92 28     clr4  $28
 1362: e4 0e     mov   a,$0e
 1364: f8 1f     mov   x,$1f
@@ -2194,7 +2197,7 @@
 1369: f6 48 01  mov   a,$0148+y
 136c: 5f 3a 15  jmp   $153a
 
-; vcmd e8
+; vcmd e8 - panpot fade
 136f: e4 0e     mov   a,$0e
 1371: f0 3b     beq   $13ae
 1373: c4 0c     mov   $0c,a
@@ -2226,7 +2229,7 @@
 13ac: c2 28     set6  $28
 13ae: 6f        ret
 
-; vcmd e9
+; vcmd e9 - panpot LFO on
 13af: b2 28     clr5  $28
 13b1: e4 0e     mov   a,$0e
 13b3: d6 9c 1b  mov   $1b9c+y,a
@@ -2250,7 +2253,7 @@
 
 13da: 6f        ret
 
-; vcmd ec
+; vcmd ec - transpose (absolute, signed, 4 = 1 semitone)
 13db: 3f 01 14  call  $1401
 13de: f8 1f     mov   x,$1f
 13e0: e4 06     mov   a,$06
@@ -2259,7 +2262,7 @@
 13e7: d5 ed 19  mov   $19ed+x,a
 13ea: 6f        ret
 
-; vcmd ed
+; vcmd ed - transpose (relative, signed, 4 = 1 semitone)
 13eb: 3f 01 14  call  $1401
 13ee: f8 1f     mov   x,$1f
 13f0: f5 ed 19  mov   a,$19ed+x
@@ -2271,20 +2274,24 @@
 13fd: d5 ed 19  mov   $19ed+x,a
 1400: 6f        ret
 
+; divide the 1st argument by 4 (arithmetic, set results into $06/7)
 1401: 8f 00 06  mov   $06,#$00
-1404: e4 0e     mov   a,$0e
+1404: e4 0e     mov   a,$0e             ; take first argument (tuning amount)
 1406: 30 08     bmi   $1410
+; positive tuning
 1408: 5c        lsr   a
 1409: 6b 06     ror   $06
 140b: 5c        lsr   a
 140c: 6b 06     ror   $06
 140e: 2f 08     bra   $1418
+; negative tuning
 1410: 80        setc
 1411: 7c        ror   a
 1412: 6b 06     ror   $06
 1414: 80        setc
 1415: 7c        ror   a
 1416: 6b 06     ror   $06
+; divided by 4, result is in $06/07
 1418: c4 07     mov   $07,a
 141a: e8 ff     mov   a,#$ff
 141c: d6 54 18  mov   $1854+y,a
@@ -2295,15 +2302,15 @@
 1422: d6 1c 1a  mov   $1a1c+y,a
 1425: 6f        ret
 
-; vcmd ee
+; vcmd ee - rhythm kit on
 1426: a2 26     set5  $26
 1428: 6f        ret
 
-; vcmd ef
+; vcmd ef - rhythm kit off
 1429: b2 26     clr5  $26
 142b: 6f        ret
 
-; vcmd f0
+; vcmd f0 - vibrato on
 142c: 32 27     clr1  $27
 142e: e4 0e     mov   a,$0e
 1430: f0 2d     beq   $145f
@@ -2334,13 +2341,13 @@
 1463: d6 d4 19  mov   $19d4+y,a
 1466: 6f        ret
 
-; vcmd f1
+; vcmd f1 - vibrato on (w/delay)
 1467: 3f 2c 14  call  $142c
 146a: e4 10     mov   a,$10
 146c: d6 d4 19  mov   $19d4+y,a
 146f: 6f        ret
 
-; vcmd f2
+; vcmd f2 - change tempo
 1470: e4 0e     mov   a,$0e
 1472: e3 26 0c  bbs7  $26,$1481
 1475: 84 5f     adc   a,$5f
@@ -2355,11 +2362,11 @@
 1485: c4 fb     mov   $fb,a
 1487: 6f        ret
 
-; vcmd f3
+; vcmd f3 - vibrato off
 1488: 12 27     clr0  $27
 148a: 6f        ret
 
-; vcmd f4
+; vcmd f4 - tremolo on
 148b: e4 0e     mov   a,$0e
 148d: d6 dc 1a  mov   $1adc+y,a
 1490: d6 c4 1a  mov   $1ac4+y,a
@@ -2370,29 +2377,29 @@
 149d: 02 28     set0  $28
 149f: 6f        ret
 
-; vcmd f5
+; vcmd f5 - tremolo on (w/delay)
 14a0: 3f 8b 14  call  $148b
 14a3: e4 10     mov   a,$10
 14a5: d6 0c 1b  mov   $1b0c+y,a
 14a8: 6f        ret
 
-; vcmd f7
+; vcmd f7 - tremolo off
 14a9: 12 28     clr0  $28
 14ab: f6 48 01  mov   a,$0148+y
 14ae: 5f 3a 15  jmp   $153a
 
 14b1: 6f        ret
 
-; vcmd f8
+; vcmd f8 - slur on
 14b2: 62 26     set3  $26
 14b4: 6f        ret
 
-; vcmd f9
+; vcmd f9 - slur off
 14b5: 72 26     clr3  $26
 14b7: 52 26     clr2  $26
 14b9: 6f        ret
 
-; vcmd fa
+; vcmd fa - echo on
 14ba: e3 26 05  bbs7  $26,$14c2
 14bd: 09 20 5d  or    ($5d),($20)
 14c0: 2f 1e     bra   $14e0
@@ -2403,7 +2410,7 @@
 14cb: c4 57     mov   $57,a
 14cd: 2f 11     bra   $14e0
 
-; vcmd fb
+; vcmd fb - echo off
 14cf: e4 20     mov   a,$20
 14d1: 48 ff     eor   a,#$ff
 14d3: e3 26 06  bbs7  $26,$14dc
@@ -2458,46 +2465,48 @@
 1537: 2f 01     bra   $153a
 1539: 6f        ret
 
-153a: fd        mov   y,a
+; calculate volume reg value
+153a: fd        mov   y,a               ; y = per-instrument volume
 153b: e4 20     mov   a,$20
 153d: 24 22     and   a,$22
-153f: f0 48     beq   $1589
+153f: f0 48     beq   $1589             ; skip if not changed
 1541: f8 1f     mov   x,$1f
-1543: f5 35 1a  mov   a,$1a35+x
-1546: 1c        asl   a
+1543: f5 35 1a  mov   a,$1a35+x         ; channel volume
+1546: 1c        asl   a                 ; convert from 7 bits to 8 bits
 1547: cf        mul   ya
-1548: e4 2f     mov   a,$2f
-154a: 1c        asl   a
+1548: e4 2f     mov   a,$2f             ; master volume?
+154a: 1c        asl   a                 ; convert from 7 bits to 8 bits
 154b: cf        mul   ya
-154c: 63 37 2f  bbs3  $37,$157e
-154f: f5 25 1b  mov   a,$1b25+x
+154c: 63 37 2f  bbs3  $37,$157e         ; branch if mono
+154f: f5 25 1b  mov   a,$1b25+x         ; pan
 1552: 68 80     cmp   a,#$80
 1554: f0 28     beq   $157e
 1556: 90 15     bcc   $156d
+; left pan (pan < 128)
 1558: e4 21     mov   a,$21
 155a: bc        inc   a
 155b: c4 f2     mov   $f2,a
-155d: cb f3     mov   $f3,y
+155d: cb f3     mov   $f3,y             ; VOL(R)
 155f: fa 21 f2  mov   ($f2),($21)
-1562: f5 25 1b  mov   a,$1b25+x
+1562: f5 25 1b  mov   a,$1b25+x         ; pan
 1565: 48 ff     eor   a,#$ff
-1567: bc        inc   a
+1567: bc        inc   a                 ; 0..127 => 0..-127
 1568: 1c        asl   a
-1569: cf        mul   ya
-156a: cb f3     mov   $f3,y
+1569: cf        mul   ya                ; decrease left volume
+156a: cb f3     mov   $f3,y             ; VOL(L)
 156c: 6f        ret
-
+; right pan (pan > 128)
 156d: e4 21     mov   a,$21
 156f: c4 f2     mov   $f2,a
-1571: cb f3     mov   $f3,y
+1571: cb f3     mov   $f3,y             ; VOL(L)
 1573: bc        inc   a
 1574: c4 f2     mov   $f2,a
 1576: f5 25 1b  mov   a,$1b25+x
 1579: 1c        asl   a
-157a: cf        mul   ya
-157b: cb f3     mov   $f3,y
+157a: cf        mul   ya                ; decrease right volume
+157b: cb f3     mov   $f3,y             ; VOL(R)
 157d: 6f        ret
-
+; center (pan == 128)
 157e: e4 21     mov   a,$21
 1580: c4 f2     mov   $f2,a
 1582: cb f3     mov   $f3,y
@@ -2738,58 +2747,58 @@
 1741: dw $103c  ; c5 - octave down
 1743: dw $1042  ; c6 - set octave
 1745: dw $1048  ; c7 - nop
-1747: dw $1049  ; c8
-1749: dw $1060  ; c9
-174b: dw $106d  ; ca
-174d: dw $108c  ; cb
-174f: dw $109c  ; cc
+1747: dw $1049  ; c8 - set noise freq
+1749: dw $1060  ; c9 - noise on
+174b: dw $106d  ; ca - noise off
+174d: dw $108c  ; cb - pitchmod on
+174f: dw $109c  ; cc - pitchmod off
 1751: dw $10bb  ; cd
 1753: dw $10c2  ; ce
-1755: dw $10d7  ; cf
-1757: dw $10f1  ; d0 - back to loop point
+1755: dw $10d7  ; cf - transpose (absolute, signed, 16 = 1 semitone)
+1757: dw $10f1  ; d0 - end/return
 1759: dw $1123  ; d1 - tempo
-175b: dw $1138  ; d2
-175d: dw $113c  ; d3
+175b: dw $1138  ; d2 - set timer 1 freq
+175d: dw $113c  ; d3 - change timer 1 freq
 175f: dw $1141  ; d4 - repeat start
 1761: dw $1166  ; d5 - repeat end
 1763: dw $1199  ; d6 - repeat break
 1765: dw $11b5  ; d7 - set loop point
-1767: dw $11c2  ; d8
-1769: dw $11f5  ; d9
-176b: dw $1206  ; da
-176d: dw $1219  ; db
-176f: dw $1234  ; dc
-1771: dw $1255  ; dd
+1767: dw $11c2  ; d8 - default ADSR
+1769: dw $11f5  ; d9 - set attack rate (AR)
+176b: dw $1206  ; da - set decay rate (DR)
+176d: dw $1219  ; db - set sustain level (SL)
+176f: dw $1234  ; dc - set sustain rate (SR)
+1771: dw $1255  ; dd - duration rate
 1773: dw $125b  ; de - set instrument
-1775: dw $104d  ; df
+1775: dw $104d  ; df - change noise freq
 1777: dw $128c  ; e0
 1779: dw $1036  ; e1 - octave up (duplicated)
-177b: dw $129b  ; e2
-177d: dw $12ad  ; e3
-177f: dw $12c0  ; e4
-1781: dw $12fb  ; e5
-1783: dw $1355  ; e6
-1785: dw $1360  ; e7
-1787: dw $136f  ; e8
-1789: dw $13af  ; e9
+177b: dw $129b  ; e2 - volume
+177d: dw $12ad  ; e3 - change volume
+177f: dw $12c0  ; e4 - volume fade
+1781: dw $12fb  ; e5 - portamento
+1783: dw $1355  ; e6 - portamento toggle
+1785: dw $1360  ; e7 - panpot
+1787: dw $136f  ; e8 - panpot fade
+1789: dw $13af  ; e9 - panpot LFO on
 178b: dw $1036  ; ea - octave up (duplicated)
 178d: dw $1036  ; eb - octave up (duplicated)
-178f: dw $13db  ; ec
-1791: dw $13eb  ; ed
-1793: dw $1426  ; ee
-1795: dw $1429  ; ef
-1797: dw $142c  ; f0
-1799: dw $1467  ; f1
-179b: dw $1470  ; f2
-179d: dw $1488  ; f3
-179f: dw $148b  ; f4
-17a1: dw $14a0  ; f5
+178f: dw $13db  ; ec - transpose (absolute, signed, 4 = 1 semitone)
+1791: dw $13eb  ; ed - transpose (relative, signed, 4 = 1 semitone)
+1793: dw $1426  ; ee - rhythm kit on
+1795: dw $1429  ; ef - rhythm kit off
+1797: dw $142c  ; f0 - vibrato on
+1799: dw $1467  ; f1 - vibrato on (w/delay)
+179b: dw $1470  ; f2 - change tempo
+179d: dw $1488  ; f3 - vibrato off
+179f: dw $148b  ; f4 - tremolo on
+17a1: dw $14a0  ; f5 - tremolo on (w/delay)
 17a3: dw $1420  ; f6
-17a5: dw $14a9  ; f7
-17a7: dw $14b2  ; f8
-17a9: dw $14b5  ; f9
-17ab: dw $14ba  ; fa
-17ad: dw $14cf  ; fb
+17a5: dw $14a9  ; f7 - tremolo off
+17a7: dw $14b2  ; f8 - slur on
+17a9: dw $14b5  ; f9 - slur off
+17ab: dw $14ba  ; fa - echo on
+17ad: dw $14cf  ; fb - echo off
 17af: dw $14f0  ; fc
 17b1: dw $1036  ; fd - octave up (duplicated)
 17b3: dw $1174  ; fe
@@ -2803,6 +2812,7 @@
 
 17f5: db $c0,$90,$60,$48,$30,$24,$20,$18,$10,$0c,$08,$06,$03
 
+; pitch table
 1802: dw $260e
 1804: dw $2851
 1806: dw $2ab7

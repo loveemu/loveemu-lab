@@ -1521,14 +1521,14 @@
 0e25: f5 a9 01  mov   a,$01a9+x
 0e28: fd        mov   y,a
 0e29: f5 a8 01  mov   a,$01a8+x
-0e2c: 7a 08     addw  ya,$08
+0e2c: 7a 08     addw  ya,$08            ; add per-instrument tuning
 0e2e: da 08     movw  $08,ya
 0e30: f5 82 19  mov   a,$1982+x
 0e33: fd        mov   y,a
 0e34: f5 81 19  mov   a,$1981+x
-0e37: 7a 08     addw  ya,$08
+0e37: 7a 08     addw  ya,$08            ; add channel transpose/tuning
 0e39: da 28     movw  $28,ya
-0e3b: 3f 33 0f  call  $0f33
+0e3b: 3f 33 0f  call  $0f33             ; update pitch reg value
 0e3e: f8 22     mov   x,$22
 0e40: 43 25 38  bbs2  $25,$0e7b
 0e43: e4 20     mov   a,$20
@@ -1642,24 +1642,25 @@
 0f2c: c4 28     mov   $28,a
 0f2e: f5 1a 18  mov   a,$181a+x
 0f31: c4 29     mov   $29,a
+; calculate final pitch reg value ($2b = note number)
 0f33: e4 20     mov   a,$20
 0f35: 24 1d     and   a,$1d
-0f37: f0 6f     beq   $0fa8
+0f37: f0 6f     beq   $0fa8             ; skip if not changed
 0f39: ba 28     movw  ya,$28
-0f3b: 7a 2f     addw  ya,$2f
-0f3d: da 02     movw  $02,ya
+0f3b: 7a 2f     addw  ya,$2f            ; add global tuning?
+0f3d: da 02     movw  $02,ya            ; $03 = note number, $02 = fraction
 0f3f: cd 0c     mov   x,#$0c
 0f41: 8d 00     mov   y,#$00
 0f43: e4 03     mov   a,$03
 0f45: 60        clrc
 0f46: 9e        div   ya,x
-0f47: c4 08     mov   $08,a
-0f49: dd        mov   a,y
+0f47: c4 08     mov   $08,a             ; octave
+0f49: dd        mov   a,y               ; key
 0f4a: 1c        asl   a
 0f4b: 5d        mov   x,a
-0f4c: f5 b0 17  mov   a,$17b0+x         ; pitch table
+0f4c: f5 b0 17  mov   a,$17b0+x
 0f4f: fd        mov   y,a
-0f50: f5 af 17  mov   a,$17af+x
+0f50: f5 af 17  mov   a,$17af+x         ; pitch table
 0f53: da 0a     movw  $0a,ya
 0f55: da 04     movw  $04,ya
 0f57: f5 b2 17  mov   a,$17b2+x
@@ -1668,7 +1669,7 @@
 0f5e: 9a 0a     subw  ya,$0a
 0f60: cb 0b     mov   $0b,y
 0f62: eb 02     mov   y,$02
-0f64: cf        mul   ya
+0f64: cf        mul   ya                ; interpolate by note number fraction
 0f65: 8f 00 0d  mov   $0d,#$00
 0f68: cb 0c     mov   $0c,y
 0f6a: eb 02     mov   y,$02
@@ -1677,14 +1678,14 @@
 0f6f: 7a 0c     addw  ya,$0c
 0f71: 7a 04     addw  ya,$04
 0f73: da 0c     movw  $0c,ya
-0f75: e4 08     mov   a,$08
+0f75: e4 08     mov   a,$08             ; octave
 0f77: 28 07     and   a,#$07
 0f79: c4 0a     mov   $0a,a
 0f7b: 1c        asl   a
-0f7c: 84 0a     adc   a,$0a
-0f7e: c5 83 0f  mov   $0f83,a
+0f7c: 84 0a     adc   a,$0a             ; $0a *= 3 (lsr + ror = 3 bytes)
+0f7e: c5 83 0f  mov   $0f83,a           ; self-modifying code!
 0f81: dd        mov   a,y
-0f82: 2f 09     bra   $0f8d
+0f82: 2f 09     bra   $0f8d             ; note: destination changes dynamically by the code above!
 0f84: 5c        lsr   a
 0f85: 6b 0c     ror   $0c
 0f87: 5c        lsr   a
@@ -1878,7 +1879,7 @@
 10c7: d5 a2 1d  mov   $1da2+x,a
 10ca: 6f        ret
 
-; vcmd cf - detune (/16)
+; vcmd cf - transpose (absolute, signed, 16 = 1 semitone)
 10cb: 5d        mov   x,a
 10cc: e7 2c     mov   a,($2c+x)
 10ce: 30 05     bmi   $10d5
@@ -2107,28 +2108,28 @@
 1258: 5d        mov   x,a
 1259: e7 2c     mov   a,($2c+x)
 125b: 3a 2c     incw  $2c
-125d: d6 01 18  mov   $1801+y,a
+125d: d6 01 18  mov   $1801+y,a         ; duration rate
 1260: 6f        ret
 
 ; vcmd de - set instrument
 1261: 5d        mov   x,a
 1262: e7 2c     mov   a,($2c+x)
 1264: 3a 2c     incw  $2c
-1266: d6 48 01  mov   $0148+y,a
+1266: d6 48 01  mov   $0148+y,a         ; save instrument #
 1269: 5d        mov   x,a
-126a: f5 80 5e  mov   a,$5e80+x
+126a: f5 80 5e  mov   a,$5e80+x         ; SRCN table
 126d: 1c        asl   a
 126e: 5d        mov   x,a
 126f: f5 01 5f  mov   a,$5f01+x
-1272: d6 60 01  mov   $0160+y,a
+1272: d6 60 01  mov   $0160+y,a         ; volume
 1275: eb 23     mov   y,$23
-1277: f5 40 5f  mov   a,$5f40+x
+1277: f5 40 5f  mov   a,$5f40+x         ; ADSR(1)
 127a: d6 78 01  mov   $0178+y,a
-127d: f5 41 5f  mov   a,$5f41+x
+127d: f5 41 5f  mov   a,$5f41+x         ; ADSR(2)
 1280: d6 79 01  mov   $0179+y,a
-1283: f5 80 5f  mov   a,$5f80+x
+1283: f5 80 5f  mov   a,$5f80+x         ; coarse tuning
 1286: d6 a8 01  mov   $01a8+y,a
-1289: f5 81 5f  mov   a,$5f81+x
+1289: f5 81 5f  mov   a,$5f81+x         ; fine tuning
 128c: d6 a9 01  mov   $01a9+y,a
 128f: 09 20 1f  or    ($1f),($20)
 1292: 6f        ret
@@ -2139,7 +2140,7 @@
 1296: 3a 2c     incw  $2c
 1298: f8 23     mov   x,$23
 129a: d5 b2 19  mov   $19b2+x,a
-129d: f6 60 01  mov   a,$0160+y
+129d: f6 60 01  mov   a,$0160+y         ; per-instrument volume
 12a0: 5f 2f 15  jmp   $152f
 
 ; vcmd e3 - change volume
@@ -2324,7 +2325,7 @@
 13e6: f6 60 01  mov   a,$0160+y
 13e9: 5f 2f 15  jmp   $152f
 
-; vcmd ec - set detune (/4)
+; vcmd ec - transpose (absolute, signed, 4 = 1 semitone)
 13ec: 3f 17 14  call  $1417
 13ef: f8 23     mov   x,$23
 13f1: e4 06     mov   a,$06
@@ -2333,7 +2334,7 @@
 13f8: d5 82 19  mov   $1982+x,a
 13fb: 6f        ret
 
-; vcmd ed - change detune (/4)
+; vcmd ec - transpose (relative, signed, 4 = 1 semitone)
 13fc: 3f 17 14  call  $1417
 13ff: e8 ff     mov   a,#$ff
 1401: d6 e9 17  mov   $17e9+y,a
@@ -2347,6 +2348,7 @@
 1413: d5 82 19  mov   $1982+x,a
 1416: 6f        ret
 
+; divide the 1st argument by 4 (arithmetic, set results into $06/7)
 1417: 5d        mov   x,a
 1418: c4 06     mov   $06,a
 141a: e7 2c     mov   a,($2c+x)
@@ -2520,35 +2522,37 @@
 152c: 2f 01     bra   $152f
 152e: 6f        ret
 
-152f: fd        mov   y,a
+; calculate volume reg value
+152f: fd        mov   y,a               ; y = per-instrument volume
 1530: e4 20     mov   a,$20
 1532: 24 1d     and   a,$1d
-1534: f0 48     beq   $157e
+1534: f0 48     beq   $157e             ; skip if not changed
 1536: f8 23     mov   x,$23
-1538: f5 b2 19  mov   a,$19b2+x
-153b: 1c        asl   a
+1538: f5 b2 19  mov   a,$19b2+x         ; channel volume
+153b: 1c        asl   a                 ; convert from 7 bits to 8 bits
 153c: cf        mul   ya
-153d: e4 2e     mov   a,$2e
-153f: 1c        asl   a
+153d: e4 2e     mov   a,$2e             ; master volume?
+153f: 1c        asl   a                 ; convert from 7 bits to 8 bits
 1540: cf        mul   ya
-1541: 63 36 2f  bbs3  $36,$1573
-1544: f5 a2 1a  mov   a,$1aa2+x
+1541: 63 36 2f  bbs3  $36,$1573         ; branch if mono
+1544: f5 a2 1a  mov   a,$1aa2+x         ; pan
 1547: 68 80     cmp   a,#$80
 1549: f0 28     beq   $1573
 154b: 90 15     bcc   $1562
+; left pan (pan < 128)
 154d: e4 21     mov   a,$21
 154f: bc        inc   a
 1550: c4 f2     mov   $f2,a
-1552: cb f3     mov   $f3,y
+1552: cb f3     mov   $f3,y             ; VOL(R)
 1554: fa 21 f2  mov   ($f2),($21)
 1557: f5 a2 1a  mov   a,$1aa2+x
 155a: 48 ff     eor   a,#$ff
 155c: bc        inc   a
 155d: 1c        asl   a
 155e: cf        mul   ya
-155f: cb f3     mov   $f3,y
+155f: cb f3     mov   $f3,y             ; VOL(L)
 1561: 6f        ret
-
+; right pan (pan > 128)
 1562: e4 21     mov   a,$21
 1564: c4 f2     mov   $f2,a
 1566: cb f3     mov   $f3,y
@@ -2559,7 +2563,7 @@
 156f: cf        mul   ya
 1570: cb f3     mov   $f3,y
 1572: 6f        ret
-
+; center (pan == 128)
 1573: e4 21     mov   a,$21
 1575: c4 f2     mov   $f2,a
 1577: cb f3     mov   $f3,y
@@ -2769,7 +2773,7 @@
 16fd: dw $1071  ; cc - pitchmod off
 16ff: dw $1098  ; cd - jump to $4000+x*2 (sfx lo)
 1701: dw $10a5  ; ce - jump to $4002+x*2 (sfx hi)
-1703: dw $10cb  ; cf - detune (/16)
+1703: dw $10cb  ; cf - transpose (absolute, signed, 16 = 1 semitone)
 1705: dw $10e8  ; d0 - end/return
 1707: dw $112f  ; d1 - tempo
 1709: dw $1143  ; d2 - repeat start (duplicated)
@@ -2798,8 +2802,8 @@
 1737: dw $13ab  ; e9 - panpot LFO on
 1739: dw $13d1  ; ea - restart panpot LFO
 173b: dw $13dc  ; eb - panpot LFO off
-173d: dw $13ec  ; ec - set detune (/4)
-173f: dw $13fc  ; ed - change detune (/4)
+173d: dw $13ec  ; ec - transpose (absolute, signed, 4 = 1 semitone)
+173f: dw $13fc  ; ed - transpose (relative, signed, 4 = 1 semitone)
 1741: dw $1433  ; ee - rhythm kit on
 1743: dw $1436  ; ef - rhythm kit off
 1745: dw $1439  ; f0 - vibrato on
@@ -2828,7 +2832,7 @@
 ; durations (-1)
 17a1: db $bf,$8f,$5f,$47,$2f,$23,$1f,$17,$0f,$0b,$07,$05,$02,$00
 
-; pitch table?
+; pitch table
 17af: dw $260e
 17b1: dw $2851
 17b3: dw $2ab7

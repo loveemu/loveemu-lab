@@ -1718,24 +1718,24 @@
 1012: bc        inc   a
 1013: 2f 08     bra   $101d
 
-; vcmd c5
+; vcmd c5 - octave down
 1015: f6 a4 17  mov   a,$17a4+y
 1018: 9c        dec   a
 1019: 2f 02     bra   $101d
 
-; vcmd c6
+; vcmd c6 - set octave
 101b: e4 0e     mov   a,$0e
 101d: d6 a4 17  mov   $17a4+y,a
 1020: 6f        ret
 
-; vcmd c7
+; vcmd c7 - nop
 1021: 6f        ret
 
-; vcmd c8
+; vcmd c8 - set noise freq
 1022: e4 0e     mov   a,$0e
 1024: 2f 05     bra   $102b
 
-; vcmd df
+; vcmd df - change noise freq
 1026: e4 0e     mov   a,$0e
 1028: 60        clrc
 1029: 84 38     adc   a,$38
@@ -1745,14 +1745,14 @@
 1032: c4 38     mov   $38,a
 1034: 8f 6c f2  mov   $f2,#$6c
 1037: c4 f3     mov   $f3,a
-; vcmd c9
+; vcmd c9 - noise on
 1039: e3 26 05  bbs7  $26,$1041
 103c: 09 20 59  or    ($59),($20)
 103f: 2f 16     bra   $1057
 1041: 09 20 4c  or    ($4c),($20)
 1044: 2f 11     bra   $1057
 
-; vcmd ca
+; vcmd ca - noise off
 1046: e4 20     mov   a,$20
 1048: 48 ff     eor   a,#$ff
 104a: e3 26 06  bbs7  $26,$1053
@@ -1769,14 +1769,14 @@
 1062: c4 f3     mov   $f3,a
 1064: 6f        ret
 
-; vcmd cb
+; vcmd cb - pitchmod on
 1065: e3 26 05  bbs7  $26,$106d
 1068: 09 20 5a  or    ($5a),($20)
 106b: 2f 16     bra   $1083
 106d: 09 20 4d  or    ($4d),($20)
 1070: 2f 11     bra   $1083
 
-; vcmd cc
+; vcmd cc - pitchmod off
 1072: e4 20     mov   a,$20
 1074: 48 ff     eor   a,#$ff
 1076: e3 26 06  bbs7  $26,$107f
@@ -1812,7 +1812,7 @@
 10aa: c4 2a     mov   $2a,a
 10ac: 6f        ret
 
-; vcmd cf
+; vcmd cf - transpose (absolute, signed, 16 = 1 semitone)
 10ad: e4 0e     mov   a,$0e
 10af: 30 05     bmi   $10b6
 10b1: 9f        xcn   a
@@ -1828,7 +1828,7 @@
 10c3: d6 54 19  mov   $1954+y,a
 10c6: 6f        ret
 
-; vcmd d0 - back to loop point
+; vcmd d0 - end/return
 10c7: f8 1f     mov   x,$1f
 10c9: f5 7c 1b  mov   a,$1b7c+x
 10cc: c4 29     mov   $29,a
@@ -1865,16 +1865,16 @@
 1108: c4 4f     mov   $4f,a
 110a: 6f        ret
 
-; vcmd d2
+; vcmd d2 - set timer 1 freq
 110b: fa 0e 67  mov   ($67),($0e)
 110e: 6f        ret
 
-; vcmd d3
+; vcmd d3 - change timer 1 freq
 110f: 60        clrc
 1110: 89 0e 67  adc   ($67),($0e)
 1113: 6f        ret
 
-; vcmd d4
+; vcmd d4 - repeat start
 1114: f6 a4 17  mov   a,$17a4+y
 1117: c4 06     mov   $06,a
 1119: f6 ac 1b  mov   a,$1bac+y
@@ -1892,7 +1892,7 @@
 1135: d5 55 1c  mov   $1c55+x,a
 1138: 6f        ret
 
-; vcmd d5
+; vcmd d5 - repeat end
 1139: 3f d3 15  call  $15d3
 113c: f5 c4 1b  mov   a,$1bc4+x
 113f: f0 3e     beq   $117f
@@ -1915,7 +1915,7 @@
 1168: da 29     movw  $29,ya
 116a: 6f        ret
 
-; vcmd d6
+; vcmd d6 - repeat break
 116b: 3f d3 15  call  $15d3
 116e: f5 c4 1b  mov   a,$1bc4+x
 1171: f0 01     beq   $1174
@@ -1939,7 +1939,7 @@
 1190: d5 7d 1b  mov   $1b7d+x,a
 1193: 6f        ret
 
-; vcmd d8
+; vcmd d8 - default ADSR
 1194: f6 d8 01  mov   a,$01d8+y
 1197: 5d        mov   x,a
 1198: f5 80 56  mov   a,$5680+x
@@ -2024,7 +2024,7 @@
 1224: cb f3     mov   $f3,y
 1226: 6f        ret
 
-; vcmd dd
+; vcmd dd - duration rate
 1227: e4 0e     mov   a,$0e
 1229: d6 d4 17  mov   $17d4+y,a
 122c: 6f        ret
@@ -2060,7 +2060,7 @@
 126a: 82 26     set4  $26
 126c: 6f        ret
 
-; vcmd e2
+; vcmd e2 - volume
 126d: e4 0e     mov   a,$0e
 126f: f8 1f     mov   x,$1f
 1271: d5 9d 19  mov   $199d+x,a
@@ -2069,7 +2069,7 @@
 1279: f6 48 01  mov   a,$0148+y
 127c: 5f e2 14  jmp   $14e2
 
-; vcmd e3
+; vcmd e3 - change volume
 127f: e4 0e     mov   a,$0e
 1281: f8 1f     mov   x,$1f
 1283: 95 9d 19  adc   a,$199d+x
@@ -2078,7 +2078,7 @@
 128b: f6 48 01  mov   a,$0148+y
 128e: 5f e2 14  jmp   $14e2
 
-; vcmd e4
+; vcmd e4 - volume fade
 1291: e4 0e     mov   a,$0e
 1293: f0 36     beq   $12cb
 1295: c4 0c     mov   $0c,a
@@ -2108,7 +2108,7 @@
 12c9: 62 28     set3  $28
 12cb: 6f        ret
 
-; vcmd e5
+; vcmd e5 - portamento
 12cc: fa 0e 0a  mov   ($0a),($0e)
 12cf: fa 0f 0b  mov   ($0b),($0f)
 12d2: e4 0a     mov   a,$0a
@@ -2154,7 +2154,7 @@
 1323: 62 27     set3  $27
 1325: 6f        ret
 
-; vcmd e6
+; vcmd e6 - portamento toggle
 1326: a3 27 03  bbs5  $27,$132c
 1329: a2 27     set5  $27
 132b: 6f        ret
@@ -2163,7 +2163,7 @@
 132e: 72 27     clr3  $27
 1330: 6f        ret
 
-; vcmd e7
+; vcmd e7 - panpot
 1331: 92 28     clr4  $28
 1333: e4 0e     mov   a,$0e
 1335: f8 1f     mov   x,$1f
@@ -2171,7 +2171,7 @@
 133a: f6 48 01  mov   a,$0148+y
 133d: 5f e2 14  jmp   $14e2
 
-; vcmd e8
+; vcmd e8 - panpot fade
 1340: e4 0e     mov   a,$0e
 1342: f0 3b     beq   $137f
 1344: c4 0c     mov   $0c,a
@@ -2203,7 +2203,7 @@
 137d: c2 28     set6  $28
 137f: 6f        ret
 
-; vcmd e9
+; vcmd e9 - panpot LFO on
 1380: b2 28     clr5  $28
 1382: e4 0e     mov   a,$0e
 1384: d6 1c 1b  mov   $1b1c+y,a
@@ -2220,7 +2220,7 @@
 
 139b: 6f        ret
 
-; vcmd ec
+; vcmd ec - transpose (absolute, signed, 4 = 1 semitone)
 139c: 3f c2 13  call  $13c2
 139f: f8 1f     mov   x,$1f
 13a1: e4 06     mov   a,$06
@@ -2229,7 +2229,7 @@
 13a8: d5 55 19  mov   $1955+x,a
 13ab: 6f        ret
 
-; vcmd ed
+; vcmd ed - transpose (relative, signed, 4 = 1 semitone)
 13ac: 3f c2 13  call  $13c2
 13af: f8 1f     mov   x,$1f
 13b1: f5 55 19  mov   a,$1955+x
@@ -2265,15 +2265,15 @@
 13e3: d6 84 19  mov   $1984+y,a
 13e6: 6f        ret
 
-; vcmd ee
+; vcmd ee - rhythm kit on
 13e7: a2 26     set5  $26
 13e9: 6f        ret
 
-; vcmd ef
+; vcmd ef - rhythm kit off
 13ea: b2 26     clr5  $26
 13ec: 6f        ret
 
-; vcmd f0
+; vcmd f0 - vibrato on
 13ed: 32 27     clr1  $27
 13ef: e4 0e     mov   a,$0e
 13f1: f0 2d     beq   $1420
@@ -2304,13 +2304,13 @@
 1424: d6 3c 19  mov   $193c+y,a
 1427: 6f        ret
 
-; vcmd f1
+; vcmd f1 - vibrato on (w/delay)
 1428: 3f ed 13  call  $13ed
 142b: e4 10     mov   a,$10
 142d: d6 3c 19  mov   $193c+y,a
 1430: 6f        ret
 
-; vcmd f2
+; vcmd f2 - change tempo
 1431: e4 0e     mov   a,$0e
 1433: e3 26 09  bbs7  $26,$143f
 1436: 84 5d     adc   a,$5d
@@ -2324,11 +2324,11 @@
 1443: c4 fb     mov   $fb,a
 1445: 6f        ret
 
-; vcmd f3
+; vcmd f3 - vibrato off
 1446: 12 27     clr0  $27
 1448: 6f        ret
 
-; vcmd f4
+; vcmd f4 - tremolo on
 1449: e4 0e     mov   a,$0e
 144b: d6 44 1a  mov   $1a44+y,a
 144e: d6 2c 1a  mov   $1a2c+y,a
@@ -2339,36 +2339,36 @@
 145b: 02 28     set0  $28
 145d: 6f        ret
 
-; vcmd f5
+; vcmd f5 - tremolo on (w/delay)
 145e: 3f 49 14  call  $1449
 1461: e4 10     mov   a,$10
 1463: d6 74 1a  mov   $1a74+y,a
 1466: 6f        ret
 
-; vcmd f7
+; vcmd f7 - tremolo off
 1467: 12 28     clr0  $28
 1469: f6 48 01  mov   a,$0148+y
 146c: 5f e2 14  jmp   $14e2
 
 146f: 6f        ret
 
-; vcmd f8
+; vcmd f8 - slur on
 1470: 62 26     set3  $26
 1472: 6f        ret
 
-; vcmd f9
+; vcmd f9 - slur off
 1473: 72 26     clr3  $26
 1475: 52 26     clr2  $26
 1477: 6f        ret
 
-; vcmd fa
+; vcmd fa - echo on
 1478: e3 26 05  bbs7  $26,$1480
 147b: 09 20 5b  or    ($5b),($20)
 147e: 2f 16     bra   $1496
 1480: 09 20 4e  or    ($4e),($20)
 1483: 2f 11     bra   $1496
 
-; vcmd fb
+; vcmd fb - echo off
 1485: e4 20     mov   a,$20
 1487: 48 ff     eor   a,#$ff
 1489: e3 26 06  bbs7  $26,$1492
@@ -2663,58 +2663,58 @@
 16ab: dw $1015  ; c5 - octave down
 16ad: dw $101b  ; c6 - set octave
 16af: dw $1021  ; c7 - nop
-16b1: dw $1022  ; c8
-16b3: dw $1039  ; c9
-16b5: dw $1046  ; ca
-16b7: dw $1065  ; cb
-16b9: dw $1072  ; cc
+16b1: dw $1022  ; c8 - set noise freq
+16b3: dw $1039  ; c9 - noise on
+16b5: dw $1046  ; ca - noise off
+16b7: dw $1065  ; cb - pitchmod on
+16b9: dw $1072  ; cc - pitchmod off
 16bb: dw $1091  ; cd
 16bd: dw $1098  ; ce
-16bf: dw $10ad  ; cf
-16c1: dw $10c7  ; d0 - back to loop point
+16bf: dw $10ad  ; cf - transpose (absolute, signed, 16 = 1 semitone)
+16c1: dw $10c7  ; d0 - end/return
 16c3: dw $10f9  ; d1 - tempo
-16c5: dw $110b  ; d2
-16c7: dw $110f  ; d3
-16c9: dw $1114  ; d4
-16cb: dw $1139  ; d5
-16cd: dw $116b  ; d6
+16c5: dw $110b  ; d2 - set timer 1 freq
+16c7: dw $110f  ; d3 - change timer 1 freq
+16c9: dw $1114  ; d4 - repeat start
+16cb: dw $1139  ; d5 - repeat end
+16cd: dw $116b  ; d6 - repeat break
 16cf: dw $1187  ; d7 - set loop point
-16d1: dw $1194  ; d8
-16d3: dw $11c7  ; d9
-16d5: dw $11d8  ; da
-16d7: dw $11eb  ; db
-16d9: dw $1206  ; dc
-16db: dw $1227  ; dd
+16d1: dw $1194  ; d8 - default ADSR
+16d3: dw $11c7  ; d9 - set attack rate (AR)
+16d5: dw $11d8  ; da - set decay rate (DR)
+16d7: dw $11eb  ; db - set sustain level (SL)
+16d9: dw $1206  ; dc - set sustain rate (SR)
+16db: dw $1227  ; dd - duration rate
 16dd: dw $122d  ; de - set instrument
-16df: dw $1026  ; df
+16df: dw $1026  ; df - change noise freq
 16e1: dw $125e  ; e0
 16e3: dw $100f  ; e1 - octave up (duplicated)
-16e5: dw $126d  ; e2
-16e7: dw $127f  ; e3
-16e9: dw $1291  ; e4
-16eb: dw $12cc  ; e5
-16ed: dw $1326  ; e6
-16ef: dw $1331  ; e7
-16f1: dw $1340  ; e8
-16f3: dw $1380  ; e9
+16e5: dw $126d  ; e2 - volume
+16e7: dw $127f  ; e3 - change volume
+16e9: dw $1291  ; e4 - volume fade
+16eb: dw $12cc  ; e5 - portamento
+16ed: dw $1326  ; e6 - portamento toggle
+16ef: dw $1331  ; e7 - panpot
+16f1: dw $1340  ; e8 - panpot fade
+16f3: dw $1380  ; e9 - panpot LFO on
 16f5: dw $100f  ; ea - octave up (duplicated)
 16f7: dw $100f  ; eb - octave up (duplicated)
-16f9: dw $139c  ; ec
-16fb: dw $13ac  ; ed
-16fd: dw $13e7  ; ee
-16ff: dw $13ea  ; ef
-1701: dw $13ed  ; f0
-1703: dw $1428  ; f1
-1705: dw $1431  ; f2
-1707: dw $1446  ; f3
-1709: dw $1449  ; f4
-170b: dw $145e  ; f5
+16f9: dw $139c  ; ec - transpose (absolute, signed, 4 = 1 semitone)
+16fb: dw $13ac  ; ed - transpose (relative, signed, 4 = 1 semitone)
+16fd: dw $13e7  ; ee - rhythm kit on
+16ff: dw $13ea  ; ef - rhythm kit off
+1701: dw $13ed  ; f0 - vibrato on
+1703: dw $1428  ; f1 - vibrato on (w/delay)
+1705: dw $1431  ; f2 - change tempo
+1707: dw $1446  ; f3 - vibrato off
+1709: dw $1449  ; f4 - tremolo on
+170b: dw $145e  ; f5 - tremolo on (w/delay)
 170d: dw $13e1  ; f6
-170f: dw $1467  ; f7
-1711: dw $1470  ; f8
-1713: dw $1473  ; f9
-1715: dw $1478  ; fa
-1717: dw $1485  ; fb
+170f: dw $1467  ; f7 - tremolo off
+1711: dw $1470  ; f8 - slur on
+1713: dw $1473  ; f9 - slur off
+1715: dw $1478  ; fa - echo on
+1717: dw $1485  ; fb - echo off
 1719: dw $100f  ; fc - octave up (duplicated)
 171b: dw $100f  ; fd - octave up (duplicated)
 171d: dw $14a4  ; fe
