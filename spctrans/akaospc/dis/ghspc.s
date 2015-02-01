@@ -2604,7 +2604,7 @@
 1646: dw $17c7  ; f1 - tempo fade
 1648: dw $1819  ; f2 - echo volume
 164a: dw $1824  ; f3 - echo volume fade
-164c: dw $17df  ; f4 - master volume
+164c: dw $17df  ; f4 - expression
 164e: dw $1c6a  ; f5 - conditional jump in repeat
 1650: dw $1c4f  ; f6 - goto
 1652: dw $1881  ; f7 - echo feedback

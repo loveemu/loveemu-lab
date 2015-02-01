@@ -10,9 +10,9 @@
 020d: 8b 80     dec   $80
 020f: 1a bc     decw  $bc
 0211: 8d 2c     mov   y,#$2c
-0213: 3f 97 07  call  $0797
+0213: 3f 97 07  call  $0797             ; EVOL(L)
 0216: 8d 3c     mov   y,#$3c
-0218: 3f 97 07  call  $0797
+0218: 3f 97 07  call  $0797             ; EVOL(R)
 021b: cd 40     mov   x,#$40
 021d: d5 68 f1  mov   $f168+x,a
 0220: 1d        dec   x
@@ -22,11 +22,11 @@
 0224: d0 f7     bne   $021d
 0226: e8 20     mov   a,#$20
 0228: 8d 5d     mov   y,#$5d
-022a: 3f 97 07  call  $0797
+022a: 3f 97 07  call  $0797             ; DIR
 022d: 8d 07     mov   y,#$07
 022f: cd a0     mov   x,#$a0
 0231: cb f2     mov   $f2,y
-0233: d8 f3     mov   $f3,x
+0233: d8 f3     mov   $f3,x             ; GAIN
 0235: dd        mov   a,y
 0236: 60        clrc
 0237: 88 10     adc   a,#$10
@@ -111,7 +111,7 @@
 02ed: f6 13 18  mov   a,$1813+y
 02f0: 5d        mov   x,a
 02f1: e6        mov   a,(x)
-02f2: c4 f3     mov   $f3,a
+02f2: c4 f3     mov   $f3,a             ; update DSP regs
 02f4: fe f2     dbnz  y,$02e8
 02f6: cb 23     mov   $23,y
 02f8: cb 22     mov   $22,y
@@ -275,7 +275,7 @@
 0446: f6 13 18  mov   a,$1813+y
 0449: 5d        mov   x,a
 044a: e6        mov   a,(x)
-044b: c4 f3     mov   $f3,a
+044b: c4 f3     mov   $f3,a             ; update DSP regs
 044d: fe f2     dbnz  y,$0441
 044f: cb 23     mov   $23,y
 0451: cb 22     mov   $22,y
@@ -332,7 +332,7 @@
 04bb: e4 87     mov   a,$87
 04bd: f0 21     beq   $04e0
 04bf: e8 78     mov   a,#$78
-04c1: c4 f2     mov   $f2,a
+04c1: c4 f2     mov   $f2,a             ; ENVX
 04c3: e4 f3     mov   a,$f3
 04c5: d0 19     bne   $04e0
 04c7: e8 8c     mov   a,#$8c
@@ -425,9 +425,9 @@
 056e: d5 a1 f3  mov   $f3a1+x,a
 0571: 3f af 06  call  $06af
 0574: e4 b4     mov   a,$b4
-0576: d5 e0 f4  mov   $f4e0+x,a
+0576: d5 e0 f4  mov   $f4e0+x,a         ; P(L) without LFO
 0579: e4 b5     mov   a,$b5
-057b: d5 e1 f4  mov   $f4e1+x,a
+057b: d5 e1 f4  mov   $f4e1+x,a         ; P(H) without LFO
 057e: c8 10     cmp   x,#$10
 0580: b0 05     bcs   $0587
 0582: 09 92 24  or    ($24),($92)
@@ -563,23 +563,24 @@
 06ab: d5 a1 f4  mov   $f4a1+x,a
 06ae: 6f        ret
 
+; calculate pitch reg value for note A
 06af: cd 0c     mov   x,#$0c
 06b1: 8d 00     mov   y,#$00
 06b3: 9e        div   ya,x
 06b4: f8 a7     mov   x,$a7
-06b6: c4 a5     mov   $a5,a
-06b8: dd        mov   a,y
+06b6: c4 a5     mov   $a5,a             ; octave
+06b8: dd        mov   a,y               ; key (0-11)
 06b9: 1c        asl   a
 06ba: fd        mov   y,a
 06bb: f6 38 1e  mov   a,$1e38+y
 06be: c4 b6     mov   $b6,a
 06c0: f6 39 1e  mov   a,$1e39+y
-06c3: c4 b7     mov   $b7,a
+06c3: c4 b7     mov   $b7,a             ; pitch from pitch table
 06c5: fd        mov   y,a
-06c6: f5 80 f3  mov   a,$f380+x
+06c6: f5 80 f3  mov   a,$f380+x         ; per-instrument tuning (signed)
 06c9: 60        clrc
-06ca: 95 a0 f3  adc   a,$f3a0+x
-06cd: c4 9c     mov   $9c,a
+06ca: 95 a0 f3  adc   a,$f3a0+x         ; add per-voice tuning (signed)
+06cd: c4 9c     mov   $9c,a             ; overflow seems to be ignored
 06cf: cf        mul   ya
 06d0: da b4     movw  $b4,ya
 06d2: eb b6     mov   y,$b6
@@ -588,30 +589,31 @@
 06d7: dd        mov   a,y
 06d8: 8d 00     mov   y,#$00
 06da: 7a b4     addw  ya,$b4
-06dc: da b4     movw  $b4,ya
-06de: f5 81 f3  mov   a,$f381+x
+06dc: da b4     movw  $b4,ya            ; pitch * tuning / 256
+06de: f5 81 f3  mov   a,$f381+x         ; per-instrument tuning (fration, unsigned)
 06e1: f0 08     beq   $06eb
 06e3: cf        mul   ya
 06e4: dd        mov   a,y
 06e5: 8d 00     mov   y,#$00
-06e7: 7a b4     addw  ya,$b4
+06e7: 7a b4     addw  ya,$b4            ; ya = pitch * (tuning * (1 + (coarse_tuning / 65536))) / 256
 06e9: 2f 02     bra   $06ed
-06eb: e4 b4     mov   a,$b4
+06eb: e4 b4     mov   a,$b4             ; ya = pitch * tuning / 256
 06ed: e3 9c 02  bbs7  $9c,$06f2
-06f0: 7a b6     addw  ya,$b6
-06f2: da b4     movw  $b4,ya
+06f0: 7a b6     addw  ya,$b6            ; ya += pitch if positive tuning
+06f2: da b4     movw  $b4,ya            ; save calculated pitch
 06f4: e8 04     mov   a,#$04
 06f6: eb a5     mov   y,$a5
 06f8: 30 0f     bmi   $0709
 06fa: f0 0d     beq   $0709
 06fc: 64 a5     cmp   a,$a5
 06fe: b0 0e     bcs   $070e
+; shift left if octave > 4
 0700: 0b b4     asl   $b4
 0702: 2b b5     rol   $b5
 0704: bc        inc   a
 0705: 2e a5 f8  cbne  $a5,$0700
 0708: 6f        ret
-
+; shift right until octave < 4
 0709: 4b b5     lsr   $b5
 070b: 6b b4     ror   $b4
 070d: 9c        dec   a
@@ -969,16 +971,16 @@
 09d2: b2 88     clr5  $88
 09d4: 8f 80 9e  mov   $9e,#$80
 09d7: 03 88 0e  bbs0  $88,$09e8
-09da: f5 81 f2  mov   a,$f281+x
+09da: f5 81 f2  mov   a,$f281+x         ; panpot
 09dd: fd        mov   y,a
 09de: f5 81 f4  mov   a,$f481+x
 09e1: 3f 22 14  call  $1422
 09e4: 48 ff     eor   a,#$ff
 09e6: c4 9e     mov   $9e,a
-09e8: f5 41 f2  mov   a,$f241+x
+09e8: f5 41 f2  mov   a,$f241+x         ; channel volume
 09eb: fd        mov   y,a
 09ec: c4 9f     mov   $9f,a
-09ee: f5 60 f4  mov   a,$f460+x
+09ee: f5 60 f4  mov   a,$f460+x         ; tremolo
 09f1: f0 0c     beq   $09ff
 09f3: 1c        asl   a
 09f4: cf        mul   ya
@@ -988,18 +990,18 @@
 09fa: 10 02     bpl   $09fe
 09fc: e8 7f     mov   a,#$7f
 09fe: fd        mov   y,a
-09ff: e4 a9     mov   a,$a9
+09ff: e4 a9     mov   a,$a9             ; master volume
 0a01: cf        mul   ya
 0a02: c8 10     cmp   x,#$10
 0a04: b0 11     bcs   $0a17
 0a06: e4 92     mov   a,$92
-0a08: 24 a8     and   a,$a8
+0a08: 24 a8     and   a,$a8             ; channel mask
 0a0a: f0 04     beq   $0a10
 0a0c: 8d 00     mov   y,#$00
 0a0e: 2f 07     bra   $0a17
-0a10: f5 20 f2  mov   a,$f220+x
+0a10: f5 20 f2  mov   a,$f220+x         ; expression
 0a13: cf        mul   ya
-0a14: e4 4d     mov   a,$4d
+0a14: e4 4d     mov   a,$4d             ; master volume
 0a16: cf        mul   ya
 0a17: cb 9f     mov   $9f,y
 0a19: e4 9e     mov   a,$9e
@@ -1009,7 +1011,7 @@
 0a1f: d6 bf 00  mov   $00bf+y,a
 0a22: eb 9d     mov   y,$9d
 0a24: cb f2     mov   $f2,y
-0a26: c4 f3     mov   $f3,a
+0a26: c4 f3     mov   $f3,a             ; VOL(L)/VOL(R)
 0a28: ea 9c 00  not1  $009c,0
 0a2b: ab 9d     inc   $9d
 0a2d: 23 9d 08  bbs1  $9d,$0a38
@@ -1017,21 +1019,23 @@
 0a32: 48 ff     eor   a,#$ff
 0a34: eb 9f     mov   y,$9f
 0a36: 2f e3     bra   $0a1b
+; final pitch calculation
 0a38: e4 92     mov   a,$92
 0a3a: 24 d2     and   a,$d2
 0a3c: f0 46     beq   $0a84
 0a3e: 22 9d     set1  $9d
-0a40: f5 e0 f4  mov   a,$f4e0+x
+0a40: f5 e0 f4  mov   a,$f4e0+x         ; P(L)
 0a43: 60        clrc
-0a44: 95 c0 f4  adc   a,$f4c0+x
+0a44: 95 c0 f4  adc   a,$f4c0+x         ; P(L) LFO
 0a47: c4 9e     mov   $9e,a
-0a49: f5 e1 f4  mov   a,$f4e1+x
-0a4c: 95 c1 f4  adc   a,$f4c1+x
-0a4f: c4 9f     mov   $9f,a
+0a49: f5 e1 f4  mov   a,$f4e1+x         ; P(H)
+0a4c: 95 c1 f4  adc   a,$f4c1+x         ; P(H) LFO
+0a4f: c4 9f     mov   $9f,a             ; $9e/f = pitch
 0a51: c8 10     cmp   x,#$10
 0a53: 90 04     bcc   $0a59
 0a55: ba 9e     movw  ya,$9e
 0a57: 2f 1c     bra   $0a75
+; process global tuning $b0 (signed, 128 = x1.0)
 0a59: eb b0     mov   y,$b0
 0a5b: cf        mul   ya
 0a5c: da a0     movw  $a0,ya
@@ -1049,13 +1053,14 @@
 0a70: fd        mov   y,a
 0a71: e4 a2     mov   a,$a2
 0a73: 7a 9e     addw  ya,$9e
+; coup de grace
 0a75: d8 9c     mov   $9c,x
 0a77: f8 9d     mov   x,$9d
 0a79: d8 f2     mov   $f2,x
-0a7b: c4 f3     mov   $f3,a
+0a7b: c4 f3     mov   $f3,a             ; P(L)
 0a7d: 3d        inc   x
 0a7e: d8 f2     mov   $f2,x
-0a80: cb f3     mov   $f3,y
+0a80: cb f3     mov   $f3,y             ; P(R)
 0a82: f8 9c     mov   x,$9c
 0a84: 6f        ret
 
@@ -1296,7 +1301,7 @@
 0c03: 8f 20 ba  mov   $ba,#$20
 0c06: e8 ff     mov   a,#$ff
 0c08: 8d 5c     mov   y,#$5c
-0c0a: 3f 97 07  call  $0797
+0c0a: 3f 97 07  call  $0797             ; KOF
 0c0d: fa 8f bd  mov   ($bd),($8f)
 0c10: e4 90     mov   a,$90
 0c12: c4 4d     mov   $4d,a
@@ -1355,9 +1360,9 @@
 0c85: 5c        lsr   a
 0c86: fd        mov   y,a
 0c87: e8 00     mov   a,#$00
-0c89: 3f 97 07  call  $0797
+0c89: 3f 97 07  call  $0797             ; VOL(L)
 0c8c: fc        inc   y
-0c8d: 3f 97 07  call  $0797
+0c8d: 3f 97 07  call  $0797             ; VOL(R)
 0c90: fc        inc   y
 0c91: cb 9d     mov   $9d,y
 0c93: 3f 40 0a  call  $0a40
@@ -1889,7 +1894,7 @@
 10b3: cb f2     mov   $f2,y
 10b5: e4 f3     mov   a,$f3
 10b7: 28 7f     and   a,#$7f
-10b9: c4 f3     mov   $f3,a
+10b9: c4 f3     mov   $f3,a             ; ADSR(1)
 10bb: dd        mov   a,y
 10bc: 60        clrc
 10bd: 88 10     adc   a,#$10
@@ -1898,10 +1903,10 @@
 10c2: cd 00     mov   x,#$00
 10c4: 8d 00     mov   y,#$00
 10c6: cb f2     mov   $f2,y
-10c8: d8 f3     mov   $f3,x
+10c8: d8 f3     mov   $f3,x             ; VOL(L)
 10ca: fc        inc   y
 10cb: cb f2     mov   $f2,y
-10cd: d8 f3     mov   $f3,x
+10cd: d8 f3     mov   $f3,x             ; VOL(R)
 10cf: dd        mov   a,y
 10d0: 60        clrc
 10d1: 88 0f     adc   a,#$0f
@@ -1920,7 +1925,7 @@
 10e8: cb f2     mov   $f2,y
 10ea: e4 f3     mov   a,$f3
 10ec: 08 80     or    a,#$80
-10ee: c4 f3     mov   $f3,a
+10ee: c4 f3     mov   $f3,a             ; ADSR(1)
 10f0: dd        mov   a,y
 10f1: 60        clrc
 10f2: 88 10     adc   a,#$10
@@ -2323,7 +2328,7 @@
 1412: d0 fb     bne   $140f
 1414: e8 e0     mov   a,#$e0
 1416: 8d 6c     mov   y,#$6c
-1418: 3f 97 07  call  $0797
+1418: 3f 97 07  call  $0797             ; FLG
 141b: 8f 80 f1  mov   $f1,#$80
 141e: 5f c0 ff  jmp   $ffc0
 
@@ -2399,20 +2404,20 @@
 1496: c4 f3     mov   $f3,a
 1498: e8 00     mov   a,#$00
 149a: 8d 4d     mov   y,#$4d
-149c: 3f 97 07  call  $0797
+149c: 3f 97 07  call  $0797             ; EON
 149f: 8d 0d     mov   y,#$0d
-14a1: 3f 97 07  call  $0797
+14a1: 3f 97 07  call  $0797             ; EFB
 14a4: 8d 2c     mov   y,#$2c
-14a6: 3f 97 07  call  $0797
+14a6: 3f 97 07  call  $0797             ; EVOL(L)
 14a9: 8d 3c     mov   y,#$3c
-14ab: 3f 97 07  call  $0797
+14ab: 3f 97 07  call  $0797             ; EVOL(R)
 14ae: 8d 7d     mov   y,#$7d
 14b0: cb f2     mov   $f2,y
 14b2: e4 f3     mov   a,$f3
 14b4: 28 0f     and   a,#$0f
 14b6: c4 82     mov   $82,a
 14b8: e4 81     mov   a,$81
-14ba: 3f 97 07  call  $0797
+14ba: 3f 97 07  call  $0797             ; EDL
 14bd: 1c        asl   a
 14be: 1c        asl   a
 14bf: 1c        asl   a
@@ -2421,7 +2426,7 @@
 14c3: 60        clrc
 14c4: 88 f1     adc   a,#$f1
 14c6: 8d 6d     mov   y,#$6d
-14c8: 3f 97 07  call  $0797
+14c8: 3f 97 07  call  $0797             ; ESA
 14cb: 8f 01 f1  mov   $f1,#$01
 14ce: eb fe     mov   y,$fe
 14d0: 8f 03 f1  mov   $f1,#$03
@@ -2433,7 +2438,7 @@
 14dc: 8f 6c f2  mov   $f2,#$6c
 14df: e4 f3     mov   a,$f3
 14e1: 28 df     and   a,#$df
-14e3: c4 f3     mov   $f3,a
+14e3: c4 f3     mov   $f3,a             ; FLG
 14e5: 6f        ret
 
 14e6: fa bd bc  mov   ($bc),($bd)
@@ -2670,7 +2675,7 @@
 16af: dw $1830  ; f1 - tempo fade
 16b1: dw $1882  ; f2 - echo volume
 16b3: dw $188d  ; f3 - echo volume fade
-16b5: dw $1848  ; f4 - master volume
+16b5: dw $1848  ; f4 - expression
 16b7: dw $1c9e  ; f5 - conditional jump in repeat
 16b9: dw $1c83  ; f6 - goto
 16bb: dw $18d3  ; f7 - echo feedback
@@ -2815,10 +2820,10 @@
 17fd: dw $10fd  ; 
 17ff: dw $1401  ; 
 
-1801: db $4c,$2d,$3d,$6c,$5c,$0c,$1c,$4d,$2c,$3c,$0d
-
-180c: db $0f,$1f,$2f,$3f,$4f,$5f,$6f,$7f
-
+; $1800+y - dsp reg addresses
+; KON,PMON,NON,FLG,KOF,MVOL(L),MVOL(R),EON,EVOL(L),EVOL(R),EFB,FIR C0-C7
+1801: db $4c,$2d,$3d,$6c,$5c,$0c,$1c,$4d,$2c,$3c,$0d,$0f,$1f,$2f,$3f,$4f,$5f,$6f,$7f
+; $1813+y - dsp reg shadows
 1814: db $22,$8c,$8b,$8d,$23,$de,$df,$8a,$e0,$e1,$76,$66,$68,$6a,$6c,$6e,$70,$72,$74
 
 ; vcmd f0 - tempo
@@ -2842,7 +2847,7 @@
 1845: da 4b     movw  $4b,ya
 1847: 6f        ret
 
-; vcmd f4 - master volume
+; vcmd f4 - expression
 1848: 1c        asl   a
 1849: d5 20 f2  mov   $f220+x,a
 184c: 09 92 d1  or    ($d1),($92)
@@ -3291,23 +3296,23 @@
 1b67: 1c        asl   a
 1b68: fd        mov   y,a
 1b69: f6 00 21  mov   a,$2100+y
-1b6c: d5 80 f3  mov   $f380+x,a
+1b6c: d5 80 f3  mov   $f380+x,a         ; per-instrument tuning (signed)
 1b6f: f6 01 21  mov   a,$2101+y
-1b72: d5 81 f3  mov   $f381+x,a
-1b75: f6 80 21  mov   a,$2180+y
+1b72: d5 81 f3  mov   $f381+x,a         ; per-instrument tuning (fractional) (unsigned)
+1b75: f6 80 21  mov   a,$2180+y         ; default ADSR(1)
 1b78: d5 00 f5  mov   $f500+x,a
-1b7b: f6 81 21  mov   a,$2181+y
+1b7b: f6 81 21  mov   a,$2181+y         ; default ADSR(2)
 1b7e: d5 01 f5  mov   $f501+x,a
 1b81: 6f        ret
 
-1b82: f5 01 f2  mov   a,$f201+x
+1b82: f5 01 f2  mov   a,$f201+x         ; instrument #
 1b85: fd        mov   y,a
 1b86: 7d        mov   a,x
 1b87: 9f        xcn   a
 1b88: 5c        lsr   a
 1b89: 08 04     or    a,#$04
 1b8b: c4 f2     mov   $f2,a
-1b8d: cb f3     mov   $f3,y
+1b8d: cb f3     mov   $f3,y             ; SRCN
 1b8f: 2f 10     bra   $1ba1
 ; vcmd dd - attack rate
 1b91: 28 0f     and   a,#$0f
@@ -3330,10 +3335,10 @@
 1baf: 08 05     or    a,#$05
 1bb1: fd        mov   y,a
 1bb2: f5 00 f5  mov   a,$f500+x
-1bb5: 3f 97 07  call  $0797
+1bb5: 3f 97 07  call  $0797             ; ADSR(1)
 1bb8: fc        inc   y
 1bb9: f5 01 f5  mov   a,$f501+x
-1bbc: 5f 97 07  jmp   $0797
+1bbc: 5f 97 07  jmp   $0797             ; ADSR(2)
 
 ; vcmd de - decay rate
 1bbf: 28 07     and   a,#$07
@@ -3364,7 +3369,7 @@
 1bef: d5 01 f5  mov   $f501+x,a
 1bf2: 2f ad     bra   $1ba1
 ; vcmd e1 - default ADSR
-1bf4: f5 01 f2  mov   a,$f201+x
+1bf4: f5 01 f2  mov   a,$f201+x         ; instrument #
 1bf7: 1c        asl   a
 1bf8: fd        mov   y,a
 1bf9: f6 80 21  mov   a,$2180+y

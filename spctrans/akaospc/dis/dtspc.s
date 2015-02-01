@@ -2853,7 +2853,7 @@
 1846: dw $19c7  ; f1 - tempo fade
 1848: dw $1a19  ; f2 - echo volume
 184a: dw $1a24  ; f3 - echo volume fade
-184c: dw $19df  ; f4 - master volume
+184c: dw $19df  ; f4 - expression
 184e: dw $1e6a  ; f5 - conditional jump in repeat
 1850: dw $1e4f  ; f6 - goto
 1852: dw $1a81  ; f7 - echo feedback
@@ -2917,7 +2917,7 @@
 19dc: da 4b     movw  $4b,ya
 19de: 6f        ret
 
-; vcmd f4 - master volume
+; vcmd f4 - expression
 19df: 1c        asl   a
 19e0: d5 20 f2  mov   $f220+x,a
 19e3: 09 92 d9  or    ($d9),($92)
