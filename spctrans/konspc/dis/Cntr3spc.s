@@ -594,11 +594,11 @@
 0dda: 5f 40 14  jmp   $1440
 
 ; vcmd dispatch table
-0ddd: dw $0e7f  ; db
-0ddf: dw $0e84  ; dc
-0de1: dw $0e89  ; dd
-0de3: dw $0ea5  ; de
-0de5: dw $0e97  ; df
+0ddd: dw $0e7f  ; 60
+0ddf: dw $0e84  ; 61
+0de1: dw $0e89  ; 62
+0de3: dw $0ea5  ; 63
+0de5: dw $0e97  ; 64
 0de7: dw $0eab  ; e0
 0de9: dw $0ecf  ; e1
 0deb: dw $0ef1  ; e2
@@ -670,15 +670,15 @@
 0e7c: bb 2e     inc   $2e+x
 0e7e: 6f        ret
 
-; vcmd db
+; vcmd 60
 0e7f: 22 26     set1  $26
 0e81: 5f 8c 0c  jmp   $0c8c
 
-; vcmd dc
+; vcmd 61
 0e84: 32 26     clr1  $26
 0e86: 5f 8c 0c  jmp   $0c8c
 
-; vcmd dd
+; vcmd 62
 0e89: fd        mov   y,a
 0e8a: f5 67 02  mov   a,$0267+x
 0e8d: d5 76 02  mov   $0276+x,a
@@ -686,14 +686,14 @@
 0e91: d5 67 02  mov   $0267+x,a
 0e94: 5f 8c 0c  jmp   $0c8c
 
-; vcmd df
+; vcmd 64
 0e97: fd        mov   y,a
 0e98: f5 67 02  mov   a,$0267+x
 0e9b: d5 76 02  mov   $0276+x,a
 0e9e: dd        mov   a,y
 0e9f: d5 67 02  mov   $0267+x,a
 0ea2: 3f 76 0e  call  $0e76
-; vcmd de
+; vcmd 63
 0ea5: d5 b7 02  mov   $02b7+x,a
 0ea8: 5f 8c 0c  jmp   $0c8c
 
