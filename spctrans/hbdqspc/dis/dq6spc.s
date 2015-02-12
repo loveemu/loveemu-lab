@@ -1224,16 +1224,16 @@
 14f6: f8 36     mov   x,$36
 14f8: f5 c7 09  mov   a,$09c7+x
 14fb: fd        mov   y,a
-14fc: f5 c0 09  mov   a,$09c0+x
-14ff: 7a 3b     addw  ya,$3b
+14fc: f5 c0 09  mov   a,$09c0+x         ; load instrument table offset in YA
+14ff: 7a 3b     addw  ya,$3b            ; relative offset to address (add sequence start address
 1501: da 08     movw  $08,ya
 1503: f8 37     mov   x,$37
-1505: 3f c3 12  call  $12c3
+1505: 3f c3 12  call  $12c3             ; read arg1: set patch
 1508: 8d 06     mov   y,#$06
-150a: cf        mul   ya
-150b: fd        mov   y,a
+150a: cf        mul   ya                ; offset = patch * 6
+150b: fd        mov   y,a               ; use lower 8 bits
 150c: 6d        push  y
-150d: f7 08     mov   a,($08)+y
+150d: f7 08     mov   a,($08)+y         ; offset +0: sample index
 150f: d5 d8 03  mov   $03d8+x,a
 1512: eb 36     mov   y,$36
 1514: f6 e0 08  mov   a,$08e0+y
@@ -1242,41 +1242,41 @@
 151b: cf        mul   ya
 151c: ee        pop   y
 151d: 60        clrc
-151e: 97 08     adc   a,($08)+y
+151e: 97 08     adc   a,($08)+y         ; offset +0: sample index + (n * 0x10)
 1520: fc        inc   y
 1521: 6d        push  y
 1522: fd        mov   y,a
-1523: f6 25 0a  mov   a,$0a25+y
+1523: f6 25 0a  mov   a,$0a25+y         ; read actual SRCN
 1526: 8d 04     mov   y,#$04
-1528: 3f 37 14  call  $1437
+1528: 3f 37 14  call  $1437             ; set SRCN
 152b: ee        pop   y
-152c: f7 08     mov   a,($08)+y
+152c: f7 08     mov   a,($08)+y         ; offset +1: ADSR(1)
 152e: fc        inc   y
 152f: 2d        push  a
 1530: 28 0f     and   a,#$0f
-1532: d5 f0 03  mov   $03f0+x,a
+1532: d5 f0 03  mov   $03f0+x,a         ; AR
 1535: ae        pop   a
 1536: 28 70     and   a,#$70
-1538: d5 08 04  mov   $0408+x,a
-153b: f7 08     mov   a,($08)+y
+1538: d5 08 04  mov   $0408+x,a         ; DR
+153b: f7 08     mov   a,($08)+y         ; offset +2: ADSR(2)
 153d: fc        inc   y
 153e: 2d        push  a
 153f: 28 1f     and   a,#$1f
-1541: d5 38 04  mov   $0438+x,a
-1544: d5 50 04  mov   $0450+x,a
+1541: d5 38 04  mov   $0438+x,a         ; SR
+1544: d5 50 04  mov   $0450+x,a         ; SR
 1547: ae        pop   a
 1548: 28 e0     and   a,#$e0
-154a: d5 20 04  mov   $0420+x,a
-154d: f7 08     mov   a,($08)+y
+154a: d5 20 04  mov   $0420+x,a         ; SL
+154d: f7 08     mov   a,($08)+y         ; offset +3: 
 154f: fc        inc   y
 1550: 6d        push  y
 1551: 8d 07     mov   y,#$07
-1553: 3f 37 14  call  $1437
+1553: 3f 37 14  call  $1437             ; set GAIN
 1556: ee        pop   y
-1557: f7 08     mov   a,($08)+y
+1557: f7 08     mov   a,($08)+y         ; offset +4: pitch multiplier (fraction)
 1559: fc        inc   y
 155a: d5 80 04  mov   $0480+x,a
-155d: f7 08     mov   a,($08)+y
+155d: f7 08     mov   a,($08)+y         ; offset +5: pitch multiplier (integer)
 155f: d5 68 04  mov   $0468+x,a
 1562: 3f af 11  call  $11af
 1565: 6f        ret

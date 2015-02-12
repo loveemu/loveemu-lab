@@ -260,9 +260,9 @@
 0d35: d0 13     bne   $0d4a
 0d37: 8d 00     mov   y,#$00
 0d39: e8 00     mov   a,#$00
-0d3b: 3f 64 14  call  $1464
+0d3b: 3f 64 14  call  $1464             ; set VOL(L)
 0d3e: 8d 01     mov   y,#$01
-0d40: 3f 64 14  call  $1464
+0d40: 3f 64 14  call  $1464             ; set VOL(R)
 0d43: e4 1c     mov   a,$1c
 0d45: 8d 5c     mov   y,#$5c
 0d47: 3f 75 14  call  $1475
@@ -637,7 +637,7 @@
 105e: ab 33     inc   $33
 1060: 8d 00     mov   y,#$00
 1062: e4 33     mov   a,$33
-1064: 3f 64 14  call  $1464
+1064: 3f 64 14  call  $1464             ; set VOL(L)
 1067: e4 35     mov   a,$35
 1069: d0 0c     bne   $1077
 106b: f5 a8 03  mov   a,$03a8+x
@@ -647,7 +647,7 @@
 1075: ab 34     inc   $34
 1077: 8d 01     mov   y,#$01
 1079: e4 34     mov   a,$34
-107b: 3f 64 14  call  $1464
+107b: 3f 64 14  call  $1464             ; set VOL(R)
 107e: 6f        ret
 ;
 107f: e4 35     mov   a,$35
@@ -795,10 +795,10 @@
 1196: 7a 0a     addw  ya,$0a
 1198: 6d        push  y
 1199: 8d 02     mov   y,#$02
-119b: 3f 64 14  call  $1464
+119b: 3f 64 14  call  $1464             ; set P(L)
 119e: ae        pop   a
 119f: 8d 03     mov   y,#$03
-11a1: 3f 64 14  call  $1464
+11a1: 3f 64 14  call  $1464             ; set P(H)
 11a4: 6f        ret
 ;
 11a5: e4 1d     mov   a,$1d
@@ -825,11 +825,11 @@
 11c9: 15 20 04  or    a,$0420+x
 11cc: 08 80     or    a,#$80
 11ce: 8d 05     mov   y,#$05
-11d0: 3f 64 14  call  $1464
+11d0: 3f 64 14  call  $1464             ; set ADSR(1)
 11d3: f5 38 04  mov   a,$0438+x
 11d6: 15 50 04  or    a,$0450+x
 11d9: 8d 06     mov   y,#$06
-11db: 3f 64 14  call  $1464
+11db: 3f 64 14  call  $1464             ; set ADSR(2)
 11de: 6f        ret
 ;
 11df: f5 28 05  mov   a,$0528+x
@@ -852,12 +852,12 @@
 1207: 15 20 04  or    a,$0420+x
 120a: 08 80     or    a,#$80
 120c: 8d 05     mov   y,#$05
-120e: 3f 64 14  call  $1464
+120e: 3f 64 14  call  $1464             ; set ADSR(1)
 1211: f5 38 04  mov   a,$0438+x
 1214: 28 e0     and   a,#$e0
 1216: 15 68 04  or    a,$0468+x
 1219: 8d 06     mov   y,#$06
-121b: 3f 64 14  call  $1464
+121b: 3f 64 14  call  $1464             ; set ADSR(2)
 121e: 6f        ret
 121f: f5 a8 03  mov   a,$03a8+x
 1222: 28 bf     and   a,#$bf
@@ -1134,7 +1134,7 @@
 1430: fd        mov   y,a
 1431: f6 3d 0a  mov   a,$0a3d+y
 1434: 8d 04     mov   y,#$04
-1436: 3f 64 14  call  $1464
+1436: 3f 64 14  call  $1464             ; set SRCN
 1439: 6f        ret
 143a: 64 01     cmp   a,$01
 143c: d0 03     bne   $1441
@@ -1153,15 +1153,18 @@
 ;
 1454: db $01,$02,$04,$08,$10,$20,$40,$80
 145c: db $fe,$fd,$fb,$f7,$ef,$df,$bf,$7f
-;
+
+; set Y to DSP register A of voice $1b
 1464: 2d        push  a
 1465: c4 00     mov   $00,a
 1467: e4 1b     mov   a,$1b
 1469: 30 08     bmi   $1473
+;
 146b: dd        mov   a,y
 146c: 04 1b     or    a,$1b
 146e: c4 f2     mov   $f2,a
 1470: fa 00 f3  mov   ($f3),($00)
+;
 1473: ae        pop   a
 1474: 6f        ret
 ; set DSP register Y to A
@@ -1261,16 +1264,16 @@
 1537: f8 36     mov   x,$36
 1539: f5 df 09  mov   a,$09df+x
 153c: fd        mov   y,a
-153d: f5 d8 09  mov   a,$09d8+x
-1540: 7a 3b     addw  ya,$3b
+153d: f5 d8 09  mov   a,$09d8+x         ; load instrument table offset in YA
+1540: 7a 3b     addw  ya,$3b            ; relative offset to address (add sequence start address)
 1542: da 08     movw  $08,ya
 1544: f8 37     mov   x,$37
-1546: 3f f0 12  call  $12f0
+1546: 3f f0 12  call  $12f0             ; read arg1: set patch
 1549: 8d 06     mov   y,#$06
-154b: cf        mul   ya
-154c: fd        mov   y,a
+154b: cf        mul   ya                ; offset = patch * 6
+154c: fd        mov   y,a               ; use lower 8 bits
 154d: 6d        push  y
-154e: f7 08     mov   a,($08)+y
+154e: f7 08     mov   a,($08)+y         ; offset +0: sample index
 1550: d5 f0 03  mov   $03f0+x,a
 1553: eb 36     mov   y,$36
 1555: f6 f8 08  mov   a,$08f8+y
@@ -1279,41 +1282,41 @@
 155c: cf        mul   ya
 155d: ee        pop   y
 155e: 60        clrc
-155f: 97 08     adc   a,($08)+y
+155f: 97 08     adc   a,($08)+y         ; offset +0: sample index + (n * 0x10)
 1561: fc        inc   y
 1562: 6d        push  y
 1563: fd        mov   y,a
-1564: f6 3d 0a  mov   a,$0a3d+y
+1564: f6 3d 0a  mov   a,$0a3d+y         ; read actual SRCN
 1567: 8d 04     mov   y,#$04
-1569: 3f 64 14  call  $1464
+1569: 3f 64 14  call  $1464             ; set SRCN
 156c: ee        pop   y
-156d: f7 08     mov   a,($08)+y
+156d: f7 08     mov   a,($08)+y         ; offset +1: ADSR(1)
 156f: fc        inc   y
 1570: 2d        push  a
 1571: 28 0f     and   a,#$0f
-1573: d5 08 04  mov   $0408+x,a
+1573: d5 08 04  mov   $0408+x,a         ; AR
 1576: ae        pop   a
 1577: 28 70     and   a,#$70
-1579: d5 20 04  mov   $0420+x,a
-157c: f7 08     mov   a,($08)+y
+1579: d5 20 04  mov   $0420+x,a         ; DR
+157c: f7 08     mov   a,($08)+y         ; offset +2: ADSR(2)
 157e: fc        inc   y
 157f: 2d        push  a
 1580: 28 1f     and   a,#$1f
-1582: d5 50 04  mov   $0450+x,a
-1585: d5 68 04  mov   $0468+x,a
+1582: d5 50 04  mov   $0450+x,a         ; SR
+1585: d5 68 04  mov   $0468+x,a         ; SR
 1588: ae        pop   a
 1589: 28 e0     and   a,#$e0
-158b: d5 38 04  mov   $0438+x,a
-158e: f7 08     mov   a,($08)+y
+158b: d5 38 04  mov   $0438+x,a         ; SL
+158e: f7 08     mov   a,($08)+y         ; offset +3: 
 1590: fc        inc   y
 1591: 6d        push  y
 1592: 8d 07     mov   y,#$07
-1594: 3f 64 14  call  $1464
+1594: 3f 64 14  call  $1464             ; set GAIN
 1597: ee        pop   y
-1598: f7 08     mov   a,($08)+y
+1598: f7 08     mov   a,($08)+y         ; offset +4: pitch multiplier (fraction)
 159a: fc        inc   y
 159b: d5 98 04  mov   $0498+x,a
-159e: f7 08     mov   a,($08)+y
+159e: f7 08     mov   a,($08)+y         ; offset +5: pitch multiplier (integer)
 15a0: d5 80 04  mov   $0480+x,a
 15a3: 3f c6 11  call  $11c6
 15a6: 6f        ret
@@ -2253,7 +2256,7 @@
 1d2a: fd        mov   y,a
 1d2b: f6 3d 0a  mov   a,$0a3d+y
 1d2e: 8d 04     mov   y,#$04
-1d30: 3f 64 14  call  $1464
+1d30: 3f 64 14  call  $1464             ; set SRCN
 1d33: e4 3d     mov   a,$3d
 1d35: d5 18 03  mov   $0318+x,a
 1d38: 8b 3d     dec   $3d
