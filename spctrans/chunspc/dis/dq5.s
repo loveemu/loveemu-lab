@@ -2163,6 +2163,7 @@
 1867: f6 ff 03  mov   a,$03ff+y
 186a: 68 ff     cmp   a,#$ff
 186c: d0 15     bne   $1883
+;
 186e: f5 cb 02  mov   a,$02cb+x
 1871: 08 80     or    a,#$80
 1873: d5 cb 02  mov   $02cb+x,a
@@ -2173,6 +2174,7 @@
 187f: 3f 93 1a  call  $1a93
 1882: 6f        ret
 
+; read sample info table (A=SRCN)
 1883: d5 cc 02  mov   $02cc+x,a
 1886: 8d 04     mov   y,#$04
 1888: 3f 23 1b  call  $1b23             ; SRCN

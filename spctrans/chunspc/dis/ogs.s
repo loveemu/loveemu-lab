@@ -1650,62 +1650,65 @@
 141e: fd        mov   y,a
 141f: 4d        push  x
 1420: 8f 03 c4  mov   $c4,#$03
-1423: 8f 02 c5  mov   $c5,#$02
+1423: 8f 02 c5  mov   $c5,#$02          ; $c4 = instrument table
 1426: cd 00     mov   x,#$00
 1428: ad 00     cmp   y,#$00
-142a: f0 0e     beq   $143a
-142c: e7 c4     mov   a,($c4+x)
+142a: f0 0e     beq   $143a             ; while y ~= 0 do
+142c: e7 c4     mov   a,($c4+x)         ;   read instrument count
 142e: bc        inc   a
 142f: 6d        push  y
 1430: 8d 00     mov   y,#$00
-1432: 7a c4     addw  ya,$c4
+1432: 7a c4     addw  ya,$c4            ;   skip (1 + instrument_count) bytes
 1434: da c4     movw  $c4,ya
 1436: ee        pop   y
 1437: dc        dec   y
-1438: 2f ee     bra   $1428
+1438: 2f ee     bra   $1428             ; end
 143a: ce        pop   x
-143b: ae        pop   a
-143c: bc        inc   a
+143b: ae        pop   a                 ; patch number in A
+143c: bc        inc   a                 ; skip offset +0: number of instruments
 143d: fd        mov   y,a
-143e: f7 c4     mov   a,($c4)+y
+143e: f7 c4     mov   a,($c4)+y         ; read global instrument number
 1440: fd        mov   y,a
 1441: f6 67 05  mov   a,$0567+y
 1444: 68 ff     cmp   a,#$ff
 1446: d0 02     bne   $144a
+;
 1448: 00        nop
 1449: bc        inc   a
-144a: d5 0e 04  mov   $040e+x,a
+
+; read sample info table (A=SRCN)
+144a: d5 0e 04  mov   $040e+x,a         ; save SRCN
 144d: 8d 04     mov   y,#$04
 144f: 3f 65 17  call  $1765             ; SRCN
 1452: 8d 08     mov   y,#$08
 1454: cf        mul   ya
 1455: 8f 2f c4  mov   $c4,#$2f
-1458: 8f 06 c5  mov   $c5,#$06
+1458: 8f 06 c5  mov   $c5,#$06          ; $062f = sample info table
 145b: 7a c4     addw  ya,$c4
-145d: da c4     movw  $c4,ya
+145d: da c4     movw  $c4,ya            ; $c4 = &SampInfoTable[patch * 8]
 145f: 8d 02     mov   y,#$02
-1461: f7 c4     mov   a,($c4)+y
-1463: d5 26 04  mov   $0426+x,a
+1461: f7 c4     mov   a,($c4)+y         ; read offset +2
+1463: d5 26 04  mov   $0426+x,a         ; save ADSR(1)
 1466: 8d 05     mov   y,#$05
 1468: 3f 65 17  call  $1765             ; ADSR(1)
 146b: 8d 03     mov   y,#$03
-146d: f7 c4     mov   a,($c4)+y
-146f: d5 3d 04  mov   $043d+x,a
+146d: f7 c4     mov   a,($c4)+y         ; read offset +3
+146f: d5 3d 04  mov   $043d+x,a         ; save ADSR(2)
 1472: 8d 06     mov   y,#$06
 1474: 3f 65 17  call  $1765             ; ADSR(2)
 1477: 28 e0     and   a,#$e0
-1479: 08 1d     or    a,#$1d
-147b: d5 fd 04  mov   $04fd+x,a
+1479: 08 1d     or    a,#$1d            ; SR = #$1d
+147b: d5 fd 04  mov   $04fd+x,a         ; save another ADSR(2) (for release?)
 147e: 8d 04     mov   y,#$04
-1480: f7 c4     mov   a,($c4)+y
-1482: d5 25 04  mov   $0425+x,a
+1480: f7 c4     mov   a,($c4)+y         ; read offset +4
+1482: d5 25 04  mov   $0425+x,a         ; save GAIN
 1485: 8d 07     mov   y,#$07
 1487: 3f 65 17  call  $1765             ; GAIN
 148a: 8d 05     mov   y,#$05
-148c: f7 c4     mov   a,($c4)+y
+148c: f7 c4     mov   a,($c4)+y         ; read offset +5
 148e: d5 f6 03  mov   $03f6+x,a
 1491: 8d 06     mov   y,#$06
-1493: f7 c4     mov   a,($c4)+y
+1493: f7 c4     mov   a,($c4)+y         ; read offset +6
 1495: d5 f5 03  mov   $03f5+x,a
 1498: 6f        ret
 

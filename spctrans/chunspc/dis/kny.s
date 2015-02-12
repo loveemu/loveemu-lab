@@ -2289,38 +2289,39 @@
 1aef: 2d        push  a
 1af0: f5 a3 02  mov   a,$02a3+x
 1af3: fd        mov   y,a
-1af4: f6 b7 03  mov   a,$03b7+y
+1af4: f6 b7 03  mov   a,$03b7+y         ; instrument table selector
 1af7: fd        mov   y,a
 1af8: 4d        push  x
 1af9: e5 46 2c  mov   a,$2c46
 1afc: c4 a4     mov   $a4,a
 1afe: e5 47 2c  mov   a,$2c47
-1b01: c4 a5     mov   $a5,a             ; $a4 = instrument table?
+1b01: c4 a5     mov   $a5,a             ; $a4 = instrument table
 1b03: cd 00     mov   x,#$00
 1b05: ad 00     cmp   y,#$00
-1b07: f0 0f     beq   $1b18
-1b09: e7 a4     mov   a,($a4+x)
+1b07: f0 0f     beq   $1b18             ; while y ~= 0 do
+1b09: e7 a4     mov   a,($a4+x)         ;   read instrument count
 1b0b: bc        inc   a
 1b0c: bc        inc   a
 1b0d: 6d        push  y
 1b0e: 8d 00     mov   y,#$00
-1b10: 7a a4     addw  ya,$a4
+1b10: 7a a4     addw  ya,$a4            ;   skip (2 + instrument_count) bytes
 1b12: da a4     movw  $a4,ya
 1b14: ee        pop   y
 1b15: dc        dec   y
-1b16: 2f ed     bra   $1b05
+1b16: 2f ed     bra   $1b05             ; end
 1b18: ce        pop   x
-1b19: ae        pop   a
-1b1a: bc        inc   a
-1b1b: bc        inc   a
+1b19: ae        pop   a                 ; patch number in A
+1b1a: bc        inc   a                 ; skip offset +0: number of instruments
+1b1b: bc        inc   a                 ; skip offset +1: ?
 1b1c: fd        mov   y,a
-1b1d: f7 a4     mov   a,($a4)+y
-1b1f: 65 90 01  cmp   a,$0190
+1b1d: f7 a4     mov   a,($a4)+y         ; read global instrument number
+1b1f: 65 90 01  cmp   a,$0190           ; $0190 = #$ff
 1b22: f0 08     beq   $1b2c
 1b24: fd        mov   y,a
-1b25: f6 10 04  mov   a,$0410+y
+1b25: f6 10 04  mov   a,$0410+y         ; read SRCN by global instrument number
 1b28: 68 ff     cmp   a,#$ff
 1b2a: d0 15     bne   $1b41
+;
 1b2c: f5 cb 02  mov   a,$02cb+x
 1b2f: 08 80     or    a,#$80
 1b31: d5 cb 02  mov   $02cb+x,a
@@ -2331,43 +2332,44 @@
 1b3d: 3f 59 1d  call  $1d59
 1b40: 6f        ret
 
-1b41: d5 cc 02  mov   $02cc+x,a
+; read sample info table (A=SRCN)
+1b41: d5 cc 02  mov   $02cc+x,a         ; save SRCN
 1b44: 8d 04     mov   y,#$04
 1b46: 3f e9 1d  call  $1de9             ; SRCN
 1b49: 8d 08     mov   y,#$08
 1b4b: cf        mul   ya
 1b4c: 8f e6 a4  mov   $a4,#$e6
-1b4f: 8f 05 a5  mov   $a5,#$05
+1b4f: 8f 05 a5  mov   $a5,#$05          ; $05e6 = sample info table
 1b52: 7a a4     addw  ya,$a4
-1b54: da a4     movw  $a4,ya
+1b54: da a4     movw  $a4,ya            ; $a4 = &SampInfoTable[patch * 8]
 1b56: 8d 02     mov   y,#$02
-1b58: f7 a4     mov   a,($a4)+y
-1b5a: d5 e0 02  mov   $02e0+x,a
+1b58: f7 a4     mov   a,($a4)+y         ; read offset +2
+1b5a: d5 e0 02  mov   $02e0+x,a         ; save ADSR(1)
 1b5d: 8d 05     mov   y,#$05
 1b5f: 3f e9 1d  call  $1de9             ; ADSR(1)
 1b62: 8d 03     mov   y,#$03
-1b64: f7 a4     mov   a,($a4)+y
-1b66: d5 f3 02  mov   $02f3+x,a
+1b64: f7 a4     mov   a,($a4)+y         ; read offset +3
+1b66: d5 f3 02  mov   $02f3+x,a         ; save ADSR(2)
 1b69: 8d 06     mov   y,#$06
 1b6b: 3f e9 1d  call  $1de9             ; ADSR(2)
 1b6e: 28 e0     and   a,#$e0
-1b70: 08 19     or    a,#$19
-1b72: d5 93 03  mov   $0393+x,a
+1b70: 08 19     or    a,#$19            ; SR = #$19
+1b72: d5 93 03  mov   $0393+x,a         ; save another ADSR(2) (for release?)
 1b75: 8d 04     mov   y,#$04
-1b77: f7 a4     mov   a,($a4)+y
-1b79: d5 df 02  mov   $02df+x,a
+1b77: f7 a4     mov   a,($a4)+y         ; read offset +4
+1b79: d5 df 02  mov   $02df+x,a         ; save GAIN
 1b7c: 8d 07     mov   y,#$07
 1b7e: 3f e9 1d  call  $1de9             ; GAIN
 1b81: 8d 05     mov   y,#$05
-1b83: f7 a4     mov   a,($a4)+y
+1b83: f7 a4     mov   a,($a4)+y         ; read offset +5
 1b85: d5 b8 02  mov   $02b8+x,a
 1b88: 8d 06     mov   y,#$06
-1b8a: f7 a4     mov   a,($a4)+y
+1b8a: f7 a4     mov   a,($a4)+y         ; read offset +6
 1b8c: d5 b7 02  mov   $02b7+x,a
 1b8f: 8d 07     mov   y,#$07
-1b91: f7 a4     mov   a,($a4)+y
-1b93: 08 08     or    a,#$08
-1b95: d7 a4     mov   ($a4)+y,a
+1b91: f7 a4     mov   a,($a4)+y         ; read offset +7
+1b93: 08 08     or    a,#$08            ; set3
+1b95: d7 a4     mov   ($a4)+y,a         ; write it back
 1b97: f5 cb 02  mov   a,$02cb+x
 1b9a: 28 7f     and   a,#$7f
 1b9c: d5 cb 02  mov   $02cb+x,a
