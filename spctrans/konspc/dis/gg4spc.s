@@ -1124,13 +1124,15 @@
 1901: d0 03     bne   $1906             ; 63-7f
 1903: 5f ab 1f  jmp   $1fab
 
-; vcmd 63-7f
+; (63-7f)
 1906: 68 85     cmp   a,#$85
 1908: b0 19     bcs   $1923
 190a: 68 83     cmp   a,#$83
 190c: d0 05     bne   $1913
+; vcmd 63
 190e: 09 11 14  or    ($14),($11)
 1911: 2f 08     bra   $191b
+; vcmd 64
 1913: e8 ff     mov   a,#$ff
 1915: 44 11     eor   a,$11
 1917: 24 14     and   a,$14
@@ -1138,20 +1140,23 @@
 191b: 8f 4d f2  mov   $f2,#$4d
 191e: fa 14 f3  mov   ($f3),($14)       ; set EON
 1921: 2f bf     bra   $18e2
+; (65-7f)
 1923: 68 90     cmp   a,#$90
 1925: 90 16     bcc   $193d
-1927: 28 0f     and   a,#$0f
+; vcmd 70-7f - instant tuning
+1927: 28 0f     and   a,#$0f            ; tuning amount: (-8..7) * 4 / 256 semitones
 1929: 1c        asl   a
 192a: 1c        asl   a
 192b: 8d 00     mov   y,#$00
 192d: 68 20     cmp   a,#$20
 192f: 90 03     bcc   $1934
-1931: 08 e0     or    a,#$e0
+1931: 08 e0     or    a,#$e0            ; neg ya
 1933: dc        dec   y
 1934: d5 80 02  mov   $0280+x,a
 1937: dd        mov   a,y
 1938: d5 81 02  mov   $0281+x,a
 193b: 2f a5     bra   $18e2
+; vcmd 65-6f
 193d: a2 20     set5  $20
 193f: 3f 6c 11  call  $116c
 1942: cd 00     mov   x,#$00
