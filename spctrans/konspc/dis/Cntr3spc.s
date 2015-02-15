@@ -458,26 +458,26 @@
 
 0c9a: 33 26 03  bbc1  $26,$0ca0
 0c9d: 09 20 17  or    ($17),($20)
-0ca0: f3 08 05  bbc7  $08,$0ca8
-0ca3: f5 66 02  mov   a,$0266+x
+0ca0: f3 08 05  bbc7  $08,$0ca8         ; if vcmd >= $80
+0ca3: f5 66 02  mov   a,$0266+x         ;   reuse last length, skip arg1
 0ca6: 2f 03     bra   $0cab
-0ca8: 3f 76 0e  call  $0e76
-0cab: d5 66 02  mov   $0266+x,a
+0ca8: 3f 76 0e  call  $0e76             ; get arg1 (length in ticks)
+0cab: d5 66 02  mov   $0266+x,a         ; save note length
 0cae: 8d 00     mov   y,#$00
 0cb0: 7a 2b     addw  ya,$2b
-0cb2: da 2b     movw  $2b,ya
+0cb2: da 2b     movw  $2b,ya            ; wait counter
 0cb4: f0 02     beq   $0cb8
 0cb6: 10 1b     bpl   $0cd3
 0cb8: 03 26 15  bbs0  $26,$0cd0
-0cbb: 3f 76 0e  call  $0e76
+0cbb: 3f 76 0e  call  $0e76             ; get arg2 (00-7f: note duration, 80-ff: note volume)
 0cbe: fd        mov   y,a
 0cbf: 10 03     bpl   $0cc4
 0cc1: f5 67 02  mov   a,$0267+x
-0cc4: d5 67 02  mov   $0267+x,a
+0cc4: d5 67 02  mov   $0267+x,a         ; save note duration
 0cc7: d5 76 02  mov   $0276+x,a
 0cca: dd        mov   a,y
 0ccb: 30 03     bmi   $0cd0
-0ccd: 3f 78 0e  call  $0e78
+0ccd: 3f 78 0e  call  $0e78             ; skip arg3
 0cd0: 5f 8c 0c  jmp   $0c8c
 
 0cd3: 13 26 1a  bbc0  $26,$0cf0
@@ -496,17 +496,17 @@
 0cf5: f0 06     beq   $0cfd
 0cf7: 09 20 16  or    ($16),($20)
 0cfa: 09 20 1f  or    ($1f),($20)
-0cfd: 3f 76 0e  call  $0e76
+0cfd: 3f 76 0e  call  $0e76             ; get arg2 (00-7f: note duration, 80-ff: note volume)
 0d00: fd        mov   y,a
 0d01: 10 03     bpl   $0d06
 0d03: f5 67 02  mov   a,$0267+x
-0d06: d5 67 02  mov   $0267+x,a
+0d06: d5 67 02  mov   $0267+x,a         ; save note duration
 0d09: d5 76 02  mov   $0276+x,a
 0d0c: dd        mov   a,y
 0d0d: 30 03     bmi   $0d12
-0d0f: 3f 76 0e  call  $0e76
+0d0f: 3f 76 0e  call  $0e76             ; get arg3 (note volume) (only available if arg2 < 0x80)
 0d12: 28 7f     and   a,#$7f
-0d14: d5 b7 02  mov   $02b7+x,a
+0d14: d5 b7 02  mov   $02b7+x,a         ; save note volume
 0d17: d5 17 02  mov   $0217+x,a
 0d1a: d0 08     bne   $0d24
 0d1c: e4 20     mov   a,$20
