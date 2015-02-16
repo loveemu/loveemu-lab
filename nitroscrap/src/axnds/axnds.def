@@ -1,7 +1,0 @@
-EXPORTS
-	GetPluginInfo
-	IsSupported
-	GetArchiveInfo
-	GetFileInfo
-	GetFile
-;	ConfigurationDlg
