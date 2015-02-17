@@ -326,7 +326,7 @@
 
 ; vcmd 00 - set delta time
 07b6: 3f eb 09  call  $09eb             ; arg1
-07b9: d4 08     mov   $08+x,a
+07b9: d4 08     mov   $08+x,a           ; set delta time
 07bb: 5f 61 07  jmp   $0761
 
 ; vcmd 01 - set active voices
@@ -515,9 +515,10 @@
 0906: d0 ec     bne   $08f4             ; } while ($38 != 0);
 0908: 2f 16     bra   $0920             ; wait
 
+; calculate scaled delta-time
 090a: f8 de     mov   x,$de
-090c: f4 08     mov   a,$08+x
-090e: fb 10     mov   y,$10+x
+090c: f4 08     mov   a,$08+x           ; delta time
+090e: fb 10     mov   y,$10+x           ; timebase (delta-time multiplier)
 0910: cf        mul   ya
 0911: c4 d0     mov   $d0,a
 0913: 74 28     cmp   a,$28+x
@@ -578,8 +579,8 @@
 0988: 7a 40     addw  ya,$40
 098a: da 40     movw  $40,ya            ; dst += step
 098c: 6e 3b eb  dbnz  $3b,$097a         ; do above for 11 times
-098f: 3f 05 0a  call  $0a05
-0992: 3f a9 0d  call  $0da9
+098f: 3f 05 0a  call  $0a05             ; dispatch note vcmd
+0992: 3f a9 0d  call  $0da9             ; update volume regs
 0995: e8 ff     mov   a,#$ff
 0997: f8 df     mov   x,$df
 0999: d5 c0 04  mov   $04c0+x,a
@@ -643,6 +644,7 @@
 0a01: e5 f3 00  mov   a,$00f3
 0a04: 6f        ret
 
+; dispatch note vcmd
 0a05: f8 df     mov   x,$df
 0a07: f5 c0 04  mov   a,$04c0+x
 0a0a: 68 54     cmp   a,#$54
@@ -663,7 +665,7 @@
 0a2a: d5 20 05  mov   $0520+x,a
 0a2d: 3f 8b 0c  call  $0c8b
 0a30: e4 d8     mov   a,$d8
-0a32: 10 06     bpl   $0a3a
+0a32: 10 06     bpl   $0a3a             ; update key on/off etc.
 0a34: 3f 42 0b  call  $0b42
 0a37: 5f 54 0b  jmp   $0b54
 
@@ -682,14 +684,14 @@
 0a54: 1c        asl   a
 0a55: 9f        xcn   a
 0a56: 08 02     or    a,#$02
-0a58: c5 60 0a  mov   $0a60,a
+0a58: c5 60 0a  mov   $0a60,a           ; self-modifying code
 0a5b: 08 12     or    a,#$12
-0a5d: c5 62 0a  mov   $0a62,a
-0a60: a2 db     set5  $db
-0a62: b2 d9     clr5  $d9
+0a5d: c5 62 0a  mov   $0a62,a           ; self-modifying code
+0a60: a2 db     set5  $db               ; set0-set7 KON shadow
+0a62: b2 d9     clr5  $d9               ; clr0-clr7 NON shadow
 0a64: 3f f2 0c  call  $0cf2
-0a67: 3f 36 0e  call  $0e36
-0a6a: f5 40 03  mov   a,$0340+x
+0a67: 3f 36 0e  call  $0e36             ; write pitch
+0a6a: f5 40 03  mov   a,$0340+x         ; ADSR index
 0a6d: d0 05     bne   $0a74
 0a6f: e8 7f     mov   a,#$7f
 0a71: 5f 9d 0e  jmp   $0e9d
@@ -731,10 +733,10 @@
 0ab3: 1c        asl   a
 0ab4: 9f        xcn   a
 0ab5: 08 02     or    a,#$02
-0ab7: c5 bd 0a  mov   $0abd,a
-0aba: c5 bf 0a  mov   $0abf,a
-0abd: a2 d9     set5  $d9
-0abf: a2 db     set5  $db
+0ab7: c5 bd 0a  mov   $0abd,a           ; self-modifying code
+0aba: c5 bf 0a  mov   $0abf,a           ; self-modifying code
+0abd: a2 d9     set5  $d9               ; set0-set7 NON shadow
+0abf: a2 db     set5  $db               ; set0-set7 KON shadow
 0ac1: e4 d2     mov   a,$d2
 0ac3: 08 04     or    a,#$04
 0ac5: fd        mov   y,a
@@ -745,34 +747,34 @@
 0acc: f8 df     mov   x,$df
 0ace: 3f 80 0c  call  $0c80
 0ad1: 3f 42 0b  call  $0b42
-0ad4: f5 40 03  mov   a,$0340+x
+0ad4: f5 40 03  mov   a,$0340+x         ; ADSR index
 0ad7: 5f 3e 0f  jmp   $0f3e
 
 ; percussion note (80-ff)
 0ada: 28 7f     and   a,#$7f
 0adc: 8d 05     mov   y,#$05
-0ade: cf        mul   ya
+0ade: cf        mul   ya                ; 5 bytes / item
 0adf: da 3a     movw  $3a,ya
 0ae1: ec 15 dc  mov   y,$dc15
-0ae4: e5 14 dc  mov   a,$dc14
+0ae4: e5 14 dc  mov   a,$dc14           ; percussion table address is in $dc14
 0ae7: 7a 3a     addw  ya,$3a
-0ae9: da 3a     movw  $3a,ya
+0ae9: da 3a     movw  $3a,ya            ; $3a/b = [$dc14] + ((note & 0x7f) * 5)
 0aeb: 8d 00     mov   y,#$00
 0aed: f8 df     mov   x,$df
-0aef: f7 3a     mov   a,($3a)+y
+0aef: f7 3a     mov   a,($3a)+y         ; offset +0: SRCN
 0af1: d5 00 02  mov   $0200+x,a
 0af4: fc        inc   y
-0af5: f7 3a     mov   a,($3a)+y
+0af5: f7 3a     mov   a,($3a)+y         ; offset +1: ADSR index
 0af7: d5 40 03  mov   $0340+x,a
 0afa: fc        inc   y
-0afb: f7 3a     mov   a,($3a)+y
+0afb: f7 3a     mov   a,($3a)+y         ; offset +2: volume
 0afd: d5 20 02  mov   $0220+x,a
 0b00: fc        inc   y
-0b01: f7 3a     mov   a,($3a)+y
+0b01: f7 3a     mov   a,($3a)+y         ; offset +3: volume balance
 0b03: d5 40 02  mov   $0240+x,a
 0b06: fc        inc   y
-0b07: f7 3a     mov   a,($3a)+y
-0b09: 5f 0a 0a  jmp   $0a0a
+0b07: f7 3a     mov   a,($3a)+y         ; offset +4: note number
+0b09: 5f 0a 0a  jmp   $0a0a             ; dispatch it
 
 0b0c: f8 df     mov   x,$df
 0b0e: f4 50     mov   a,$50+x
@@ -804,7 +806,7 @@
 0b47: 3f 71 0b  call  $0b71
 0b4a: 3f c4 0b  call  $0bc4
 0b4d: 3f f2 0c  call  $0cf2
-0b50: 3f 36 0e  call  $0e36
+0b50: 3f 36 0e  call  $0e36             ; write pitch
 0b53: 6f        ret
 
 0b54: f8 df     mov   x,$df
@@ -812,7 +814,7 @@
 0b59: f0 0a     beq   $0b65
 0b5b: 74 b0     cmp   a,$b0+x
 0b5d: b0 06     bcs   $0b65
-0b5f: f5 40 03  mov   a,$0340+x
+0b5f: f5 40 03  mov   a,$0340+x         ; ADSR index
 0b62: 5f 3e 0f  jmp   $0f3e
 
 0b65: f4 90     mov   a,$90+x
@@ -1032,6 +1034,7 @@
 0cee: d5 a0 01  mov   $01a0+x,a
 0cf1: 6f        ret
 
+; calculate pitch into $40/1
 0cf2: f8 df     mov   x,$df
 0cf4: e4 3d     mov   a,$3d             ; note key
 0cf6: d4 50     mov   $50+x,a
@@ -1041,8 +1044,8 @@
 0cfd: 48 ff     eor   a,#$ff
 0cff: 9c        dec   a
 0d00: 28 07     and   a,#$07
-0d02: 2d        push  a
-0d03: dd        mov   a,y
+0d02: 2d        push  a                 ; push octave
+0d03: dd        mov   a,y               ; key
 0d04: 1c        asl   a
 0d05: fd        mov   y,a
 0d06: f6 68 10  mov   a,$1068+y
@@ -1054,10 +1057,10 @@
 0d15: f6 69 10  mov   a,$1069+y
 0d18: eb 39     mov   y,$39             ; read pitch table
 0d1a: 9a 3a     subw  ya,$3a
-0d1c: da 42     movw  $42,ya
+0d1c: da 42     movw  $42,ya            ; delta pitch
 0d1e: f8 df     mov   x,$df
 0d20: fd        mov   y,a
-0d21: f5 60 01  mov   a,$0160+x
+0d21: f5 60 01  mov   a,$0160+x         ; tuning?
 0d24: cf        mul   ya
 0d25: cb 3e     mov   $3e,y
 0d27: e4 42     mov   a,$42
@@ -1091,7 +1094,7 @@
 0d5a: ba 3a     movw  ya,$3a
 0d5c: 7a 3f     addw  ya,$3f
 0d5e: cb 3b     mov   $3b,y
-0d60: ce        pop   x
+0d60: ce        pop   x                 ; pop octave
 0d61: c8 00     cmp   x,#$00
 0d63: f0 06     beq   $0d6b
 0d65: 4b 3b     lsr   $3b
@@ -1100,20 +1103,20 @@
 0d69: d0 fa     bne   $0d65
 0d6b: c4 3a     mov   $3a,a
 0d6d: f8 df     mov   x,$df
-0d6f: f5 00 02  mov   a,$0200+x
+0d6f: f5 00 02  mov   a,$0200+x         ; SRCN index
 0d72: 1c        asl   a
 0d73: 60        clrc
 0d74: 88 e0     adc   a,#$e0
 0d76: c4 3c     mov   $3c,a
 0d78: e8 11     mov   a,#$11
 0d7a: 88 00     adc   a,#$00
-0d7c: c4 3d     mov   $3d,a
+0d7c: c4 3d     mov   $3d,a             ; $3c/d = $11e0 + (srcn * 2)
 0d7e: 8d 00     mov   y,#$00
 0d80: f7 3c     mov   a,($3c)+y
 0d82: c4 3e     mov   $3e,a
 0d84: fc        inc   y
 0d85: f7 3c     mov   a,($3c)+y
-0d87: c4 3d     mov   $3d,a
+0d87: c4 3d     mov   $3d,a             ; read per-instrument tuning
 0d89: eb 3b     mov   y,$3b
 0d8b: cf        mul   ya
 0d8c: da 40     movw  $40,ya
@@ -1222,6 +1225,7 @@
 0e32: ee        pop   y
 0e33: 5f ea 0f  jmp   $0fea
 
+; write pitch $40/1 to dsp
 0e36: e4 d2     mov   a,$d2
 0e38: 08 02     or    a,#$02
 0e3a: fd        mov   y,a
@@ -1373,6 +1377,7 @@
 0f45: d0 01     bne   $0f48
 0f47: 6f        ret
 
+; case ENVX=0
 0f48: f8 df     mov   x,$df
 0f4a: c4 39     mov   $39,a
 0f4c: f4 90     mov   a,$90+x
