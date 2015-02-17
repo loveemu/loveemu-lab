@@ -507,7 +507,7 @@
 08f4: 0b 38     asl   $38               ;   $38 <<= 1;
 08f6: 90 0b     bcc   $0903             ;   if carry == 0 then continue
 08f8: 3f ee 09  call  $09ee             ;   read next byte
-08fb: d6 c0 04  mov   $04c0+y,a
+08fb: d6 c0 04  mov   $04c0+y,a         ;   save note byte
 08fe: e8 00     mov   a,#$00
 0900: d6 70 00  mov   $0070+y,a
 0903: fc        inc   y
@@ -652,10 +652,10 @@
 0a0e: 5f 83 0a  jmp   $0a83
 
 ; normal note (00-53)
-0a11: c4 39     mov   $39,a
-0a13: 3f 32 0b  call  $0b32
-0a16: 3f 80 0c  call  $0c80
-0a19: f5 e0 02  mov   a,$02e0+x
+0a11: c4 39     mov   $39,a             ; note number
+0a13: 3f 32 0b  call  $0b32             ; save adjusted note number
+0a16: 3f 80 0c  call  $0c80             ; load it to $3c/d
+0a19: f5 e0 02  mov   a,$02e0+x         ; vcmd 27 param
 0a1c: f0 12     beq   $0a30
 0a1e: f4 50     mov   a,$50+x
 0a20: 68 54     cmp   a,#$54
@@ -793,11 +793,12 @@
 0b2c: 3f 42 0b  call  $0b42
 0b2f: 5f 3e 0f  jmp   $0f3e
 
+; set note number into $0120+x and $0100+x (fraction)
 0b32: f8 df     mov   x,$df
 0b34: 60        clrc
-0b35: 95 a0 02  adc   a,$02a0+x
+0b35: 95 a0 02  adc   a,$02a0+x         ; vcmd 25 param (transpose?)
 0b38: d5 20 01  mov   $0120+x,a
-0b3b: f5 c0 02  mov   a,$02c0+x
+0b3b: f5 c0 02  mov   a,$02c0+x         ; vcmd 26 param (tuning?)
 0b3e: d5 00 01  mov   $0100+x,a
 0b41: 6f        ret
 
@@ -974,6 +975,7 @@
 0c7e: fd        mov   y,a
 0c7f: 6f        ret
 
+; load note number to $3c/d
 0c80: f5 00 01  mov   a,$0100+x
 0c83: c4 3c     mov   $3c,a
 0c85: f5 20 01  mov   a,$0120+x
