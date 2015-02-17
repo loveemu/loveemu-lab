@@ -197,7 +197,7 @@
 087a: c4 08     mov   $08,a
 087c: d6 50 01  mov   $0150+y,a
 087f: f5 81 1c  mov   a,$1c81+x
-0882: c4 09     mov   $09,a
+0882: c4 09     mov   $09,a             ; set voice pointer to $08/9
 0884: d6 54 01  mov   $0154+y,a
 0887: 30 49     bmi   $08d2
 0889: 3f 6f 0a  call  $0a6f
@@ -449,11 +449,13 @@
 
 0a6a: 3f 0f 16  call  $160f
 0a6d: 2f ed     bra   $0a5c
+; read voice bytestream, increase voice pointer
 0a6f: 8d 00     mov   y,#$00
 0a71: f7 08     mov   a,($08)+y
 0a73: 3a 08     incw  $08
 0a75: 6f        ret
 
+; read relative offset into YA as absolute address
 0a76: 8d 00     mov   y,#$00
 0a78: f7 08     mov   a,($08)+y
 0a7a: 3a 08     incw  $08
@@ -498,22 +500,25 @@
 
 0ac4: 3f 6f 0a  call  $0a6f
 0ac7: 68 00     cmp   a,#$00
-0ac9: f0 12     beq   $0add
-0acb: 10 1b     bpl   $0ae8
+0ac9: f0 12     beq   $0add             ; branch if 00
+0acb: 10 1b     bpl   $0ae8             ; branch if 01-7f
 0acd: 68 f9     cmp   a,#$f9
-0acf: b0 1d     bcs   $0aee
+0acf: b0 1d     bcs   $0aee             ; branch if f9-ff
 0ad1: 68 da     cmp   a,#$da
-0ad3: b0 03     bcs   $0ad8
+0ad3: b0 03     bcs   $0ad8             ; branch if da-f8
 0ad5: 5f 3a 0b  jmp   $0b3a
 
 0ad8: 3f 29 0d  call  $0d29
 0adb: 2f e7     bra   $0ac4
+
+; vcmd 00
 0add: f5 cc 01  mov   a,$01cc+x
 0ae0: 30 03     bmi   $0ae5
 0ae2: 5f ec 0b  jmp   $0bec
 
 0ae5: 5f 60 09  jmp   $0960
 
+; vcmd 01-7f
 0ae8: d5 84 01  mov   $0184+x,a
 0aeb: 5f c4 0a  jmp   $0ac4
 
@@ -535,18 +540,24 @@
 
 0b0a: 68 fb     cmp   a,#$fb
 0b0c: d0 08     bne   $0b16
+
+; vcmd fb
 0b0e: e8 00     mov   a,#$00
 0b10: d5 a8 01  mov   $01a8+x,a
 0b13: 5f c4 0a  jmp   $0ac4
 
 0b16: 68 fa     cmp   a,#$fa
 0b18: d0 08     bne   $0b22
+
+; vcmd fa
 0b1a: e8 ff     mov   a,#$ff
 0b1c: d5 a8 01  mov   $01a8+x,a
 0b1f: 5f c4 0a  jmp   $0ac4
 
 0b22: 68 f9     cmp   a,#$f9
 0b24: d0 11     bne   $0b37
+
+; vcmd f9
 0b26: 3f 6f 0a  call  $0a6f
 0b29: 4d        push  x
 0b2a: fd        mov   y,a
@@ -620,6 +631,7 @@
 0bb3: fd        mov   y,a
 0bb4: ae        pop   a
 0bb5: 2f 8f     bra   $0b46
+; vcmd fc
 0bb7: f5 cc 01  mov   a,$01cc+x
 0bba: 60        clrc
 0bbb: 88 0c     adc   a,#$0c
@@ -661,6 +673,7 @@
 0c07: d5 cc 01  mov   $01cc+x,a
 0c0a: 5f c4 0a  jmp   $0ac4
 
+; vcmd fd
 0c0d: f5 cc 01  mov   a,$01cc+x
 0c10: 60        clrc
 0c11: 88 0c     adc   a,#$0c
@@ -678,6 +691,7 @@
 0c2d: d6 f8 02  mov   $02f8+y,a
 0c30: 5f c4 0a  jmp   $0ac4
 
+; vcmd fe
 0c33: f5 cc 01  mov   a,$01cc+x
 0c36: 30 11     bmi   $0c49
 0c38: fd        mov   y,a
@@ -691,6 +705,7 @@
 0c46: d5 cc 01  mov   $01cc+x,a
 0c49: 5f c4 0a  jmp   $0ac4
 
+; vcmd ff
 0c4c: 3f 76 0a  call  $0a76
 0c4f: da 08     movw  $08,ya
 0c51: 5f c4 0a  jmp   $0ac4
@@ -702,7 +717,7 @@
 0c5c: f6 9f 0c  mov   a,$0c9f+y
 0c5f: d5 e4 03  mov   $03e4+x,a
 0c62: f6 a0 0c  mov   a,$0ca0+y
-0c65: d5 e5 03  mov   $03e5+x,a
+0c65: d5 e5 03  mov   $03e5+x,a         ; construct actual vcmd dispatch table
 0c68: fc        inc   y
 0c69: fc        inc   y
 0c6a: fc        inc   y
@@ -785,15 +800,16 @@
 
 0d21: 5f b9 13  jmp   $13b9
 
-0d24: 18 19 1a  or    $1a,#$19
-0d27: 1b 1e     asl   $1e+x
+0d24: db $18,$19,$1a,$1b,$1e
+
+; dispatch vcmd (da-f8)
 0d29: 80        setc
 0d2a: a8 da     sbc   a,#$da
 0d2c: 68 1f     cmp   a,#$1f
 0d2e: 90 01     bcc   $0d31
 0d30: 6f        ret
 
-; dispatch vcmd (da-f8)
+; dispatch vcmd (indexed by A)
 0d31: 1c        asl   a
 0d32: fd        mov   y,a
 0d33: f6 e5 03  mov   a,$03e5+y
@@ -802,11 +818,13 @@
 0d3a: 2d        push  a
 0d3b: 6f        ret
 
+; vcmd e9
 0d3c: 3f 6f 0a  call  $0a6f
 0d3f: fb 29     mov   y,$29+x
 0d41: d6 e0 03  mov   $03e0+y,a
 0d44: 6f        ret
 
+; vcmd e1
 0d45: fb 29     mov   y,$29+x
 0d47: f6 24 0d  mov   a,$0d24+y
 0d4a: 2d        push  a
@@ -815,6 +833,7 @@
 0d50: ee        pop   y
 0d51: 5f b9 13  jmp   $13b9
 
+; vcmd e2
 0d54: 4d        push  x
 0d55: fb 29     mov   y,$29+x
 0d57: f6 24 0d  mov   a,$0d24+y
@@ -828,6 +847,7 @@
 0d68: ce        pop   x
 0d69: 6f        ret
 
+; vcdm e7
 0d6a: 3f 6f 0a  call  $0a6f
 0d6d: c4 71     mov   $71,a
 0d6f: 3f 6f 0a  call  $0a6f
@@ -837,12 +857,14 @@
 0d79: 3f 3b 11  call  $113b
 0d7c: 6f        ret
 
+; vcmd e8
 0d7d: 3f 6f 0a  call  $0a6f
 0d80: 3f 75 0f  call  $0f75
 0d83: 3f c8 10  call  $10c8
 0d86: 3f 05 0f  call  $0f05
 0d89: 6f        ret
 
+; vcmd ed
 0d8a: 3f 6f 0a  call  $0a6f
 0d8d: 2d        push  a
 0d8e: 7d        mov   a,x
@@ -854,6 +876,7 @@
 0d95: 88 0a     adc   a,#$0a
 0d97: 5f b9 13  jmp   $13b9
 
+; vcmd ee
 0d9a: 4d        push  x
 0d9b: 3f 6f 0a  call  $0a6f
 0d9e: 2d        push  a
@@ -871,10 +894,12 @@
 0db0: ce        pop   x
 0db1: 6f        ret
 
+; vcmd ea
 0db2: 3f 6f 0a  call  $0a6f
 0db5: d5 b8 03  mov   $03b8+x,a
 0db8: 6f        ret
 
+; vcmd eb
 0db9: 3f 6f 0a  call  $0a6f
 0dbc: 2d        push  a
 0dbd: 7d        mov   a,x
@@ -885,6 +910,7 @@
 0dc3: 48 7f     eor   a,#$7f
 0dc5: 5f b9 13  jmp   $13b9
 
+; vcmd ec
 0dc8: 4d        push  x
 0dc9: 3f 6f 0a  call  $0a6f
 0dcc: 2d        push  a
@@ -901,38 +927,46 @@
 0ddd: ce        pop   x
 0dde: 6f        ret
 
+; vcmd f1
 0ddf: 3f 6f 0a  call  $0a6f
 0de2: d5 c4 03  mov   $03c4+x,a
 0de5: 3f 05 0f  call  $0f05
 0de8: 6f        ret
 
+; vcmd f6
 0de9: 3f 6f 0a  call  $0a6f
 0dec: d5 ea 04  mov   $04ea+x,a
 0def: 3f 6f 0a  call  $0a6f
 0df2: d5 f6 04  mov   $04f6+x,a
 0df5: 6f        ret
 
+; vcmd f7
 0df6: e8 01     mov   a,#$01
 0df8: d5 02 05  mov   $0502+x,a
 0dfb: 6f        ret
 
+; vcmd f8
 0dfc: e8 00     mov   a,#$00
 0dfe: d5 02 05  mov   $0502+x,a
 0e01: 6f        ret
 
+; vcmd ef
 0e02: e8 ff     mov   a,#$ff
 0e04: d5 d0 03  mov   $03d0+x,a
 0e07: 5f f4 15  jmp   $15f4
 
+; vcmd f0
 0e0a: e8 00     mov   a,#$00
 0e0c: d5 d0 03  mov   $03d0+x,a
 0e0f: 5f f4 15  jmp   $15f4
 
+; vcmd e3
 0e12: 3f 6f 0a  call  $0a6f
 0e15: 48 7f     eor   a,#$7f
 0e17: 8d 1c     mov   y,#$1c
 0e19: 5f b9 13  jmp   $13b9
 
+; vcmd e4
 0e1c: 4d        push  x
 0e1d: 3f 6f 0a  call  $0a6f
 0e20: 5d        mov   x,a
@@ -943,12 +977,14 @@
 0e2b: ce        pop   x
 0e2c: 6f        ret
 
+; vcmd e5
 0e2d: 3f 6f 0a  call  $0a6f
 0e30: 8d 1d     mov   y,#$1d
 0e32: 60        clrc
 0e33: 88 0a     adc   a,#$0a
 0e35: 5f b9 13  jmp   $13b9
 
+; vcmd e6
 0e38: 4d        push  x
 0e39: 3f 6f 0a  call  $0a6f
 0e3c: 5d        mov   x,a
@@ -961,11 +997,13 @@
 0e4a: ce        pop   x
 0e4b: 6f        ret
 
+; vcmd de
 0e4c: 3f 6f 0a  call  $0a6f
 0e4f: fb 29     mov   y,$29+x
 0e51: d6 dc 03  mov   $03dc+y,a
 0e54: 6f        ret
 
+; vcmd df
 0e55: e8 00     mov   a,#$00
 0e57: c4 71     mov   $71,a
 0e59: 3f 6f 0a  call  $0a6f
@@ -979,6 +1017,7 @@
 0e6c: d6 44 01  mov   $0144+y,a
 0e6f: 6f        ret
 
+; vcmd f2
 0e70: e8 40     mov   a,#$40
 0e72: 2f 02     bra   $0e76
 0e74: e8 80     mov   a,#$80
@@ -994,19 +1033,23 @@
 0e8b: ae        pop   a
 0e8c: 5f ae 11  jmp   $11ae
 
+; vcmd f3,f5
 0e8f: e8 00     mov   a,#$00
 0e91: 5f ae 11  jmp   $11ae
 
+; vcmd dd
 0e94: 3f 6f 0a  call  $0a6f
 0e97: c4 71     mov   $71,a
 0e99: 3f 6f 0a  call  $0a6f
 0e9c: c4 72     mov   $72,a
 0e9e: 5f 2f 11  jmp   $112f
 
+; vcmd dc
 0ea1: 3f 6f 0a  call  $0a6f
 0ea4: d5 60 01  mov   $0160+x,a
 0ea7: 6f        ret
 
+; vcmd e0
 0ea8: 3f 6f 0a  call  $0a6f
 0eab: 48 ff     eor   a,#$ff
 0ead: bc        inc   a
@@ -1022,10 +1065,12 @@
 0ebb: e8 7f     mov   a,#$7f
 0ebd: 5f b9 13  jmp   $13b9
 
+; vcmd db
 0ec0: 3f 6f 0a  call  $0a6f
 0ec3: d5 c0 01  mov   $01c0+x,a
 0ec6: 6f        ret
 
+; vcmd da
 0ec7: 3f 6f 0a  call  $0a6f
 0eca: 9c        dec   a
 0ecb: 30 09     bmi   $0ed6
@@ -1188,47 +1233,47 @@
 0fd8: 8f c9 7a  mov   $7a,#$c9
 0fdb: 8f 00 7b  mov   $7b,#$00
 0fde: 8f 6c f2  mov   $f2,#$6c
-0fe1: 8f e0 f3  mov   $f3,#$e0
+0fe1: 8f e0 f3  mov   $f3,#$e0          ; FLG
 0fe4: 8f 7d f2  mov   $f2,#$7d
-0fe7: 8f 00 f3  mov   $f3,#$00
+0fe7: 8f 00 f3  mov   $f3,#$00          ; EDL
 0fea: 8f 0d f2  mov   $f2,#$0d
-0fed: 8f 00 f3  mov   $f3,#$00
+0fed: 8f 00 f3  mov   $f3,#$00          ; EFB
 0ff0: 8f 4d f2  mov   $f2,#$4d
-0ff3: 8f 00 f3  mov   $f3,#$00
+0ff3: 8f 00 f3  mov   $f3,#$00          ; EON
 0ff6: 8f 2c f2  mov   $f2,#$2c
-0ff9: 8f 00 f3  mov   $f3,#$00
+0ff9: 8f 00 f3  mov   $f3,#$00          ; EVOL(L)
 0ffc: 8f 3c f2  mov   $f2,#$3c
-0fff: 8f 00 f3  mov   $f3,#$00
+0fff: 8f 00 f3  mov   $f3,#$00          ; EVOL(R)
 1002: 8f 0c f2  mov   $f2,#$0c
-1005: 8f 00 f3  mov   $f3,#$00
+1005: 8f 00 f3  mov   $f3,#$00          ; MVOL(L)
 1008: 8f 1c f2  mov   $f2,#$1c
-100b: 8f 00 f3  mov   $f3,#$00
+100b: 8f 00 f3  mov   $f3,#$00          ; MVOL(R)
 100e: 8f 2d f2  mov   $f2,#$2d
-1011: 8f 00 f3  mov   $f3,#$00
+1011: 8f 00 f3  mov   $f3,#$00          ; PMON
 1014: 8f 5d f2  mov   $f2,#$5d
-1017: 8f 1a f3  mov   $f3,#$1a
+1017: 8f 1a f3  mov   $f3,#$1a          ; NON
 101a: 8f 6d f2  mov   $f2,#$6d
-101d: 8f e0 f3  mov   $f3,#$e0
+101d: 8f e0 f3  mov   $f3,#$e0          ; ESA
 1020: 8f 0f f2  mov   $f2,#$0f
-1023: 8f 7f f3  mov   $f3,#$7f
+1023: 8f 7f f3  mov   $f3,#$7f          ; C0
 1026: 8f 1f f2  mov   $f2,#$1f
-1029: 8f 00 f3  mov   $f3,#$00
+1029: 8f 00 f3  mov   $f3,#$00          ; C1
 102c: 8f 2f f2  mov   $f2,#$2f
-102f: 8f 00 f3  mov   $f3,#$00
+102f: 8f 00 f3  mov   $f3,#$00          ; C2
 1032: 8f 3f f2  mov   $f2,#$3f
-1035: 8f 00 f3  mov   $f3,#$00
+1035: 8f 00 f3  mov   $f3,#$00          ; C3
 1038: 8f 4f f2  mov   $f2,#$4f
-103b: 8f 00 f3  mov   $f3,#$00
+103b: 8f 00 f3  mov   $f3,#$00          ; C4
 103e: 8f 5f f2  mov   $f2,#$5f
-1041: 8f 00 f3  mov   $f3,#$00
+1041: 8f 00 f3  mov   $f3,#$00          ; C5
 1044: 8f 6f f2  mov   $f2,#$6f
-1047: 8f 00 f3  mov   $f3,#$00
+1047: 8f 00 f3  mov   $f3,#$00          ; C6
 104a: 8f 7f f2  mov   $f2,#$7f
-104d: 8f 00 f3  mov   $f3,#$00
+104d: 8f 00 f3  mov   $f3,#$00          ; C7
 1050: e8 1a     mov   a,#$1a
 1052: 3f e2 07  call  $07e2
 1055: 8f 6c f2  mov   $f2,#$6c
-1058: 8f 00 f3  mov   $f3,#$00
+1058: 8f 00 f3  mov   $f3,#$00          ; FLG
 105b: 8f 00 84  mov   $84,#$00
 105e: 8f 00 85  mov   $85,#$00
 1061: 8f 00 86  mov   $86,#$00
@@ -1240,17 +1285,17 @@
 106e: e4 77     mov   a,$77
 1070: 48 ff     eor   a,#$ff
 1072: 24 76     and   a,$76
-1074: c4 f3     mov   $f3,a
+1074: c4 f3     mov   $f3,a             ; set KON
 1076: 8f 5c f2  mov   $f2,#$5c
 1079: 8f 00 f3  mov   $f3,#$00
 107c: e4 76     mov   a,$76
 107e: 48 ff     eor   a,#$ff
 1080: 24 77     and   a,$77
-1082: c4 f3     mov   $f3,a
+1082: c4 f3     mov   $f3,a             ; set KOF
 1084: fa 76 77  mov   ($77),($76)
 1087: fa 88 87  mov   ($87),($88)
 108a: 8f 7c f2  mov   $f2,#$7c
-108d: e4 f3     mov   a,$f3
+108d: e4 f3     mov   a,$f3             ; read ENDX
 108f: c4 88     mov   $88,a
 1091: 6f        ret
 
@@ -1276,12 +1321,13 @@
 10b5: fb 1d     mov   y,$1d+x
 10b7: f6 0d 13  mov   a,$130d+y
 10ba: c4 f2     mov   $f2,a
-10bc: fa 7f f3  mov   ($f3),($7f)
+10bc: fa 7f f3  mov   ($f3),($7f)       ; set P(L)
 10bf: f6 15 13  mov   a,$1315+y
 10c2: c4 f2     mov   $f2,a
-10c4: fa 80 f3  mov   ($f3),($80)
+10c4: fa 80 f3  mov   ($f3),($80)       ; set P(H)
 10c7: 6f        ret
 
+; set sample A
 10c8: 8d 06     mov   y,#$06
 10ca: cf        mul   ya
 10cb: da 7f     movw  $7f,ya
@@ -1290,23 +1336,23 @@
 10d1: 7a 7f     addw  ya,$7f
 10d3: da 7f     movw  $7f,ya
 10d5: 8d 00     mov   y,#$00
-10d7: f7 7f     mov   a,($7f)+y
+10d7: f7 7f     mov   a,($7f)+y         ; offset +0: SRCN
 10d9: d5 2a 04  mov   $042a+x,a
 10dc: fc        inc   y
-10dd: f7 7f     mov   a,($7f)+y
+10dd: f7 7f     mov   a,($7f)+y         ; offset +1: ADSR(1)
 10df: d5 36 04  mov   $0436+x,a
 10e2: fc        inc   y
-10e3: f7 7f     mov   a,($7f)+y
+10e3: f7 7f     mov   a,($7f)+y         ; offset +2: ADSR(2)
 10e5: d5 42 04  mov   $0442+x,a
 10e8: fc        inc   y
-10e9: f7 7f     mov   a,($7f)+y
+10e9: f7 7f     mov   a,($7f)+y         ; offset +3: GAIN
 10eb: d5 4e 04  mov   $044e+x,a
 10ee: fc        inc   y
-10ef: f7 7f     mov   a,($7f)+y
+10ef: f7 7f     mov   a,($7f)+y         ; offset +4
 10f1: d5 5a 04  mov   $045a+x,a
 10f4: d5 72 04  mov   $0472+x,a
 10f7: fc        inc   y
-10f8: f7 7f     mov   a,($7f)+y
+10f8: f7 7f     mov   a,($7f)+y         ; offset +5
 10fa: d5 66 04  mov   $0466+x,a
 10fd: d5 7e 04  mov   $047e+x,a
 1100: f4 11     mov   a,$11+x
@@ -1315,19 +1361,19 @@
 1106: f6 1d 13  mov   a,$131d+y
 1109: c4 f2     mov   $f2,a
 110b: f5 2a 04  mov   a,$042a+x
-110e: c4 f3     mov   $f3,a
+110e: c4 f3     mov   $f3,a             ; set SRCN
 1110: f6 25 13  mov   a,$1325+y
 1113: c4 f2     mov   $f2,a
 1115: f5 36 04  mov   a,$0436+x
-1118: c4 f3     mov   $f3,a
+1118: c4 f3     mov   $f3,a             ; set ADSR(1)
 111a: f6 2d 13  mov   a,$132d+y
 111d: c4 f2     mov   $f2,a
 111f: f5 42 04  mov   a,$0442+x
-1122: c4 f3     mov   $f3,a
+1122: c4 f3     mov   $f3,a             ; set ADSR(2)
 1124: f6 35 13  mov   a,$1335+y
 1127: c4 f2     mov   $f2,a
 1129: f5 4e 04  mov   a,$044e+x
-112c: c4 f3     mov   $f3,a
+112c: c4 f3     mov   $f3,a             ; set GAIN
 112e: 6f        ret
 
 112f: e4 71     mov   a,$71
@@ -1351,9 +1397,9 @@
 1158: b0 02     bcs   $115c
 115a: c4 71     mov   $71,a
 115c: 8f 7d f2  mov   $f2,#$7d
-115f: fa 71 f3  mov   ($f3),($71)
+115f: fa 71 f3  mov   ($f3),($71)       ; set EDL
 1162: 8f 0d f2  mov   $f2,#$0d
-1165: fa 72 f3  mov   ($f3),($72)
+1165: fa 72 f3  mov   ($f3),($72)       ; set EFB
 1168: e4 73     mov   a,$73
 116a: 4d        push  x
 116b: 1c        asl   a
@@ -1364,7 +1410,7 @@
 1171: f5 45 13  mov   a,$1345+x
 1174: c4 f2     mov   $f2,a
 1176: f6 8e 11  mov   a,$118e+y
-1179: c4 f3     mov   $f3,a
+1179: c4 f3     mov   $f3,a             ; set FIR C0-C7
 117b: fc        inc   y
 117c: 3d        inc   x
 117d: c8 08     cmp   x,#$08
@@ -1375,6 +1421,7 @@
 1188: 8f 20 07  mov   $07,#$20
 118b: 5f e4 12  jmp   $12e4
 
+; echo filter table
 118e: db $7f,$00,$00,$00,$00,$00,$00,$00
 1196: db $58,$bf,$db,$f0,$fe,$07,$0c,$0c
 119e: db $0c,$21,$2b,$2b,$13,$fe,$f3,$f9
@@ -1432,9 +1479,9 @@
 1213: ec d4 05  mov   y,$05d4
 1216: f6 9b 17  mov   a,$179b+y
 1219: 8f 0c f2  mov   $f2,#$0c
-121c: c4 f3     mov   $f3,a
+121c: c4 f3     mov   $f3,a             ; MVOL(L)
 121e: 8f 1c f2  mov   $f2,#$1c
-1221: c4 f3     mov   $f3,a
+1221: c4 f3     mov   $f3,a             ; MVOL(R)
 1223: e5 d3 05  mov   a,$05d3
 1226: c4 7d     mov   $7d,a
 1228: e5 d2 05  mov   a,$05d2
@@ -1447,15 +1494,15 @@
 1238: 8f 2c f2  mov   $f2,#$2c
 123b: eb 7f     mov   y,$7f
 123d: f6 9b 17  mov   a,$179b+y
-1240: c4 f3     mov   $f3,a
+1240: c4 f3     mov   $f3,a             ; EVOL(L)
 1242: 8f 3c f2  mov   $f2,#$3c
 1245: eb 80     mov   y,$80
 1247: f6 9b 17  mov   a,$179b+y
-124a: c4 f3     mov   $f3,a
+124a: c4 f3     mov   $f3,a             ; EVOL(R)
 124c: 8f 3d f2  mov   $f2,#$3d
-124f: fa 79 f3  mov   ($f3),($79)
+124f: fa 79 f3  mov   ($f3),($79)       ; NON
 1252: 8f 4d f2  mov   $f2,#$4d
-1255: fa 78 f3  mov   ($f3),($78)
+1255: fa 78 f3  mov   ($f3),($78)       ; EON
 1258: cd 00     mov   x,#$00
 125a: f4 11     mov   a,$11+x
 125c: 10 4e     bpl   $12ac
@@ -1482,12 +1529,12 @@
 1289: c4 f2     mov   $f2,a
 128b: eb 7f     mov   y,$7f
 128d: f6 9b 17  mov   a,$179b+y
-1290: c4 f3     mov   $f3,a
+1290: c4 f3     mov   $f3,a             ; set VOL(L)
 1292: f5 05 13  mov   a,$1305+x
 1295: c4 f2     mov   $f2,a
 1297: eb 80     mov   y,$80
 1299: f6 9b 17  mov   a,$179b+y
-129c: c4 f3     mov   $f3,a
+129c: c4 f3     mov   $f3,a             ; set VOL(R)
 129e: ce        pop   x
 129f: f5 c6 04  mov   a,$04c6+x
 12a2: f0 08     beq   $12ac
@@ -1529,59 +1576,27 @@
 12e3: 6f        ret
 
 12e4: 8f 2c f2  mov   $f2,#$2c
-12e7: 8f 00 f3  mov   $f3,#$00
+12e7: 8f 00 f3  mov   $f3,#$00          ; EVOL(L)
 12ea: 8f 3c f2  mov   $f2,#$3c
-12ed: 8f 00 f3  mov   $f3,#$00
+12ed: 8f 00 f3  mov   $f3,#$00          ; EVOL(R)
 12f0: 8f 0c f2  mov   $f2,#$0c
-12f3: 8f 00 f3  mov   $f3,#$00
+12f3: 8f 00 f3  mov   $f3,#$00          ; MVOL(L)
 12f6: 8f 1c f2  mov   $f2,#$1c
-12f9: 8f 00 f3  mov   $f3,#$00
+12f9: 8f 00 f3  mov   $f3,#$00          ; MVOL(R)
 12fc: 6f        ret
 
-12fd: 00
-12fe: 10 20
-1300: 30 40
-1302: 50 60
-1304: 70 01
-1306: 11
-1307: 21
-1308: 31
-1309: 41
-130a: 51
-130b: 61
-130c: 71
-130d: 02 12
-130f: 22 32
-1311: 42 52
-1313: 62 72
-1315: 03 13 23
-1318: 33 43 53
-131b: 63 73 04
-131e: 14 24
-1320: 34 44
-1322: 54 64
-1324: 74 05
-1326: 15 25 35
-1329: 45 55 65
-132c: 75 06 16
-132f: 26
-1330: 36 46 56
-1333: 66
-1334: 76 07 17
-1337: 27 37
-1339: 47 57
-133b: 67 77
-133d: 01
-133e: 02 04
-1340: 08 10
-1342: 20
-1343: 40
-1344: 80
-1345: 0f
-1346: 1f 2f 3f
-1349: 4f 5f
-134b: 6f
-134c: 7f
+12fd: db $00,$10,$20,$30,$40,$50,$60,$70    ; VOL(L)
+1305: db $01,$11,$21,$31,$41,$51,$61,$71    ; VOL(R)
+130d: db $02,$12,$22,$32,$42,$52,$62,$72    ; P(L)
+1315: db $03,$13,$23,$33,$43,$53,$63,$73    ; P(H)
+131d: db $04,$14,$24,$34,$44,$54,$64,$74    ; SRCN
+1325: db $05,$15,$25,$35,$45,$55,$65,$75    ; ADSR(1)
+132d: db $06,$16,$26,$36,$46,$56,$66,$76    ; ADSR(2)
+1335: db $07,$17,$27,$37,$47,$57,$67,$77    ; GAIN
+
+133d: db $01,$02,$04,$08,$10,$20,$40,$80
+
+1345: db $0f,$1f,$2f,$3f,$4f,$5f,$6f,$7f    ; FIR C0-C7
 
 134d: 8d 1e     mov   y,#$1e
 134f: ab 83     inc   $83
@@ -1612,23 +1627,10 @@
 138c: 10 c9     bpl   $1357
 138e: 6f        ret
 
-138f: 00
-1390: 01
-1391: 02 03
-1393: 04 05
-1395: 06
-1396: 07 08
-1398: 09 0a 0b
-139b: 00
-139c: 01
-139d: 02 03
-139f: 04 05
-13a1: 06
-13a2: 07 08
-13a4: 09 0a 0b
-13a7: 0b 05
-13a9: 05 00 0b
-13ac: 0b 00
+138f: db $00,$01,$02,$03,$04,$05,$06,$07
+1397: db $08,$09,$0a,$0b,$00,$01,$02,$03
+139f: db $04,$05,$06,$07,$08,$09,$0a,$0b
+13a7: db $0b,$05,$05,$00,$0b,$0b,$00
 
 13ae: fb 29     mov   y,$29+x
 13b0: 7d        mov   a,x
@@ -1983,324 +1985,99 @@
 1663: fe fa     dbnz  y,$165f
 1665: 6f        ret
 
-1666: 40
-1667: 40
-1668: 40
-1669: 41
-166a: 41
-166b: 42 42
-166d: 43 43 44
-1670: 44 45
-1672: 45 46 46
-1675: 47 47
-1677: 48 48
-1679: 49 49 4a
-167c: 4b 4b
-167e: 4c 4c 4d
-1681: 4d
-1682: 4e 4e 4f
-1685: 50 50
-1687: 51
-1688: 51
-1689: 52 52
-168b: 53 54 54
-168e: 55 56 56
-1691: 57 57
-1693: 58 59 59
-1696: 5a 5b
-1698: 5b 5c
-169a: 5d
-169b: 5d
-169c: 5e 5f 5f
-169f: 60
-16a0: 61
-16a1: 61
-16a2: 62 63
-16a4: 64 64
-16a6: 65 66 67
-16a9: 67 68
-16ab: 69 6a 6a
-16ae: 6b 6c
-16b0: 6d
-16b1: 6d
-16b2: 6e 6f 70
-16b5: 71
-16b6: 72 72
-16b8: 73 74 75
-16bb: 76 77 77
-16be: 78 79 7a
-16c1: 7b 7c
-16c3: 7d
-16c4: 7e 7f
-16c6: 00
-16c7: 76 ee 66
-16ca: e0
-16cb: 5a d5
-16cd: 51
-16ce: ce
-16cf: 4c ca 4a
-16d2: ca 4c ce
-16d5: 52 d6
-16d7: 5b e1
-16d9: 69 f1 7a
-16dc: 04 8f
-16de: 1b a9
-16e0: 37 c6
-16e2: 56 e8 7a
-16e5: 0e a2 38
-16e8: ce
-16e9: 66
-16ea: ff
-16eb: 99
-16ec: 34 d0
-16ee: 6e 0c ac
-16f1: 4c ee 91
-16f4: 36 db 82
-16f7: 2a d3 7d
-16fa: 29 d6 84
-16fd: 33 e4 96
-1700: 49 fd b3
-1703: 6a 23 dc
-1706: 97 54
-1708: 12 d1
-170a: 92 54
-170c: 17 dc
-170e: a2 6a
-1710: 33 fd c9
-1713: 97 66
-1715: 36 08 dc
-1718: b1
-1719: 88 60
-171b: 3a 15
-171d: f2 d0
-171f: b0 92
-1721: 76 5b 41
-1724: 2a 14 76
-1727: 78 78 7a
-172a: 7a 7b
-172c: 7c
-172d: 7d
-172e: 7e 7e
-1730: 80
-1731: 80
-1732: 82 82
-1734: 84 84
-1736: 85 86 88
-1739: 88 89
-173b: 8a 8b 8c
-173e: 8e
-173f: 8e
-1740: 8f 90 92
-1743: 92 94
-1745: 94 96
-1747: 96 98 99
-174a: 9a 9b
-174c: 9c
-174d: 9e
-174e: 9e
-174f: a0
-1750: a0
-1751: a2 a3
-1753: a5 a5 a7
-1756: a8 a9
-1758: aa ac ad
-175b: ae
-175c: af
-175d: b1
-175e: b2 b3
-1760: b4 b6
-1762: b7 b9
-1764: b9
-1765: bb bd
-1767: be
-1768: bf
-1769: c1
-176a: c2 c3
-176c: c5 c6 c8
-176f: c9 ca cc
-1772: ce
-1773: cf
-1774: d0 d2
-1776: d4 d5
-1778: d7 d8
-177a: da db
-177c: dd
-177d: de e0 e2
-1780: e4 e5
-1782: e6
-1783: e9 ea ec
-1786: 7f
-1787: 76 56 43
-178a: 36 2c 24
-178d: 1e 19 14
-1790: 10 0d
-1792: 0a 07 05
-1795: 04 02
-1797: 01
-1798: 01
-1799: 00
-179a: 00
-179b: 7f
-179c: 79
-179d: 74 6f
-179f: 6b 66
-17a1: 62 5e
-17a3: 5a 56
-17a5: 52 4f
-17a7: 4b 48
-17a9: 45 42 3f
-17ac: 3d
-17ad: 3a 38
-17af: 35 33 31
-17b2: 2f 2d
-17b4: 2b 29
-17b6: 27 25
-17b8: 24 22
-17ba: 21
-17bb: 1f 1e 1d
-17be: 1c
-17bf: 1a 19
-17c1: 18 17 16
-17c4: 15 14 13
-17c7: 13 12 11
-17ca: 10 10
-17cc: 0f
-17cd: 0e 0e 0d
-17d0: 0d
-17d1: 0c 0b 0b
-17d4: 0a 0a 0a
-17d7: 09 09 08
-17da: 08 08
-17dc: 07 07
-17de: 07 06
-17e0: 06
-17e1: 06
-17e2: 06
-17e3: 05 05 05
-17e6: 05 04 04
-17e9: 04 04
-17eb: 04 04
-17ed: 03 03 03
-17f0: 03 03 03
-17f3: 03 02 02
-17f6: 02 02
-17f8: 02 02
-17fa: 02 02
-17fc: 02 02
-17fe: 01
-17ff: 01
-1800: 01
-1801: 01
-1802: 01
-1803: 01
-1804: 01
-1805: 01
-1806: 01
-1807: 01
-1808: 01
-1809: 01
-180a: 01
-180b: 01
-180c: 01
-180d: 01
-180e: 01
-180f: 01
-1810: 01
-1811: 01
-1812: 00
-1813: 00
-1814: 00
-1815: 00
-1816: 00
-1817: 00
-1818: 00
-1819: 00
-181a: 00
-181b: 00
-181c: 03 06 09
-181f: 0d
-1820: 10 13
-1822: 16 19 1c
-1825: 1f 22 25
-1828: 28 2b
-182a: 2e 31 34
-182d: 37 3a
-182f: 3c
-1830: 3f 42 44
-1833: 47 4a
-1835: 4c 4f 51
-1838: 54 56
-183a: 58 5b 5d
-183d: 5f 61 63
-1840: 65 67 69
-1843: 6a 6c 6e
-1846: 6f
-1847: 71
-1848: 72 74
-184a: 75 76 77
-184d: 79
-184e: 7a 7a
-1850: 7b 7c
-1852: 7d
-1853: 7e 7e
-1855: 7f
-1856: 7f
-1857: 7f
-1858: 80
-1859: 80
-185a: 80
-185b: 80
-185c: 80
-185d: 80
-185e: 80
-185f: 7f
-1860: 7f
-1861: 7f
-1862: 7e 7e
-1864: 7d
-1865: 7c
-1866: 7b 7a
-1868: 7a 79
-186a: 77 76
-186c: 75 74 72
-186f: 71
-1870: 6f
-1871: 6e 6c 6a
-1874: 69 67 65
-1877: 63 61 5f
-187a: 5d
-187b: 5b 58
-187d: 56 54 51
-1880: 4f 4c
-1882: 4a 47 44
-1885: 42 3f
-1887: 3c
-1888: 3a 37
-188a: 34 31
-188c: 2e 2b 28
-188f: 25 22 1f
-1892: 1c
-1893: 19
-1894: 16 13 10
-1897: 0d
-1898: 09 06 03
+1666: db $40,$40,$40,$41,$41,$42,$42,$43
+166e: db $43,$44,$44,$45,$45,$46,$46,$47
+1676: db $47,$48,$48,$49,$49,$4a,$4b,$4b
+167e: db $4c,$4c,$4d,$4d,$4e,$4e,$4f,$50
+1686: db $50,$51,$51,$52,$52,$53,$54,$54
+168e: db $55,$56,$56,$57,$57,$58,$59,$59
+1696: db $5a,$5b,$5b,$5c,$5d,$5d,$5e,$5f
+169e: db $5f,$60,$61,$61,$62,$63,$64,$64
+16a6: db $65,$66,$67,$67,$68,$69,$6a,$6a
+16ae: db $6b,$6c,$6d,$6d,$6e,$6f,$70,$71
+16b6: db $72,$72,$73,$74,$75,$76,$77,$77
+16be: db $78,$79,$7a,$7b,$7c,$7d,$7e,$7f
 
-189b: dw $1963
-189d: dw $1968
-189f: dw $197d
-18a1: dw $198c
-18a3: dw $18c7
-18a5: dw $18c7
-18a7: dw $18c7
-18a9: dw $18c7
-18ab: dw $18c8
-18ad: dw $18da
-18af: dw $18e2
-18b1: dw $190b
-18b3: dw $1914
-18b5: dw $192e
-18b7: dw $193c
-18b9: dw $18c7
+16c6: db $00,$76,$ee,$66,$e0,$5a,$d5,$51
+16ce: db $ce,$4c,$ca,$4a,$ca,$4c,$ce,$52
+16d6: db $d6,$5b,$e1,$69,$f1,$7a,$04,$8f
+16de: db $1b,$a9,$37,$c6,$56,$e8,$7a,$0e
+16e6: db $a2,$38,$ce,$66,$ff,$99,$34,$d0
+16ee: db $6e,$0c,$ac,$4c,$ee,$91,$36,$db
+16f6: db $82,$2a,$d3,$7d,$29,$d6,$84,$33
+16fe: db $e4,$96,$49,$fd,$b3,$6a,$23,$dc
+1706: db $97,$54,$12,$d1,$92,$54,$17,$dc
+170e: db $a2,$6a,$33,$fd,$c9,$97,$66,$36
+1716: db $08,$dc,$b1,$88,$60,$3a,$15,$f2
+171e: db $d0,$b0,$92,$76,$5b,$41,$2a,$14
+
+1726: db $76,$78,$78,$7a,$7a,$7b,$7c,$7d
+172e: db $7e,$7e,$80,$80,$82,$82,$84,$84
+1736: db $85,$86,$88,$88,$89,$8a,$8b,$8c
+173e: db $8e,$8e,$8f,$90,$92,$92,$94,$94
+1746: db $96,$96,$98,$99,$9a,$9b,$9c,$9e
+174e: db $9e,$a0,$a0,$a2,$a3,$a5,$a5,$a7
+1756: db $a8,$a9,$aa,$ac,$ad,$ae,$af,$b1
+175e: db $b2,$b3,$b4,$b6,$b7,$b9,$b9,$bb
+1766: db $bd,$be,$bf,$c1,$c2,$c3,$c5,$c6
+176e: db $c8,$c9,$ca,$cc,$ce,$cf,$d0,$d2
+1776: db $d4,$d5,$d7,$d8,$da,$db,$dd,$de
+177e: db $e0,$e2,$e4,$e5,$e6,$e9,$ea,$ec
+
+1786: db $7f,$76,$56,$43,$36,$2c,$24,$1e
+178e: db $19,$14,$10,$0d,$0a,$07,$05,$04
+1796: db $02,$01,$01,$00,$00
+
+179b: db $7f,$79,$74,$6f,$6b,$66,$62,$5e
+17a3: db $5a,$56,$52,$4f,$4b,$48,$45,$42
+17ab: db $3f,$3d,$3a,$38,$35,$33,$31,$2f
+17b3: db $2d,$2b,$29,$27,$25,$24,$22,$21
+17bb: db $1f,$1e,$1d,$1c,$1a,$19,$18,$17
+17c3: db $16,$15,$14,$13,$13,$12,$11,$10
+17cb: db $10,$0f,$0e,$0e,$0d,$0d,$0c,$0b
+17d3: db $0b,$0a,$0a,$0a,$09,$09,$08,$08
+17db: db $08,$07,$07,$07,$06,$06,$06,$06
+17e3: db $05,$05,$05,$05,$04,$04,$04,$04
+17eb: db $04,$04,$03,$03,$03,$03,$03,$03
+17f3: db $03,$02,$02,$02,$02,$02,$02,$02
+17fb: db $02,$02,$02,$01,$01,$01,$01,$01
+1803: db $01,$01,$01,$01,$01,$01,$01,$01
+180b: db $01,$01,$01,$01,$01,$01,$01,$00
+1813: db $00,$00,$00,$00,$00,$00,$00,$00
+
+181b: db $00,$03,$06,$09,$0d,$10,$13,$16
+1823: db $19,$1c,$1f,$22,$25,$28,$2b,$2e
+182b: db $31,$34,$37,$3a,$3c,$3f,$42,$44
+1833: db $47,$4a,$4c,$4f,$51,$54,$56,$58
+183b: db $5b,$5d,$5f,$61,$63,$65,$67,$69
+1843: db $6a,$6c,$6e,$6f,$71,$72,$74,$75
+184b: db $76,$77,$79,$7a,$7a,$7b,$7c,$7d
+1853: db $7e,$7e,$7f,$7f,$7f,$80,$80,$80
+185b: db $80,$80,$80,$80,$7f,$7f,$7f,$7e
+1863: db $7e,$7d,$7c,$7b,$7a,$7a,$79,$77
+186b: db $76,$75,$74,$72,$71,$6f,$6e,$6c
+1873: db $6a,$69,$67,$65,$63,$61,$5f,$5d
+187b: db $5b,$58,$56,$54,$51,$4f,$4c,$4a
+1883: db $47,$44,$42,$3f,$3c,$3a,$37,$34
+188b: db $31,$2e,$2b,$28,$25,$22,$1f,$1c
+1893: db $19,$16,$13,$10,$0d,$09,$06,$03
+
+189b: dw $1963  ; e8
+189d: dw $1968  ; e9
+189f: dw $197d  ; ea
+18a1: dw $198c  ; eb
+18a3: dw $18c7  ; ec
+18a5: dw $18c7  ; ed
+18a7: dw $18c7  ; ee
+18a9: dw $18c7  ; ef
+18ab: dw $18c8  ; f0
+18ad: dw $18da  ; f1
+18af: dw $18e2  ; f2
+18b1: dw $190b  ; f3
+18b3: dw $1914  ; f4
+18b5: dw $192e  ; f5
+18b7: dw $193c  ; f6
+18b9: dw $18c7  ; f7
 
 18bb: 80        setc
 18bc: a8 e8     sbc   a,#$e8
