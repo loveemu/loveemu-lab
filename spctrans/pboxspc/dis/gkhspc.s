@@ -210,7 +210,7 @@ f1b6: fd        mov   y,a
 f1b7: f5 80 01  mov   a,$0180+x
 f1ba: e9 e3 ff  mov   x,$ffe3
 f1bd: d0 11     bne   $f1d0
-f1bf: da d9     movw  $d9,ya
+f1bf: da d9     movw  $d9,ya            ; $d9/a = $d700 (when y=0)
 f1c1: e5 c8 01  mov   a,$01c8
 f1c4: 05 cd 01  or    a,$01cd
 f1c7: f0 03     beq   $f1cc
@@ -932,18 +932,18 @@ f662: 2f 08     bra   $f66c
 ;
 f664: 8d 0c     mov   y,#$0c
 f666: 60        clrc
-f667: 97 d9     adc   a,($d9)+y
-f669: fd        mov   y,a
-f66a: f7 d9     mov   a,($d9)+y
+f667: 97 d9     adc   a,($d9)+y         ; add offset to instrument #
+f669: fd        mov   y,a               ; use it for index
+f66a: f7 d9     mov   a,($d9)+y         ; get global instrument number
 ;
 f66c: ec c3 01  mov   y,$01c3
 f66f: f0 07     beq   $f678
-f671: 76 3f 01  cmp   a,$013f+y
+f671: 76 3f 01  cmp   a,$013f+y         ; search for global instrument number
 f674: f0 03     beq   $f679
 f676: fe f9     dbnz  y,$f671
 f678: fc        inc   y
-f679: dc        dec   y
-f67a: 6d        push  y
+f679: dc        dec   y                 ; SRCN is index of the global instrument number (0 if not found)
+f67a: 6d        push  y                 ; push SRCN
 f67b: e4 e5     mov   a,$e5
 f67d: 9f        xcn   a
 f67e: 08 04     or    a,#$04
