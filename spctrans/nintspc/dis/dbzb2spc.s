@@ -225,7 +225,7 @@
 09ec: f5 90 02  mov   a,$0290+x
 09ef: c4 2d     mov   $2d,a
 09f1: f5 a0 02  mov   a,$02a0+x
-09f4: c4 2e     mov   $2e,a
+09f4: c4 2e     mov   $2e,a             ; set vcmd pointer to $2d/e
 09f6: 3f c0 0c  call  $0cc0
 09f9: c4 e4     mov   $e4,a
 09fb: 68 00     cmp   a,#$00
@@ -234,7 +234,7 @@
 0a01: 90 46     bcc   $0a49
 0a03: 68 e0     cmp   a,#$e0
 0a05: 90 6a     bcc   $0a71
-0a07: 3f 89 11  call  $1189
+0a07: 3f 89 11  call  $1189             ; vcmds e0-ff
 0a0a: 90 ea     bcc   $09f6
 0a0c: e4 2d     mov   a,$2d
 0a0e: d5 90 02  mov   $0290+x,a
@@ -245,8 +245,10 @@
 0a1a: 8f 80 2c  mov   $2c,#$80
 0a1d: 6f        ret
 
+; vcmd 00 - end repeat/return
 0a1e: f5 d4 00  mov   a,$00d4+x
-0a21: d0 15     bne   $0a38
+0a21: d0 15     bne   $0a38             ; do loop if repeat count is left
+; end of block
 0a23: d5 00 02  mov   $0200+x,a
 0a26: c8 08     cmp   x,#$08
 0a28: b0 03     bcs   $0a2d
@@ -257,6 +259,7 @@
 0a32: d5 80 06  mov   $0680+x,a
 0a35: 5f e2 09  jmp   $09e2
 
+; repeat / return from subroutine
 0a38: bc        inc   a
 0a39: f0 04     beq   $0a3f
 0a3b: 9b d4     dec   $d4+x
@@ -265,41 +268,44 @@
 0a42: 2f b2     bra   $09f6
 0a44: 3f cf 13  call  $13cf
 0a47: 2f ad     bra   $09f6
+; vcmd 01-7f - note info
 0a49: 60        clrc
 0a4a: 84 1a     adc   a,$1a
-0a4c: d5 40 06  mov   $0640+x,a
-0a4f: 3f c0 0c  call  $0cc0
+0a4c: d5 40 06  mov   $0640+x,a         ; save delta-time
+0a4f: 3f c0 0c  call  $0cc0             ; read arg1
 0a52: c4 e4     mov   $e4,a
 0a54: 68 80     cmp   a,#$80
-0a56: b0 a3     bcs   $09fb
+0a56: b0 a3     bcs   $09fb             ; quit if arg1 >= 0x80 (not a parameter)
 0a58: 2d        push  a
-0a59: 28 0f     and   a,#$0f
+0a59: 28 0f     and   a,#$0f            ; extract lower 4 bits (velocity)
 0a5b: fd        mov   y,a
-0a5c: f6 26 0c  mov   a,$0c26+y
-0a5f: d5 a0 03  mov   $03a0+x,a
+0a5c: f6 26 0c  mov   a,$0c26+y         ; read note volume table
+0a5f: d5 a0 03  mov   $03a0+x,a         ; save note volume
 0a62: ae        pop   a
 0a63: 5c        lsr   a
 0a64: 5c        lsr   a
 0a65: 5c        lsr   a
 0a66: 5c        lsr   a
-0a67: fd        mov   y,a
-0a68: f6 80 1d  mov   a,$1d80+y
-0a6b: d5 60 06  mov   $0660+x,a
+0a67: fd        mov   y,a               ; extract higher 3 bits (bit7 is always 0)
+0a68: f6 80 1d  mov   a,$1d80+y         ; read duration rate table
+0a6b: d5 60 06  mov   $0660+x,a         ; save duration rate
 0a6e: 5f f6 09  jmp   $09f6
 
 0a71: 68 ca     cmp   a,#$ca
 0a73: 90 0f     bcc   $0a84
+; vcmd ca-df - percussion note
 0a75: 80        setc
 0a76: a8 ca     sbc   a,#$ca
 0a78: 60        clrc
-0a79: 85 b0 06  adc   a,$06b0
-0a7c: 3f dc 11  call  $11dc
+0a79: 85 b0 06  adc   a,$06b0           ; add percussion patch base
+0a7c: 3f dc 11  call  $11dc             ; set sample
 0a7f: e8 a4     mov   a,#$a4
 0a81: 5f 8c 0a  jmp   $0a8c
 
+; vcmd 80-c9 - note
 0a84: 2d        push  a
 0a85: f5 a0 06  mov   a,$06a0+x
-0a88: 3f dc 11  call  $11dc
+0a88: 3f dc 11  call  $11dc             ; set sample
 0a8b: ae        pop   a
 0a8c: 68 c8     cmp   a,#$c8
 0a8e: d0 12     bne   $0aa2
@@ -314,9 +320,12 @@
 
 0aa2: 68 c9     cmp   a,#$c9
 0aa4: d0 06     bne   $0aac
+
+; vcmd c8 - tie
 0aa6: d5 50 03  mov   $0350+x,a
 0aa9: 5f 6c 0b  jmp   $0b6c
 
+; vcmd c9 - rest
 0aac: 28 7f     and   a,#$7f
 0aae: c8 08     cmp   x,#$08
 0ab0: b0 03     bcs   $0ab5
@@ -407,10 +416,10 @@
 0b6f: d5 50 06  mov   $0650+x,a
 0b72: fd        mov   y,a
 0b73: f5 60 06  mov   a,$0660+x
-0b76: cf        mul   ya
+0b76: cf        mul   ya                ; apply duration rate
 0b77: dd        mov   a,y
 0b78: d0 01     bne   $0b7b
-0b7a: bc        inc   a
+0b7a: bc        inc   a                 ; minimum length = 1
 0b7b: d5 70 06  mov   $0670+x,a
 0b7e: f5 50 03  mov   a,$0350+x
 0b81: 68 c9     cmp   a,#$c9
@@ -472,12 +481,13 @@
 0c02: dw $0fcd
 0c04: dw $1095
 
-; vcmd lengths
+; vcmd lengths (includes opcode itself)
 0c06: db $02,$02,$03,$04,$01,$02,$03,$02
 0c0e: db $03,$02,$02,$04,$01,$02,$03,$04
 0c16: db $02,$04,$04,$01,$02,$04,$01,$04
 0c1e: db $04,$04,$02,$01,$01,$01,$01,$01
 
+; note volume
 0c26: db $10,$20,$30,$40,$50,$60,$70,$80
 0c2e: db $90,$a0,$b0,$c0,$d0,$e0,$f0,$ff
 
@@ -552,11 +562,13 @@
 0cbc: d5 90 03  mov   $0390+x,a
 0cbf: 6f        ret
 
+; read voice byte, advance pointer
 0cc0: 8d 00     mov   y,#$00
 0cc2: f7 2d     mov   a,($2d)+y
 0cc4: 3a 2d     incw  $2d
 0cc6: 6f        ret
 
+; read voice byte
 0cc7: 8d 00     mov   y,#$00
 0cc9: f7 2d     mov   a,($2d)+y
 0ccb: 6f        ret
@@ -1036,7 +1048,7 @@
 10a1: f5 a0 03  mov   a,$03a0+x
 10a4: 68 ff     cmp   a,#$ff
 10a6: f0 01     beq   $10a9
-10a8: cf        mul   ya
+10a8: cf        mul   ya                ; apply note volume
 10a9: f5 90 04  mov   a,$0490+x
 10ac: 68 ff     cmp   a,#$ff
 10ae: f0 01     beq   $10b1
@@ -1162,13 +1174,14 @@
 1186: 9a 00     subw  ya,$00
 1188: 6f        ret
 
-1189: 28 1f     and   a,#$1f
+; dispatch vcmd in A (e0-ff)
+1189: 28 1f     and   a,#$1f            ; e0-ff => 00-1f
 118b: 1c        asl   a
 118c: fd        mov   y,a
 118d: f6 97 11  mov   a,$1197+y
 1190: 2d        push  a
 1191: f6 96 11  mov   a,$1196+y
-1194: 2d        push  a
+1194: 2d        push  a                 ; push jump address from table
 1195: 6f        ret
 
 ; vcmd dispatch table
@@ -1208,6 +1221,7 @@
 ; vcmd e0 - set instrument
 11d6: 3f c0 0c  call  $0cc0
 11d9: d5 a0 06  mov   $06a0+x,a
+; set sample
 11dc: c8 08     cmp   x,#$08
 11de: b0 07     bcs   $11e7
 11e0: 2d        push  a
@@ -1679,7 +1693,7 @@
 1550: c4 4d     mov   $4d,a
 1552: fc        inc   y
 1553: f7 49     mov   a,($49)+y
-1555: c4 4e     mov   $4e,a
+1555: c4 4e     mov   $4e,a             ; load section list address to $4e/e
 1557: 8f 00 51  mov   $51,#$00
 155a: 8f 00 53  mov   $53,#$00
 155d: cd 00     mov   x,#$00
@@ -1692,6 +1706,7 @@
 156e: 3d        inc   x
 156f: c8 08     cmp   x,#$08
 1571: 90 ec     bcc   $155f
+; section list main loop
 1573: 8d 00     mov   y,#$00
 1575: f7 4d     mov   a,($4d)+y
 1577: c4 00     mov   $00,a
@@ -1700,30 +1715,31 @@
 157d: f7 4d     mov   a,($4d)+y
 157f: c4 01     mov   $01,a
 1581: c4 50     mov   $50,a
-1583: 3a 4d     incw  $4d
+1583: 3a 4d     incw  $4d               ; read a word in section list into $00/1 and $4f/50
 1585: 68 00     cmp   a,#$00
-1587: d0 28     bne   $15b1
+1587: d0 28     bne   $15b1             ; $xxxx: load section $xxxx
 1589: e4 00     mov   a,$00
-158b: f0 47     beq   $15d4
-158d: eb 51     mov   y,$51
-158f: f0 0e     beq   $159f
+158b: f0 47     beq   $15d4             ; $0000: section list end
+158d: eb 51     mov   y,$51             ; $00NN $xxxx: repeat section $xxxx in NN times
+158f: f0 0e     beq   $159f             ; branch if first repeat
 1591: ad ff     cmp   y,#$ff
-1593: f0 0c     beq   $15a1
-1595: 8b 51     dec   $51
-1597: d0 08     bne   $15a1
+1593: f0 0c     beq   $15a1             ; do infinite loop if 0xff (standard N-SPC do repeat when the count is negative, so it's slightly different)
+1595: 8b 51     dec   $51               ; decrease repeat count
+1597: d0 08     bne   $15a1             ; branch if need to repeat
 1599: 3a 4d     incw  $4d
-159b: 3a 4d     incw  $4d
+159b: 3a 4d     incw  $4d               ; otherwise just skip the next word
 159d: 2f d4     bra   $1573
-159f: c4 51     mov   $51,a
+159f: c4 51     mov   $51,a             ; set repeat count
 15a1: 8d 00     mov   y,#$00
 15a3: f7 4d     mov   a,($4d)+y
 15a5: 2d        push  a
 15a6: 3a 4d     incw  $4d
 15a8: f7 4d     mov   a,($4d)+y
-15aa: c4 4e     mov   $4e,a
+15aa: c4 4e     mov   $4e,a             ; read next word
 15ac: ae        pop   a
 15ad: c4 4d     mov   $4d,a
 15af: 2f c2     bra   $1573
+; load section ($00: section header address)
 15b1: cd 00     mov   x,#$00
 15b3: 8d 00     mov   y,#$00
 15b5: e8 00     mov   a,#$00
@@ -1735,14 +1751,15 @@
 15c1: c4 03     mov   $03,a
 15c3: fc        inc   y
 15c4: 04 02     or    a,$02
-15c6: f0 03     beq   $15cb
-15c8: 3f 60 16  call  $1660
+15c6: f0 03     beq   $15cb             ; skip if null address
+15c8: 3f 60 16  call  $1660             ; set $02/3 to vcmd pointer of track X
 15cb: 3d        inc   x
 15cc: c8 08     cmp   x,#$08
-15ce: 90 e5     bcc   $15b5
+15ce: 90 e5     bcc   $15b5             ; repeat for all 8 tracks
 15d0: 8f 01 53  mov   $53,#$01
 15d3: 6f        ret
 
+; song end (section list end)
 15d4: c5 00 02  mov   $0200,a
 15d7: c5 01 02  mov   $0201,a
 15da: c5 02 02  mov   $0202,a
@@ -1815,6 +1832,7 @@
 165c: d5 d0 06  mov   $06d0+x,a
 165f: 6f        ret
 
+; set $02/3 to vcmd pointer of track X
 1660: e4 02     mov   a,$02
 1662: d5 90 02  mov   $0290+x,a
 1665: e4 03     mov   a,$03
@@ -2256,3 +2274,6 @@
 1a1c: 1e f4 00  cmp   x,$00f4
 1a1f: d0 fb     bne   $1a1c
 1a21: 6f        ret
+
+; note duration rate
+1d80: db $08,$90,$e0,$6f,$e4,$10,$28,$1f
