@@ -188,6 +188,8 @@
 0593: d0 d6     bne   $056b
 0595: 5f 87 04  jmp   $0487
 
+; percussion table
+; pan, volume (decrease), note number (vcmd byte)
 0598: db $0a,$00,$98
 059b: db $0a,$18,$ae
 059e: db $07,$4c,$ad
@@ -207,6 +209,7 @@
 
 05c8: ad ca     cmp   y,#$ca
 05ca: 90 31     bcc   $05fd
+; vcmd ca-df - percussion note
 05cc: 3f 9b 0a  call  $0a9b
 05cf: f5 11 02  mov   a,$0211+x
 05d2: 80        setc
@@ -218,24 +221,27 @@
 05db: e4 5f     mov   a,$5f
 05dd: 24 47     and   a,$47
 05df: f0 0e     beq   $05ef
-05e1: f6 98 05  mov   a,$0598+y
+05e1: f6 98 05  mov   a,$0598+y         ; offset +0: pan
 05e4: d5 31 03  mov   $0331+x,a
 05e7: d5 51 03  mov   $0351+x,a
 05ea: e8 00     mov   a,#$00
 05ec: d5 30 03  mov   $0330+x,a
 05ef: fc        inc   y
 05f0: f6 98 05  mov   a,$0598+y
-05f3: d5 f1 02  mov   $02f1+x,a
+05f3: d5 f1 02  mov   $02f1+x,a         ; offset +1: volume delta (subtract)
 05f6: fc        inc   y
-05f7: f6 98 05  mov   a,$0598+y
+05f7: f6 98 05  mov   a,$0598+y         ; offset +2: note number
 05fa: fd        mov   y,a
 05fb: 2f 35     bra   $0632
+;
 05fd: e8 00     mov   a,#$00
 05ff: d5 f1 02  mov   $02f1+x,a
 0602: ad c8     cmp   y,#$c8
 0604: 90 01     bcc   $0607
+; vcmd c8-c9
 0606: 6f        ret
 
+; vcmd 80-c7 - note
 0607: e4 49     mov   a,$49
 0609: 24 47     and   a,$47
 060b: f0 25     beq   $0632
@@ -257,21 +263,22 @@
 062a: 09 47 45  or    ($45),($47)
 062d: 09 47 1d  or    ($1d),($47)
 0630: 2f d4     bra   $0606
+; dispatch note (note vbyte in Y)
 0632: dd        mov   a,y
-0633: 28 7f     and   a,#$7f
+0633: 28 7f     and   a,#$7f            ; get note number
 0635: 60        clrc
 0636: 95 f0 02  adc   a,$02f0+x
 0639: 60        clrc
-063a: 95 90 03  adc   a,$0390+x
+063a: 95 90 03  adc   a,$0390+x         ; apply per-instrument tuning (coarse)
 063d: d5 61 03  mov   $0361+x,a
 0640: f5 81 03  mov   a,$0381+x
 0643: 60        clrc
-0644: 95 91 03  adc   a,$0391+x
+0644: 95 91 03  adc   a,$0391+x         ; apply per-instrument tuning (fine)
 0647: d5 60 03  mov   $0360+x,a
 064a: 90 07     bcc   $0653
 064c: f5 61 03  mov   a,$0361+x
-064f: bc        inc   a
-0650: d5 61 03  mov   $0361+x,a
+064f: bc        inc   a                 ; add carry bit
+0650: d5 61 03  mov   $0361+x,a         ; write tuned note number
 0653: f5 60 03  mov   a,$0360+x
 0656: 60        clrc
 0657: 95 50 02  adc   a,$0250+x
@@ -310,7 +317,7 @@
 06a9: 60        clrc
 06aa: 95 61 03  adc   a,$0361+x
 06ad: 3f fd 0c  call  $0cfd
-06b0: 3f 15 0d  call  $0d15
+06b0: 3f 15 0d  call  $0d15             ; load note number $0360/1+x into $10/1
 06b3: 8d 00     mov   y,#$00
 06b5: e4 11     mov   a,$11
 06b7: 80        setc
@@ -325,36 +332,37 @@
 06c5: 7a 10     addw  ya,$10
 06c7: da 10     movw  $10,ya
 06c9: 4d        push  x
-06ca: e4 11     mov   a,$11
+06ca: e4 11     mov   a,$11             ; note number
 06cc: 1c        asl   a
 06cd: 8d 00     mov   y,#$00
 06cf: cd 18     mov   x,#$18
 06d1: 9e        div   ya,x
-06d2: 5d        mov   x,a
+06d2: 5d        mov   x,a               ; save octave into X
 06d3: f6 cc 10  mov   a,$10cc+y
 06d6: c4 15     mov   $15,a
-06d8: f6 cb 10  mov   a,$10cb+y
+06d8: f6 cb 10  mov   a,$10cb+y         ; read pitch table
 06db: c4 14     mov   $14,a
 06dd: f6 ce 10  mov   a,$10ce+y
 06e0: 2d        push  a
-06e1: f6 cd 10  mov   a,$10cd+y
+06e1: f6 cd 10  mov   a,$10cd+y         ; read next note too
 06e4: ee        pop   y
-06e5: 9a 14     subw  ya,$14
+06e5: 9a 14     subw  ya,$14            ; delta pitch
 06e7: eb 10     mov   y,$10
 06e9: cf        mul   ya
 06ea: dd        mov   a,y
 06eb: 8d 00     mov   y,#$00
-06ed: 7a 14     addw  ya,$14
+06ed: 7a 14     addw  ya,$14            ; linear linter polation
 06ef: cb 15     mov   $15,y
 06f1: 1c        asl   a
 06f2: 2b 15     rol   $15
 06f4: c4 14     mov   $14,a
 06f6: 2f 04     bra   $06fc
+; halve pitch (decrease octave)
 06f8: 4b 15     lsr   $15
 06fa: 7c        ror   a
 06fb: 3d        inc   x
 06fc: c8 06     cmp   x,#$06
-06fe: d0 f8     bne   $06f8
+06fe: d0 f8     bne   $06f8             ; repeat for (6 - octave) times
 0700: ce        pop   x
 0701: c4 14     mov   $14,a
 0703: 0b 14     asl   $14
@@ -772,7 +780,7 @@
 0a1e: 3f 57 0a  call  $0a57             ; vcmds e0-ff
 0a21: 2f ab     bra   $09ce
 ; vcmds 80-df - note
-0a23: 3f c8 05  call  $05c8
+0a23: 3f c8 05  call  $05c8             ; dispatch note byte
 0a26: f5 01 02  mov   a,$0201+x
 0a29: d0 0b     bne   $0a36
 0a2b: e4 1f     mov   a,$1f
@@ -818,15 +826,16 @@
 0a71: fd        mov   y,a
 0a72: 6f        ret
 
-; for 390+X
+; for $0390+x - per-instrument tuning (semitones)
 0a73: db $fe,$00,$ff,$07,$0b,$ff,$0a,$fb,$fb,$fd,$fb,$09,$fd,$09,$fd,$e8,$f2,$f7,$03,$f4
-; for 391+X
+; for $0391+x - per-instrument tuning (1/256 semitones)
 0a87: db $f0,$0a,$1e,$0a,$5a,$64,$e8,$0a,$0a,$b4,$0a,$b2,$be,$ba,$ba,$00,$96,$e1,$e1,$dc
 
 ; vcmd e0 - instrument
 0a9b: d5 11 02  mov   $0211+x,a
 0a9e: fd        mov   y,a
 0a9f: 30 15     bmi   $0ab6
+; set sample
 0aa1: 2d        push  a
 0aa2: 4d        push  x
 0aa3: 5d        mov   x,a
@@ -836,18 +845,20 @@
 0aab: ce        pop   x
 0aac: d5 91 03  mov   $0391+x,a
 0aaf: dd        mov   a,y
-0ab0: d5 90 03  mov   $0390+x,a
+0ab0: d5 90 03  mov   $0390+x,a         ; save per-instrument tuning
 0ab3: ae        pop   a
 0ab4: 2f 10     bra   $0ac6
+; set sample (percussion)
 0ab6: 2d        push  a
 0ab7: e8 00     mov   a,#$00
 0ab9: d5 91 03  mov   $0391+x,a
-0abc: d5 90 03  mov   $0390+x,a
+0abc: d5 90 03  mov   $0390+x,a         ; nullify per-instrument tuning
 0abf: ae        pop   a
 0ac0: 80        setc
-0ac1: a8 ca     sbc   a,#$ca
+0ac1: a8 ca     sbc   a,#$ca            ; subtract percussion offset
 0ac3: 60        clrc
-0ac4: 88 14     adc   a,#$14
+0ac4: 88 14     adc   a,#$14            ; add percussion patch base
+; load instrument table
 0ac6: 8d 06     mov   y,#$06
 0ac8: cf        mul   ya
 0ac9: da 14     movw  $14,ya
@@ -861,17 +872,19 @@
 0ad6: 08 04     or    a,#$04
 0ad8: 5d        mov   x,a
 0ad9: 8d 00     mov   y,#$00
-0adb: f7 14     mov   a,($14)+y
+0adb: f7 14     mov   a,($14)+y         ; offset +0: SRCN
 0add: 10 0e     bpl   $0aed
+; when SRCN >= 0x80:
 0adf: 28 1f     and   a,#$1f
 0ae1: 38 20 48  and   $48,#$20
 0ae4: 0e 48 00  tset1 $0048
 0ae7: 09 47 49  or    ($49),($47)
 0aea: dd        mov   a,y
 0aeb: 2f 07     bra   $0af4
+; when SRCN < 0x80:
 0aed: e4 47     mov   a,$47
 0aef: 4e 49 00  tclr1 $0049
-0af2: f7 14     mov   a,($14)+y
+0af2: f7 14     mov   a,($14)+y         ; SRCN, ADSR(1), ADSR(2), GAIN
 0af4: c9 f2 00  mov   $00f2,x
 0af7: c5 f3 00  mov   $00f3,a
 0afa: 3d        inc   x
@@ -883,7 +896,7 @@
 0b03: d5 21 02  mov   $0221+x,a
 0b06: fc        inc   y
 0b07: f7 14     mov   a,($14)+y
-0b09: d5 20 02  mov   $0220+x,a
+0b09: d5 20 02  mov   $0220+x,a         ; save traditional N-SPC tuning
 0b0c: 6f        ret
 
 ; vcmd e1 - pan
@@ -1193,7 +1206,7 @@
 0d11: d5 71 03  mov   $0371+x,a
 0d14: 6f        ret
 
-; $10/1 = $0360/1+X
+; load note number $0360/1+X into $10/1
 0d15: f5 61 03  mov   a,$0361+x
 0d18: c4 11     mov   $11,a
 0d1a: f5 60 03  mov   a,$0360+x
