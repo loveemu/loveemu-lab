@@ -162,15 +162,16 @@
 094c: 2d        push  a
 094d: 08 07     or    a,#$07
 094f: c4 f2     mov   $f2,a
-0951: 8f 9e f3  mov   $f3,#$9e
+0951: 8f 9e f3  mov   $f3,#$9e          ; set GAIN
 0954: ae        pop   a
 0955: 08 05     or    a,#$05
 0957: c4 f2     mov   $f2,a
-0959: 8f 00 f3  mov   $f3,#$00
+0959: 8f 00 f3  mov   $f3,#$00          ; set ADSR(1)
 095c: 1d        dec   x
 095d: 10 eb     bpl   $094a
 095f: 6f        ret
 
+; play song in A
 0960: 2d        push  a
 0961: 3f 0a 09  call  $090a
 0964: 3f 4d 1e  call  $1e4d
@@ -193,25 +194,26 @@
 098b: 5d        mov   x,a
 098c: f5 52 d3  mov   a,$d352+x
 098f: c4 02     mov   $02,a
-0991: f5 53 d3  mov   a,$d353+x
-0994: c4 03     mov   $03,a
+0991: f5 53 d3  mov   a,$d353+x         ; read song table
+0994: c4 03     mov   $03,a             ; get header address into $02/3
 0996: 8d 00     mov   y,#$00
 0998: cd 00     mov   x,#$00
+; initialize for each tracks
 099a: 8d 00     mov   y,#$00
-099c: f7 02     mov   a,($02)+y
+099c: f7 02     mov   a,($02)+y         ; offset +0: track address (lo)
 099e: c4 04     mov   $04,a
 09a0: 3a 02     incw  $02
-09a2: f7 02     mov   a,($02)+y
+09a2: f7 02     mov   a,($02)+y         ; offset +1: track address (hi)
 09a4: 68 ff     cmp   a,#$ff
-09a6: f0 3c     beq   $09e4
+09a6: f0 3c     beq   $09e4             ; branch if $ffxx, end of header
 09a8: c4 05     mov   $05,a
 09aa: 3a 02     incw  $02
 09ac: e4 03     mov   a,$03
 09ae: fd        mov   y,a
 09af: d5 15 02  mov   $0215+x,a
-09b2: e4 02     mov   a,$02
+09b2: e4 02     mov   a,$02             ; load header address into YA
 09b4: d5 05 02  mov   $0205+x,a
-09b7: 7a 04     addw  ya,$04
+09b7: 7a 04     addw  ya,$04            ; convert track offset to address
 09b9: da 02     movw  $02,ya
 09bb: 40        setp
 09bc: e8 00     mov   a,#$00
@@ -229,7 +231,7 @@
 09d9: d5 95 02  mov   $0295+x,a
 09dc: 3d        inc   x
 09dd: c8 10     cmp   x,#$10
-09df: d0 b9     bne   $099a
+09df: d0 b9     bne   $099a             ; repeat for 16 tracks
 09e1: 5f f1 09  jmp   $09f1
 
 09e4: e8 00     mov   a,#$00
@@ -246,7 +248,7 @@
 09fd: 6f        ret
 
 09fe: fa fe 6b  mov   ($6b),($fe)
-0a01: e4 fd     mov   a,$fd
+0a01: e4 fd     mov   a,$fd             ; timer 0 counter
 0a03: f0 67     beq   $0a6c
 0a05: ab 63     inc   $63
 0a07: 60        clrc
@@ -349,7 +351,7 @@
 0ac0: 9f        xcn   a
 0ac1: 08 08     or    a,#$08
 0ac3: c4 f2     mov   $f2,a
-0ac5: e4 f3     mov   a,$f3
+0ac5: e4 f3     mov   a,$f3             ; get ENVX
 0ac7: 68 02     cmp   a,#$02
 0ac9: 90 0b     bcc   $0ad6
 0acb: 3f fb 0a  call  $0afb
@@ -405,7 +407,7 @@
 0b2c: 6f        ret
 
 0b2d: 3f ca 0b  call  $0bca
-0b30: f5 32 21  mov   a,$2132+x
+0b30: f5 32 21  mov   a,$2132+x         ; get channel bitmask
 0b33: 2d        push  a
 0b34: f4 41     mov   a,$41+x
 0b36: 5d        mov   x,a
@@ -457,12 +459,12 @@
 0b86: eb 0c     mov   y,$0c
 0b88: cf        mul   ya
 0b89: ab f2     inc   $f2
-0b8b: cb f3     mov   $f3,y
+0b8b: cb f3     mov   $f3,y             ; 
 0b8d: f8 0d     mov   x,$0d
 0b8f: ab f2     inc   $f2
-0b91: fa 00 f3  mov   ($f3),($00)
+0b91: fa 00 f3  mov   ($f3),($00)       ; 
 0b94: ab f2     inc   $f2
-0b96: fa 01 f3  mov   ($f3),($01)
+0b96: fa 01 f3  mov   ($f3),($01)       ; 
 0b99: ae        pop   a
 0b9a: 24 3c     and   a,$3c
 0b9c: d0 01     bne   $0b9f
@@ -473,20 +475,20 @@
 0ba3: f7 61     mov   a,($61)+y
 0ba5: 5d        mov   x,a
 0ba6: f5 68 dc  mov   a,$dc68+x
-0ba9: c4 f3     mov   $f3,a
+0ba9: c4 f3     mov   $f3,a             ; 
 0bab: f8 0d     mov   x,$0d
 0bad: ab f2     inc   $f2
 0baf: 8d 05     mov   y,#$05
 0bb1: f7 61     mov   a,($61)+y
-0bb3: c4 f3     mov   $f3,a
+0bb3: c4 f3     mov   $f3,a             ; 
 0bb5: ab f2     inc   $f2
 0bb7: 8d 04     mov   y,#$04
 0bb9: f7 61     mov   a,($61)+y
-0bbb: c4 f3     mov   $f3,a
+0bbb: c4 f3     mov   $f3,a             ; 
 0bbd: ab f2     inc   $f2
 0bbf: 8d 06     mov   y,#$06
 0bc1: f7 61     mov   a,($61)+y
-0bc3: c4 f3     mov   $f3,a
+0bc3: c4 f3     mov   $f3,a             ; 
 0bc5: 6f        ret
 
 0bc6: db $00,$60,$b0,$ff
@@ -764,18 +766,18 @@
 0db8: 9f        xcn   a
 0db9: 08 07     or    a,#$07
 0dbb: c4 f2     mov   $f2,a
-0dbd: 8f 9e f3  mov   $f3,#$9e
+0dbd: 8f 9e f3  mov   $f3,#$9e          ; set GAIN
 0dc0: 1d        dec   x
 0dc1: 10 f0     bpl   $0db3
 0dc3: 6f        ret
 
 0dc4: 8f 4d f2  mov   $f2,#$4d
-0dc7: fa 33 f3  mov   ($f3),($33)
+0dc7: fa 33 f3  mov   ($f3),($33)       ; set EON
 0dca: e4 40     mov   a,$40
 0dcc: 48 ff     eor   a,#$ff
 0dce: 24 3e     and   a,$3e
 0dd0: 8d 4c     mov   y,#$4c
-0dd2: 3f e5 1f  call  $1fe5
+0dd2: 3f e5 1f  call  $1fe5             ; set KON
 0dd5: e4 3f     mov   a,$3f
 0dd7: 48 ff     eor   a,#$ff
 0dd9: 24 3d     and   a,$3d
@@ -919,7 +921,7 @@
 0eda: e4 05     mov   a,$05
 0edc: 88 00     adc   a,#$00
 0ede: d5 97 04  mov   $0497+x,a
-0ee1: f5 32 21  mov   a,$2132+x
+0ee1: f5 32 21  mov   a,$2132+x         ; get channel bitmask
 0ee4: 2d        push  a
 0ee5: 04 30     or    a,$30
 0ee7: c4 30     mov   $30,a
@@ -958,7 +960,7 @@
 0f23: 4d        push  x
 0f24: 8f 09 f2  mov   $f2,#$09
 0f27: e4 6c     mov   a,$6c
-0f29: 84 f3     adc   a,$f3
+0f29: 84 f3     adc   a,$f3             ; OUTX
 0f2b: c4 6c     mov   $6c,a
 0f2d: 7d        mov   a,x
 0f2e: 9f        xcn   a
@@ -1062,13 +1064,13 @@
 0fe9: dw $0ff6  ;
 
 0feb: ce        pop   x
-0fec: f5 32 21  mov   a,$2132+x
+0fec: f5 32 21  mov   a,$2132+x         ; get channel bitmask
 0fef: 04 34     or    a,$34
 0ff1: c4 34     mov   $34,a
 0ff3: 5f 47 0f  jmp   $0f47
 
 0ff6: ce        pop   x
-0ff7: f5 32 21  mov   a,$2132+x
+0ff7: f5 32 21  mov   a,$2132+x         ; get channel bitmask
 0ffa: 48 ff     eor   a,#$ff
 0ffc: 24 34     and   a,$34
 0ffe: c4 34     mov   $34,a
@@ -1265,12 +1267,12 @@
 1133: ce        pop   x
 1134: d5 9f 04  mov   $049f+x,a
 1137: d5 af 04  mov   $04af+x,a
-113a: c4 f3     mov   $f3,a
+113a: c4 f3     mov   $f3,a             ; set P(L)
 113c: ab f2     inc   $f2
 113e: e4 04     mov   a,$04
 1140: d5 a7 04  mov   $04a7+x,a
 1143: d5 b7 04  mov   $04b7+x,a
-1146: c4 f3     mov   $f3,a
+1146: c4 f3     mov   $f3,a             ; set P(H)
 1148: 5f 47 0f  jmp   $0f47
 
 114b: e8 03     mov   a,#$03
@@ -1294,10 +1296,10 @@
 116e: 95 a7 04  adc   a,$04a7+x
 1171: d5 a7 04  mov   $04a7+x,a
 1174: d5 b7 04  mov   $04b7+x,a
-1177: c4 f3     mov   $f3,a
+1177: c4 f3     mov   $f3,a             ; set P(H)
 1179: 8b f2     dec   $f2
 117b: ae        pop   a
-117c: c4 f3     mov   $f3,a
+117c: c4 f3     mov   $f3,a             ; set P(L)
 117e: 5f 47 0f  jmp   $0f47
 
 1181: e8 03     mov   a,#$03
@@ -1319,10 +1321,10 @@
 119f: e4 04     mov   a,$04
 11a1: 95 b7 04  adc   a,$04b7+x
 11a4: d5 b7 04  mov   $04b7+x,a
-11a7: c4 f3     mov   $f3,a
+11a7: c4 f3     mov   $f3,a             ; set P(H)
 11a9: ae        pop   a
 11aa: 8b f2     dec   $f2
-11ac: c4 f3     mov   $f3,a
+11ac: c4 f3     mov   $f3,a             ; set P(L)
 11ae: 5f 47 0f  jmp   $0f47
 
 11b1: f7 02     mov   a,($02)+y
@@ -1420,23 +1422,23 @@
 1262: 84 12     adc   a,$12
 1264: 5d        mov   x,a
 1265: 8f 6c f2  mov   $f2,#$6c
-1268: e4 f3     mov   a,$f3
+1268: e4 f3     mov   a,$f3             ; get FLG
 126a: 28 e0     and   a,#$e0
 126c: c4 04     mov   $04,a
 126e: f5 77 05  mov   a,$0577+x
 1271: 28 1f     and   a,#$1f
 1273: 04 04     or    a,$04
-1275: c4 f3     mov   $f3,a
+1275: c4 f3     mov   $f3,a             ; set FLG
 1277: ce        pop   x
 1278: 5f 47 0f  jmp   $0f47
 
 127b: ce        pop   x
 127c: 8f 6c f2  mov   $f2,#$6c
-127f: e4 f3     mov   a,$f3
+127f: e4 f3     mov   a,$f3             ; get FLG
 1281: 28 e0     and   a,#$e0
 1283: 17 02     or    a,($02)+y
 1285: fc        inc   y
-1286: c4 f3     mov   $f3,a
+1286: c4 f3     mov   $f3,a             ; set FLG
 1288: 5f 47 0f  jmp   $0f47
 
 128b: ce        pop   x
@@ -1447,13 +1449,13 @@
 1294: fc        inc   y
 1295: d5 9f 04  mov   $049f+x,a
 1298: d5 af 04  mov   $04af+x,a
-129b: c4 f3     mov   $f3,a
+129b: c4 f3     mov   $f3,a             ; set P(L)
 129d: ab f2     inc   $f2
 129f: f7 02     mov   a,($02)+y
 12a1: fc        inc   y
 12a2: d5 a7 04  mov   $04a7+x,a
 12a5: d5 b7 04  mov   $04b7+x,a
-12a8: c4 f3     mov   $f3,a
+12a8: c4 f3     mov   $f3,a             ; set P(H)
 12aa: 5f 47 0f  jmp   $0f47
 
 12ad: ce        pop   x
@@ -1472,10 +1474,10 @@
 12c7: d5 a7 04  mov   $04a7+x,a
 12ca: d5 b7 04  mov   $04b7+x,a
 12cd: fc        inc   y
-12ce: c4 f3     mov   $f3,a
+12ce: c4 f3     mov   $f3,a             ; set P(H)
 12d0: 8b f2     dec   $f2
 12d2: ae        pop   a
-12d3: c4 f3     mov   $f3,a
+12d3: c4 f3     mov   $f3,a             ; set P(L)
 12d5: 5f 47 0f  jmp   $0f47
 
 12d8: ce        pop   x
@@ -1491,11 +1493,11 @@
 12ea: f7 02     mov   a,($02)+y
 12ec: 95 b7 04  adc   a,$04b7+x
 12ef: d5 b7 04  mov   $04b7+x,a
-12f2: c4 f3     mov   $f3,a
+12f2: c4 f3     mov   $f3,a             ; set P(H)
 12f4: fc        inc   y
 12f5: ae        pop   a
 12f6: 8b f2     dec   $f2
-12f8: c4 f3     mov   $f3,a
+12f8: c4 f3     mov   $f3,a             ; set P(L)
 12fa: 5f 47 0f  jmp   $0f47
 
 12fd: ce        pop   x
@@ -1635,11 +1637,11 @@
 13f9: c4 f2     mov   $f2,a
 13fb: f7 02     mov   a,($02)+y
 13fd: fc        inc   y
-13fe: c4 f3     mov   $f3,a
+13fe: c4 f3     mov   $f3,a             ; set ADSR(2)
 1400: 8b f2     dec   $f2
 1402: f7 02     mov   a,($02)+y
 1404: fc        inc   y
-1405: c4 f3     mov   $f3,a
+1405: c4 f3     mov   $f3,a             ; set ADSR(1)
 1407: 5f 47 0f  jmp   $0f47
 
 140a: ce        pop   x
@@ -1648,7 +1650,7 @@
 140f: c4 f2     mov   $f2,a
 1411: f7 02     mov   a,($02)+y
 1413: fc        inc   y
-1414: c4 f3     mov   $f3,a
+1414: c4 f3     mov   $f3,a             ; set GAIN
 1416: 5f 47 0f  jmp   $0f47
 
 1419: ce        pop   x
@@ -1665,7 +1667,7 @@
 142c: f7 12     mov   a,($12)+y
 142e: fd        mov   y,a
 142f: f6 68 dc  mov   a,$dc68+y
-1432: c4 f3     mov   $f3,a
+1432: c4 f3     mov   $f3,a             ; set SRCN
 1434: ee        pop   y
 1435: ae        pop   a
 1436: c4 12     mov   $12,a
@@ -1673,13 +1675,13 @@
 
 143b: ce        pop   x
 143c: 8f 2d f2  mov   $f2,#$2d
-143f: f5 32 21  mov   a,$2132+x
+143f: f5 32 21  mov   a,$2132+x         ; get channel bitmask
 1442: 04 f3     or    a,$f3
-1444: c4 f3     mov   $f3,a
+1444: c4 f3     mov   $f3,a             ; set PMON
 1446: 5f 47 0f  jmp   $0f47
 
 1449: ce        pop   x
-144a: f5 32 21  mov   a,$2132+x
+144a: f5 32 21  mov   a,$2132+x         ; get channel bitmask
 144d: 2d        push  a
 144e: 04 31     or    a,$31
 1450: c4 31     mov   $31,a
@@ -1689,14 +1691,14 @@
 1457: 5f 47 0f  jmp   $0f47
 
 145a: ce        pop   x
-145b: f5 32 21  mov   a,$2132+x
+145b: f5 32 21  mov   a,$2132+x         ; get channel bitmask
 145e: 04 32     or    a,$32
 1460: c4 32     mov   $32,a
 1462: 7d        mov   a,x
 1463: 9f        xcn   a
 1464: 08 05     or    a,#$05
 1466: c4 f2     mov   $f2,a
-1468: 8f 00 f3  mov   $f3,#$00
+1468: 8f 00 f3  mov   $f3,#$00          ; set ADSR(1)
 146b: 5f 47 0f  jmp   $0f47
 
 146e: ce        pop   x
@@ -1705,7 +1707,7 @@
 1472: c4 f2     mov   $f2,a
 1474: f7 02     mov   a,($02)+y
 1476: fc        inc   y
-1477: c4 f3     mov   $f3,a
+1477: c4 f3     mov   $f3,a             ; 
 1479: 5f 47 0f  jmp   $0f47
 
 147c: ce        pop   x
@@ -1716,7 +1718,7 @@
 1484: fc        inc   y
 1485: 60        clrc
 1486: 84 f3     adc   a,$f3
-1488: c4 f3     mov   $f3,a
+1488: c4 f3     mov   $f3,a             ; 
 148a: 5f 47 0f  jmp   $0f47
 
 148d: ce        pop   x
@@ -1743,17 +1745,17 @@
 
 14b2: ce        pop   x
 14b3: 8f 3d f2  mov   $f2,#$3d
-14b6: f5 32 21  mov   a,$2132+x
+14b6: f5 32 21  mov   a,$2132+x         ; get channel bitmask
 14b9: 04 f3     or    a,$f3
-14bb: c4 f3     mov   $f3,a
+14bb: c4 f3     mov   $f3,a             ; set NON
 14bd: 5f 47 0f  jmp   $0f47
 
 14c0: ce        pop   x
 14c1: 8f 3d f2  mov   $f2,#$3d
-14c4: f5 32 21  mov   a,$2132+x
+14c4: f5 32 21  mov   a,$2132+x         ; get channel bitmask
 14c7: 48 ff     eor   a,#$ff
 14c9: 24 f3     and   a,$f3
-14cb: c4 f3     mov   $f3,a
+14cb: c4 f3     mov   $f3,a             ; set NON
 14cd: 5f 47 0f  jmp   $0f47
 
 14d0: f7 02     mov   a,($02)+y
@@ -2274,7 +2276,7 @@
 
 1812: ce        pop   x
 1813: 3f 3c 18  call  $183c
-1816: f5 32 21  mov   a,$2132+x
+1816: f5 32 21  mov   a,$2132+x         ; get channel bitmask
 1819: 48 ff     eor   a,#$ff
 181b: 2d        push  a
 181c: 24 30     and   a,$30
@@ -2297,15 +2299,15 @@
 183b: 6f        ret
 
 183c: 8f 2d f2  mov   $f2,#$2d
-183f: f5 32 21  mov   a,$2132+x
+183f: f5 32 21  mov   a,$2132+x         ; get channel bitmask
 1842: 48 ff     eor   a,#$ff
 1844: 2d        push  a
 1845: 24 f3     and   a,$f3
-1847: c4 f3     mov   $f3,a
+1847: c4 f3     mov   $f3,a             ; set PMON
 1849: ae        pop   a
 184a: 8f 3d f2  mov   $f2,#$3d
 184d: 24 f3     and   a,$f3
-184f: c4 f3     mov   $f3,a
+184f: c4 f3     mov   $f3,a             ; set PMON
 1851: 6f        ret
 
 1852: ba f6     movw  ya,$f6
@@ -2351,9 +2353,9 @@
 1895: e8 00     mov   a,#$00
 1897: 04 00     or    a,$00
 1899: c4 f2     mov   $f2,a
-189b: fa 06 f3  mov   ($f3),($06)
+189b: fa 06 f3  mov   ($f3),($06)       ; set VOL(L)
 189e: ab f2     inc   $f2
-18a0: fa 07 f3  mov   ($f3),($07)
+18a0: fa 07 f3  mov   ($f3),($07)       ; set VOL(R)
 18a3: ee        pop   y
 18a4: 6f        ret
 
@@ -2375,14 +2377,14 @@
 18c1: 5d        mov   x,a
 18c2: 1f c5 18  jmp   ($18c5+x)
 
-18c5: dw $18d5  ;
-18c7: dw $18fc  ;
-18c9: dw $1919  ;
-18cb: dw $1926  ;
-18cd: dw $1935  ;
-18cf: dw $1957  ;
-18d1: dw $1977  ;
-18d3: dw $1946  ;
+18c5: dw $18d5  ; 00-0f
+18c7: dw $18fc  ; 10-1f
+18c9: dw $1919  ; 20-2f
+18cb: dw $1926  ; 30-3f
+18cd: dw $1935  ; 40-4f
+18cf: dw $1957  ; 50-5f
+18d1: dw $1977  ; 60-6f
+18d3: dw $1946  ; 70-7f
 
 18d5: ce        pop   x
 18d6: e4 00     mov   a,$00
@@ -2481,30 +2483,30 @@
 1983: 5d        mov   x,a
 1984: 1f 87 19  jmp   ($1987+x)
 
-1987: dw $19b9  ;
-1989: dw $19c9  ;
-198b: dw $1a19  ;
-198d: dw $1a29  ;
-198f: dw $1a39  ;
-1991: dw $1a49  ;
-1993: dw $1a6f  ;
-1995: dw $1a6f  ;
-1997: dw $1a7f  ;
-1999: dw $1a9f  ;
-199b: dw $1ae8  ;
-199d: dw $1af8  ;
-199f: dw $1b00  ;
-19a1: dw $1b02  ;
-19a3: dw $1b02  ;
-19a5: dw $1b0c  ;
-19a7: dw $1b14  ;
-19a9: dw $1b30  ;
-19ab: dw $19b7  ;
-19ad: dw $1b42  ;
-19af: dw $1b55  ;
-19b1: dw $1b68  ;
-19b2: dw $1b6a  ;
-19b4: dw $1b7d  ;
+1987: dw $19b9  ; 60
+1989: dw $19c9  ; 61
+198b: dw $1a19  ; 62
+198d: dw $1a29  ; 63
+198f: dw $1a39  ; 64
+1991: dw $1a49  ; 65
+1993: dw $1a6f  ; 66
+1995: dw $1a6f  ; 67
+1997: dw $1a7f  ; 68
+1999: dw $1a9f  ; 69
+199b: dw $1ae8  ; 6a
+199d: dw $1af8  ; 6b
+199f: dw $1b00  ; 6c
+19a1: dw $1b02  ; 6d
+19a3: dw $1b02  ; 6e
+19a5: dw $1b0c  ; 6f
+19a7: dw $1b14  ; 70 (cannot be used?)
+19a9: dw $1b30  ; 71 (cannot be used?)
+19ab: dw $19b7  ; 72 (cannot be used?)
+19ad: dw $1b42  ; 73 (cannot be used?)
+19af: dw $1b55  ; 74 (cannot be used?)
+19b1: dw $1b68  ; 75 (cannot be used?)
+19b2: dw $1b6a  ; 76 (cannot be used?)
+19b4: dw $1b7d  ; 77 (cannot be used?)
 
 19b6: ce        pop   x
 19b8: 6f        ret
@@ -2768,17 +2770,17 @@
 1b8a: 6f        ret
 
 1b8b: 40        setp
-1b8c: f4 06     mov   a,$06+x
+1b8c: f4 06     mov   a,$06+x           ; automaton state?
 1b8e: 4d        push  x
 1b8f: 1c        asl   a
 1b90: 5d        mov   x,a
 1b91: 1f 94 1b  jmp   ($1b94+x)
 
-1b94: dw $1b9e  ;
-1b96: dw $1ba5  ;
-1b98: dw $1bac  ;
-1b9a: dw $1bb3  ;
-1b9b: dw $1bba  ;
+1b94: dw $1b9e  ; 00
+1b96: dw $1ba5  ; 01
+1b98: dw $1bac  ; 02
+1b9a: dw $1bb3  ; 03
+1b9b: dw $1bba  ; 04
 
 1b9e: ce        pop   x
 1b9f: 3f c0 1b  call  $1bc0
@@ -2801,14 +2803,14 @@
 1bbe: 20        clrp
 1bbf: 6f        ret
 
-1bc0: 3f 7d 1c  call  $1c7d
+1bc0: 3f 7d 1c  call  $1c7d             ; get section pointer of track X into $00/1
 1bc3: f7 00     mov   a,($00)+y
 1bc5: fc        inc   y
 1bc6: 17 00     or    a,($00)+y
 1bc8: f0 0c     beq   $1bd6
 1bca: fc        inc   y
 1bcb: e8 02     mov   a,#$02
-1bcd: d4 06     mov   $06+x,a
+1bcd: d4 06     mov   $06+x,a           ; set state #2
 1bcf: e8 00     mov   a,#$00
 1bd1: d4 56     mov   $56+x,a
 1bd3: 5f db 1b  jmp   $1bdb
@@ -2819,15 +2821,15 @@
 1bdb: 3f 8a 1c  call  $1c8a
 1bde: 6f        ret
 
-1bdf: 3f 7d 1c  call  $1c7d
+1bdf: 3f 7d 1c  call  $1c7d             ; get section pointer of track X into $00/1
 1be2: f7 00     mov   a,($00)+y
 1be4: fc        inc   y
 1be5: 2d        push  a
-1be6: 3f 8a 1c  call  $1c8a
+1be6: 3f 8a 1c  call  $1c8a             ; section pointer += 1
 1be9: ae        pop   a
 1bea: 6f        ret
 
-1beb: 3f 7d 1c  call  $1c7d
+1beb: 3f 7d 1c  call  $1c7d             ; get section pointer of track X into $00/1
 1bee: f4 16     mov   a,$16+x
 1bf0: d0 0e     bne   $1c00
 1bf2: f7 00     mov   a,($00)+y
@@ -2836,17 +2838,17 @@
 1bf7: d4 36     mov   $36+x,a
 1bf9: e8 08     mov   a,#$08
 1bfb: d4 16     mov   $16+x,a
-1bfd: 3f 8a 1c  call  $1c8a
+1bfd: 3f 8a 1c  call  $1c8a             ; section pointer += 1
 1c00: 1b 36     asl   $36+x
 1c02: e8 00     mov   a,#$00
 1c04: 88 03     adc   a,#$03
-1c06: d4 06     mov   $06+x,a
+1c06: d4 06     mov   $06+x,a           ; set state #3
 1c08: e8 ff     mov   a,#$ff
 1c0a: d4 26     mov   $26+x,a
 1c0c: 9b 16     dec   $16+x
 1c0e: 6f        ret
 
-1c0f: 3f 7d 1c  call  $1c7d
+1c0f: 3f 7d 1c  call  $1c7d             ; get section pointer of track X into $00/1
 1c12: f4 26     mov   a,$26+x
 1c14: 10 18     bpl   $1c2e
 1c16: f7 00     mov   a,($00)+y
@@ -2863,7 +2865,7 @@
 1c29: 60        clrc
 1c2a: a4 02     sbc   a,$02
 1c2c: d4 46     mov   $46+x,a
-1c2e: 3f 8a 1c  call  $1c8a
+1c2e: 3f 8a 1c  call  $1c8a             ; section pointer += 1
 1c31: f4 66     mov   a,$66+x
 1c33: c4 02     mov   $02,a
 1c35: f4 76     mov   a,$76+x
@@ -2887,7 +2889,7 @@
 1c57: e4 04     mov   a,$04
 1c59: 6f        ret
 
-1c5a: 3f 7d 1c  call  $1c7d
+1c5a: 3f 7d 1c  call  $1c7d             ; get section pointer of track X into $00/1
 1c5d: e8 02     mov   a,#$02
 1c5f: d4 06     mov   $06+x,a
 1c61: f4 66     mov   a,$66+x
@@ -2897,7 +2899,7 @@
 1c69: f7 00     mov   a,($00)+y
 1c6b: fc        inc   y
 1c6c: c4 04     mov   $04,a
-1c6e: 3f 8a 1c  call  $1c8a
+1c6e: 3f 8a 1c  call  $1c8a             ; section pointer += 1
 1c71: f4 56     mov   a,$56+x
 1c73: bb 56     inc   $56+x
 1c75: 28 1f     and   a,#$1f
@@ -2906,6 +2908,7 @@
 1c7a: d7 02     mov   ($02)+y,a
 1c7c: 6f        ret
 
+; get section pointer of track X into $00/1
 1c7d: f5 05 02  mov   a,$0205+x
 1c80: c4 00     mov   $00,a
 1c82: f5 15 02  mov   a,$0215+x
@@ -2913,6 +2916,7 @@
 1c87: 8d 00     mov   y,#$00
 1c89: 6f        ret
 
+; add Y to $00/1 and $0205+x/$0215+x
 1c8a: 60        clrc
 1c8b: dd        mov   a,y
 1c8c: 84 00     adc   a,$00
@@ -2979,7 +2983,7 @@
 1cf7: 10 fa     bpl   $1cf3
 1cf9: 6f        ret
 
-1cfa: f5 32 21  mov   a,$2132+x
+1cfa: f5 32 21  mov   a,$2132+x         ; get channel bitmask
 1cfd: 0e 3d 00  tset1 $003d
 1d00: 0e 3c 00  tset1 $003c
 1d03: 0e 3f 00  tset1 $003f
@@ -3129,7 +3133,7 @@
 1e1e: 9f        xcn   a
 1e1f: 08 05     or    a,#$05
 1e21: c4 f2     mov   $f2,a
-1e23: 8f 00 f3  mov   $f3,#$00
+1e23: 8f 00 f3  mov   $f3,#$00          ; set ADSR(1)
 1e26: 1d        dec   x
 1e27: 10 e7     bpl   $1e10
 1e29: ae        pop   a
@@ -3187,7 +3191,7 @@
 1e8a: d0 47     bne   $1ed3
 1e8c: ac a5 02  inc   $02a5
 1e8f: 8f 7d f2  mov   $f2,#$7d
-1e92: e4 f3     mov   a,$f3
+1e92: e4 f3     mov   a,$f3             ; set EDL
 1e94: 5c        lsr   a
 1e95: 60        clrc
 1e96: 84 f3     adc   a,$f3
@@ -3196,19 +3200,19 @@
 1e9c: c5 a6 02  mov   $02a6,a
 1e9f: e8 00     mov   a,#$00
 1ea1: 8f 2c f2  mov   $f2,#$2c
-1ea4: c4 f3     mov   $f3,a
+1ea4: c4 f3     mov   $f3,a             ; set EVOL(L)
 1ea6: 8f 3c f2  mov   $f2,#$3c
-1ea9: c4 f3     mov   $f3,a
+1ea9: c4 f3     mov   $f3,a             ; set EVOL(R)
 1eab: 8f 4d f2  mov   $f2,#$4d
-1eae: c4 f3     mov   $f3,a
+1eae: c4 f3     mov   $f3,a             ; set EON
 1eb0: 8f 0d f2  mov   $f2,#$0d
-1eb3: c4 f3     mov   $f3,a
+1eb3: c4 f3     mov   $f3,a             ; set EFB
 1eb5: 8f 6c f2  mov   $f2,#$6c
-1eb8: 8f 20 f3  mov   $f3,#$20
+1eb8: 8f 20 f3  mov   $f3,#$20          ; set FLG
 1ebb: 8f 7d f2  mov   $f2,#$7d
 1ebe: e5 aa 02  mov   a,$02aa
 1ec1: 28 0f     and   a,#$0f
-1ec3: c4 f3     mov   $f3,a
+1ec3: c4 f3     mov   $f3,a             ; set EDL
 1ec5: 1c        asl   a
 1ec6: 1c        asl   a
 1ec7: 1c        asl   a
@@ -3216,7 +3220,7 @@
 1eca: 80        setc
 1ecb: 88 f8     adc   a,#$f8
 1ecd: 8f 6d f2  mov   $f2,#$6d
-1ed0: c4 f3     mov   $f3,a
+1ed0: c4 f3     mov   $f3,a             ; set ESA
 1ed2: 6f        ret
 
 1ed3: 68 01     cmp   a,#$01
@@ -3226,7 +3230,7 @@
 1edc: ac a5 02  inc   $02a5
 1edf: 3f 3c 1f  call  $1f3c
 1ee2: 8f 6c f2  mov   $f2,#$6c
-1ee5: 8f 00 f3  mov   $f3,#$00
+1ee5: 8f 00 f3  mov   $f3,#$00          ; set FLG
 1ee8: e5 aa 02  mov   a,$02aa
 1eeb: 5c        lsr   a
 1eec: 60        clrc
@@ -3254,16 +3258,16 @@
 1f1a: c5 a7 02  mov   $02a7,a
 1f1d: 8f 2c f2  mov   $f2,#$2c
 1f20: c5 a7 02  mov   $02a7,a
-1f23: c4 f3     mov   $f3,a
+1f23: c4 f3     mov   $f3,a             ; set EVOL(L)
 1f25: 8f 3c f2  mov   $f2,#$3c
 1f28: e5 a8 02  mov   a,$02a8
 1f2b: 28 7f     and   a,#$7f
 1f2d: c5 a8 02  mov   $02a8,a
-1f30: c4 f3     mov   $f3,a
+1f30: c4 f3     mov   $f3,a             ; set EVOL(R)
 1f32: 8f 0d f2  mov   $f2,#$0d
 1f35: e5 a9 02  mov   a,$02a9
 1f38: 1c        asl   a
-1f39: c4 f3     mov   $f3,a
+1f39: c4 f3     mov   $f3,a             ; set EFB
 1f3b: 6f        ret
 
 1f3c: e5 ab 02  mov   a,$02ab
@@ -3278,7 +3282,7 @@
 1f49: 08 0f     or    a,#$0f
 1f4b: c4 f2     mov   $f2,a
 1f4d: f6 12 21  mov   a,$2112+y
-1f50: c4 f3     mov   $f3,a
+1f50: c4 f3     mov   $f3,a             ; set FIR C0-C7
 1f52: dc        dec   y
 1f53: 1d        dec   x
 1f54: 10 f1     bpl   $1f47
@@ -3286,21 +3290,21 @@
 
 1f57: e8 00     mov   a,#$00
 1f59: 8f 2c f2  mov   $f2,#$2c
-1f5c: c4 f3     mov   $f3,a
+1f5c: c4 f3     mov   $f3,a             ; set EVOL(L)
 1f5e: 8f 3c f2  mov   $f2,#$3c
-1f61: c4 f3     mov   $f3,a
+1f61: c4 f3     mov   $f3,a             ; set EVOL(R)
 1f63: 8f 6c f2  mov   $f2,#$6c
-1f66: 8f 20 f3  mov   $f3,#$20
+1f66: 8f 20 f3  mov   $f3,#$20          ; set FLG
 1f69: 8f 7d f2  mov   $f2,#$7d
-1f6c: c4 f3     mov   $f3,a
+1f6c: c4 f3     mov   $f3,a             ; set EDL
 1f6e: 8f 6d f2  mov   $f2,#$6d
-1f71: 8f f8 f3  mov   $f3,#$f8
+1f71: 8f f8 f3  mov   $f3,#$f8          ; set ESA
 1f74: 8f 4d f2  mov   $f2,#$4d
-1f77: c4 f3     mov   $f3,a
+1f77: c4 f3     mov   $f3,a             ; set EON
 1f79: 8f 2d f2  mov   $f2,#$2d
-1f7c: c4 f3     mov   $f3,a
+1f7c: c4 f3     mov   $f3,a             ; set PMON
 1f7e: 8f 3d f2  mov   $f2,#$3d
-1f81: c4 f3     mov   $f3,a
+1f81: c4 f3     mov   $f3,a             ; set NON
 1f83: 6f        ret
 
 1f84: 8f 00 f1  mov   $f1,#$00
@@ -3314,20 +3318,21 @@
 1f9c: 6f        ret
 
 1f9d: 8f 6c f2  mov   $f2,#$6c
-1fa0: 8f 60 f3  mov   $f3,#$60
+1fa0: 8f 60 f3  mov   $f3,#$60          ; set FLG
 1fa3: 8f 5d f2  mov   $f2,#$5d
 1fa6: e8 24     mov   a,#$24
-1fa8: c4 f3     mov   $f3,a
+1fa8: c4 f3     mov   $f3,a             ; set DIR
 1faa: cd 28     mov   x,#$28
 1fac: f5 bb 1f  mov   a,$1fbb+x
 1faf: fd        mov   y,a
 1fb0: f5 bc 1f  mov   a,$1fbc+x
-1fb3: 3f e5 1f  call  $1fe5
+1fb3: 3f e5 1f  call  $1fe5             ; reset dsp regs
 1fb6: 1d        dec   x
 1fb7: 1d        dec   x
 1fb8: 10 f2     bpl   $1fac
 1fba: 6f        ret
 
+; dsp reg initialization table
 1fbb: db $6c,$20
 1fbd: db $2d,$00
 1fbf: db $3d,$00
@@ -3350,10 +3355,12 @@
 1fe1: db $6f,$00
 1fe3: db $7f,$00
 
+; write A to dsp reg Y
 1fe5: cb f2     mov   $f2,y
 1fe7: c4 f3     mov   $f3,a
 1fe9: 6f        ret
 
+; read dsp reg Y into A
 1fea: cb f2     mov   $f2,y
 1fec: e4 f3     mov   a,$f3
 1fee: 6f        ret
@@ -3484,9 +3491,8 @@
 2132: db $01,$02,$04,$08,$10,$20,$40,$80
 
 213a: db $01,$02,$02,$02,$02,$02,$02,$02,$03,$03,$03,$03
-
 2146: db $e9,$06,$25,$45,$68,$8d,$b4,$dd,$08,$36,$67,$9c
 
+; pitch table
 2152: db $20,$21,$23,$26,$28,$2a,$2d,$2f,$32,$35,$39,$3c
-
 215e: db $00,$e7,$eb,$0e,$51,$b7,$41,$f2,$cc,$d1,$04,$68
