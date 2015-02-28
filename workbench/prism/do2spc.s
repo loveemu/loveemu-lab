@@ -561,20 +561,22 @@
 0c69: f5 60 05  mov   a,$0560+x         ; channel volume
 0c6c: c4 2b     mov   $2b,a
 0c6e: f5 90 05  mov   a,$0590+x
-0c71: f0 6e     beq   $0ce1
-0c73: 9b ba     dec   $ba+x
-0c75: d0 45     bne   $0cbc
+0c71: f0 6e     beq   $0ce1             ; skip if volume envelope address is invalid
+0c73: 9b ba     dec   $ba+x             ; decrease delta-time counter for the volume envelope
+0c75: d0 45     bne   $0cbc             ; skip if not 0
+; dispatch channel volume envelope sequence
 0c77: fd        mov   y,a
-0c78: f5 78 05  mov   a,$0578+x         ; load table address
+0c78: f5 78 05  mov   a,$0578+x
 0c7b: da 26     movw  $26,ya
 0c7d: 8d 00     mov   y,#$00
-0c7f: f7 26     mov   a,($26)+y
+0c7f: f7 26     mov   a,($26)+y         ; offset +0: volume
 0c81: d5 60 05  mov   $0560+x,a         ; channel volume
 0c84: c4 2b     mov   $2b,a
 0c86: 3a 26     incw  $26
 0c88: f7 26     mov   a,($26)+y
 0c8a: 04 2b     or    a,$2b
 0c8c: d0 0d     bne   $0c9b
+; $00 $00 $xx $yy: goto $yyxx
 0c8e: fc        inc   y
 0c8f: f7 26     mov   a,($26)+y
 0c91: c4 00     mov   $00,a
@@ -584,14 +586,14 @@
 0c97: e4 00     mov   a,$00
 0c99: 2f e0     bra   $0c7b
 ;
-0c9b: f7 26     mov   a,($26)+y
+0c9b: f7 26     mov   a,($26)+y         ; offset +1: envelope depth (volume delta)
 0c9d: d5 a8 05  mov   $05a8+x,a
 0ca0: 3a 26     incw  $26
-0ca2: f7 26     mov   a,($26)+y
+0ca2: f7 26     mov   a,($26)+y         ; offset +2: envelope speed (in tick)
 0ca4: d4 d2     mov   $d2+x,a
 0ca6: d5 c0 05  mov   $05c0+x,a
 0ca9: 3a 26     incw  $26
-0cab: f7 26     mov   a,($26)+y
+0cab: f7 26     mov   a,($26)+y         ; offset +3: delta-time
 0cad: d4 ba     mov   $ba+x,a
 0caf: 3a 26     incw  $26
 0cb1: ba 26     movw  ya,$26
@@ -606,12 +608,13 @@
 0cc3: d4 d2     mov   $d2+x,a
 0cc5: f5 a8 05  mov   a,$05a8+x
 0cc8: 30 09     bmi   $0cd3
+; increase volume
 0cca: 60        clrc
 0ccb: 84 2b     adc   a,$2b
 0ccd: 90 0d     bcc   $0cdc
 0ccf: e8 ff     mov   a,#$ff
 0cd1: 2f 09     bra   $0cdc
-;
+; decrease volume
 0cd3: 60        clrc
 0cd4: 84 2b     adc   a,$2b
 0cd6: 64 2b     cmp   a,$2b
@@ -902,7 +905,7 @@
 0f17: dw $1006  ; cc - master volume (decrease)?
 0f19: dw $100f  ; cd - slur off?
 0f1b: dw $1015  ; ce - slur on?
-0f1d: dw $101e  ; cf - unknown.2
+0f1d: dw $101e  ; cf - channel volume envelope
 0f1f: dw $1035  ; d0 - default pan table #1
 0f21: dw $1044  ; d1 - default pan table #2
 0f23: dw $1053  ; d2 - unknown.0 (on/off switch)
@@ -1037,13 +1040,13 @@
 1018: 18 20 28  or    $28,#$20
 101b: 5f 5d 0b  jmp   $0b5d
 
-; vcmd cf
+; vcmd cf - channel volume envelope
 101e: f8 24     mov   x,$24
 1020: f7 26     mov   a,($26)+y
 1022: d5 78 05  mov   $0578+x,a
 1025: 3a 26     incw  $26
 1027: f7 26     mov   a,($26)+y
-1029: d5 90 05  mov   $0590+x,a
+1029: d5 90 05  mov   $0590+x,a         ; arg1/2: envelope address
 102c: 3a 26     incw  $26
 102e: e8 01     mov   a,#$01
 1030: d4 ba     mov   $ba+x,a
