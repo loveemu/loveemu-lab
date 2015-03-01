@@ -51,8 +51,8 @@
 0464: e6        mov   a,(x)
 0465: c5 f3 00  mov   $00f3,a           ; write to DSP reg
 0468: fe e2     dbnz  y,$044c           ; loop for each reg
-046a: cb 15     mov   $15,y
-046c: cb 16     mov   $16,y
+046a: cb 15     mov   $15,y             ; KON shadow
+046c: cb 16     mov   $16,y             ; KOF shadow
 046e: e4 12     mov   a,$12
 0470: 44 13     eor   a,$13
 0472: 5c        lsr   a
@@ -95,7 +95,7 @@
 04b7: d0 f3     bne   $04ac             ; loop for each voice
 04b9: 2f e6     bra   $04a1
 
-; EVOL(L),EVOL(R),EFB,EON,FLG,KOL,KOF,NON,PMON,KOF
+; EVOL(L),EVOL(R),EFB,EON,FLG,KON,KOF,NON,PMON,KOF
 ; dsp shadow addrs ($04c4+1) for dsp regs ($04ba+1)
 04bb: db $2c,$3c,$0d,$4d,$6c,$4c,$5c,$3d,$2d,$5c
 04c5: db $4c,$4e,$3a,$36,$34,$15,$08,$35,$37,$16
@@ -109,24 +109,27 @@
 04d4: 13 ca 07  bbc0  $ca,$04de
 04d7: 3f 45 09  call  $0945             ; set sample
 04da: 8d a4     mov   y,#$a4
-04dc: 2f 28     bra   $0506             ; dispatch as note $a4
-;
+04dc: 2f 28     bra   $0506             ; dispatch as note #$a4
+; work different if ($ca & 1) != 0: use customized percussion table
 04de: cb 0a     mov   $0a,y             ; y = perc note number
-04e0: f6 a4 00  mov   a,$00a4+y
+04e0: f6 a4 00  mov   a,$00a4+y         ; read percussion patch table
 04e3: c4 0b     mov   $0b,a
-04e5: 28 40     and   a,#$40
+04e5: 28 40     and   a,#$40            ; test bit 6 of $00a4
 04e7: f0 05     beq   $04ee
-04e9: 3f a3 0a  call  $0aa3             ; vcmd f1
+; if ($00a4 & 0x40) != 0 then
+04e9: 3f a3 0a  call  $0aa3             ; echo on
 04ec: 2f 03     bra   $04f1
-04ee: 3f b3 0a  call  $0ab3             ; vcmd f2
+; else if ($00a4 & 0x40) == 0 then
+04ee: 3f b3 0a  call  $0ab3             ; echo off
+; end
 04f1: e4 0b     mov   a,$0b
-04f3: 28 bf     and   a,#$bf
-04f5: 3f 45 09  call  $0945
+04f3: 28 bf     and   a,#$bf            ; excluding bit #$40 from patch #
+04f5: 3f 45 09  call  $0945             ; set sample
 04f8: eb 0a     mov   y,$0a
-04fa: f6 bc 00  mov   a,$00bc+y
+04fa: f6 bc 00  mov   a,$00bc+y         ; read percussion pan table
 04fd: 30 03     bmi   $0502
-04ff: 3f a5 09  call  $09a5
-0502: f6 b0 00  mov   a,$00b0+y
+04ff: 3f a5 09  call  $09a5             ; set pan
+0502: f6 b0 00  mov   a,$00b0+y         ; read percussion note number table
 0505: fd        mov   y,a
 ; vcmds 80-c7,c8,c9 - note/tie/rest
 0506: ad c8     cmp   y,#$c8
@@ -140,9 +143,9 @@
 0514: 84 3b     adc   a,$3b             ; add global transpose
 0516: 60        clrc
 0517: 95 41 03  adc   a,$0341+x         ; add per-voice transpose
-051a: d5 b1 02  mov   $02b1+x,a
-051d: f5 d1 02  mov   a,$02d1+x
-0520: d5 b0 02  mov   $02b0+x,a
+051a: d5 b1 02  mov   $02b1+x,a         ; save note number (integer)
+051d: f5 d1 02  mov   a,$02d1+x         ; per-voice tuning
+0520: d5 b0 02  mov   $02b0+x,a         ; save note number (fraction)
 0523: f5 11 03  mov   a,$0311+x
 0526: 5c        lsr   a
 0527: e8 00     mov   a,#$00
@@ -374,10 +377,12 @@
 06c3: d0 1c     bne   $06e1             ; load start addresses, if hi-byte is non zero
 06c5: fd        mov   y,a               ; refetch lo-byte
 06c6: d0 08     bne   $06d0             ; key off, return if also zero:
+; $0000 - song end
 06c8: c4 1d     mov   $1d,a
 06ca: c4 17     mov   $17,a
 06cc: c4 b9     mov   $b9,a
 06ce: 2f 89     bra   $0659
+; $00xx - repeat/goto
 06d0: 8b 21     dec   $21
 06d2: 10 02     bpl   $06d6
 06d4: c4 21     mov   $21,a
@@ -459,12 +464,12 @@
 0765: bc        inc   a
 0766: d4 57     mov   $57+x,a           ; set actual key-off dur counter
 0768: ee        pop   y
-0769: f4 ba     mov   a,$ba+x
+0769: f4 ba     mov   a,$ba+x           ; apply duration rate
 076b: cf        mul   ya
 076c: dd        mov   a,y
 076d: d0 01     bne   $0770
-076f: bc        inc   a
-0770: d4 bb     mov   $bb+x,a
+076f: bc        inc   a                 ; minimum duration = 1
+0770: d4 bb     mov   $bb+x,a           ; save adjusted note duration
 0772: 2f 03     bra   $0777
 0774: 3f d3 0c  call  $0cd3             ; do readahead
 0777: 3f 76 0b  call  $0b76
@@ -538,19 +543,19 @@
 07fd: dw $0ae3  ; ee - echo volume fade
 07ff: dw $0b86  ; ef - pitch slide
 0801: dw $0b73  ; f0 - set perc base
-0803: dw $0aa3  ; f1
-0805: dw $0ab3  ; f2
-0807: dw $0bb9  ; f3
-0809: dw $0bbf  ; f4
-080b: dw $08af  ; f5
-080d: dw $08d0  ; f6
-080f: dw $0bc5  ; f7
+0803: dw $0aa3  ; f1 - echo on
+0805: dw $0ab3  ; f2 - echo off
+0807: dw $0bb9  ; f3 - legato on
+0809: dw $0bbf  ; f4 - legato off
+080b: dw $08af  ; f5 - set/clear $ca bitflag, or wait for APU port #2
+080d: dw $08d0  ; f6 - write to APU port #0
+080f: dw $0bc5  ; f7 - relational jump (conditional)
 0811: dw $0bce  ; f8 - relational jump
-0813: dw $089b  ; f9
-0815: dw $0884  ; fa
-0817: dw $0905  ; fb
-0819: dw $08d4  ; fc
-081b: dw $08ec  ; fd
+0813: dw $089b  ; f9 - unknown (copy 36 bytes data to unused area?)
+0815: dw $0884  ; fa - define voice params
+0817: dw $0905  ; fb - set voice params
+0819: dw $08d4  ; fc - set ADSR
+081b: dw $08ec  ; fd - set duration rate and GAIN
                 ; fe-ff undefined
 
 ; vcmd lengths ($07c7)
@@ -584,31 +589,32 @@
 0861: fd        mov   y,a               ; refetch arg byte
 0862: 6f        ret
 
+; overwrite instrument table by sequence
 0863: 28 3f     and   a,#$3f
 0865: 8d 06     mov   y,#$06
-0867: cf        mul   ya
+0867: cf        mul   ya                ; index: (arg1 & 0x3f) * 6
 0868: da 0e     movw  $0e,ya
 086a: 60        clrc
 086b: 98 80 0e  adc   $0e,#$80
-086e: 98 19 0f  adc   $0f,#$19          ; $0e/f = ((arg1 & 0x3f) * 6) + 0x1980
+086e: 98 19 0f  adc   $0f,#$19          ; instrument table $1980
 0871: fb 23     mov   y,$23+x
 0873: f4 22     mov   a,$22+x
-0875: da 0a     movw  $0a,ya            ; $0a/b = reading ptr
+0875: da 0a     movw  $0a,ya
 0877: 8d 05     mov   y,#$05
 0879: f7 0a     mov   a,($0a)+y
 087b: d7 0e     mov   ($0e)+y,a
 087d: dc        dec   y
-087e: 10 f9     bpl   $0879             ; copy 6 bytes from $0a/b to $0e/f
+087e: 10 f9     bpl   $0879             ; overwrite instrument definition (6 bytes)
 0880: e8 06     mov   a,#$06
-0882: 2f 0d     bra   $0891             ; then, skip them
-; vcmd fa
-0884: 30 dd     bmi   $0863
+0882: 2f 0d     bra   $0891             ; skip 6 byte arguments
+; vcmd fa - define voice params
+0884: 30 dd     bmi   $0863             ; overwrite instrument table if arg1 < 0
 0886: f4 22     mov   a,$22+x
 0888: c4 b6     mov   $b6,a
 088a: f4 23     mov   a,$23+x
-088c: c4 b7     mov   $b7,a             ; set reading ptr to $b6/7
+088c: c4 b7     mov   $b7,a             ; save current address into $b6/7 (predefined voice param table, see vcmd fb)
 088e: e8 04     mov   a,#$04
-0890: cf        mul   ya                ; skip arg1*4 bytes
+0890: cf        mul   ya                ; skip arg1 (number of items) * 4 bytes
 ; add A to reading ptr
 0891: 60        clrc
 0892: 94 22     adc   a,$22+x
@@ -623,103 +629,113 @@
 089f: da 0a     movw  $0a,ya
 08a1: 8d 23     mov   y,#$23
 08a3: f7 0a     mov   a,($0a)+y
-08a5: d6 6e 01  mov   $016e+y,a         ; copy args to $016e+y
+08a5: d6 6e 01  mov   $016e+y,a         ; copy args to $016e+y ($016e-$0191; unused area?)
 08a8: dc        dec   y
 08a9: 10 f8     bpl   $08a3             ; 36 bytes
 08ab: e8 24     mov   a,#$24
 08ad: 2f e2     bra   $0891
 
-; vcmd f5
+; vcmd f5 - set/clear $ca bitflag, or wait for APU port #2
 08af: ad f0     cmp   y,#$f0
 08b1: 90 19     bcc   $08cc
-; write bit 3 of arg1, to bit (arg1 & 7) of $00ca
-; bit 7 ($80) - use own dur/vel code
+; when arg1 >= 0xf0:
 08b3: 12 0a     clr0  $0a
 08b5: 9f        xcn   a
-08b6: 30 02     bmi   $08ba
-08b8: 02 0a     set0  $0a               ; $0a |= 1, if (arg1 & 0x08) != 0
+08b6: 30 02     bmi   $08ba             ; if (arg1 & 0x08) != 0 then
+08b8: 02 0a     set0  $0a               ;   $0a |= 1
 08ba: 9f        xcn   a
 08bb: 28 07     and   a,#$07
 08bd: fd        mov   y,a
 08be: f6 39 11  mov   a,$1139+y         ; a = 1 << (arg1 & 0x07)
 08c1: 13 0a 04  bbc0  $0a,$08c8
-08c4: 0e ca 00  tset1 $00ca
+; when (arg1 & 0x08) == 0:
+08c4: 0e ca 00  tset1 $00ca             ; $ca |= a;
 08c7: 6f        ret
-08c8: 4e ca 00  tclr1 $00ca
+; when (arg1 & 0x08) != 0:
+08c8: 4e ca 00  tclr1 $00ca             ; $ca &= ~a;
 08cb: 6f        ret
-; arg1 >= 0xf0
-08cc: cc 6c 01  mov   $016c,y
+; when arg1 < 0xf0:
+; wait for APU port #2
+08cc: cc 6c 01  mov   $016c,y           ; arg1: zero or non-zero (wait for APU port #2 later, if non-zero)
 08cf: 6f        ret
 
-; vcmd f6
+; $ca:
+; bit 0 ($01) - use customized percussion tables
+; bit 7 ($80) - use customized note duration/velocity format
+
+; vcmd f6 - write to APU port #0
 08d0: cc 6d 01  mov   $016d,y
 08d3: 6f        ret
 
-; vcmd fc
-08d4: d5 51 03  mov   $0351+x,a
+; vcmd fc - set ADSR
+08d4: d5 51 03  mov   $0351+x,a         ; arg1: ADSR(1)
 08d7: 7d        mov   a,x
 08d8: 9f        xcn   a
 08d9: 5c        lsr   a
 08da: 08 05     or    a,#$05
 08dc: fd        mov   y,a
 08dd: f5 51 03  mov   a,$0351+x
-08e0: 3f ea 05  call  $05ea
+08e0: 3f ea 05  call  $05ea             ; set ADSR(1)
 08e3: 6d        push  y
-08e4: 3f 57 08  call  $0857
+08e4: 3f 57 08  call  $0857             ; arg2: ADSR(2)
 08e7: ee        pop   y
 08e8: fc        inc   y
-08e9: 5f ea 05  jmp   $05ea
+08e9: 5f ea 05  jmp   $05ea             ; set ADSR(2)
 
-; vcmd fd
-08ec: d4 ba     mov   $ba+x,a
+; vcmd fd - set duration rate and GAIN
+08ec: d4 ba     mov   $ba+x,a           ; arg1: duration rate
 08ee: 7d        mov   a,x
 08ef: 9f        xcn   a
 08f0: 5c        lsr   a
 08f1: 08 07     or    a,#$07
 08f3: 2d        push  a
 08f4: 3f 57 08  call  $0857
-08f7: d5 50 03  mov   $0350+x,a
+08f7: d5 50 03  mov   $0350+x,a         ; arg2: GAIN
 08fa: ee        pop   y
-08fb: 5f ea 05  jmp   $05ea
+08fb: 5f ea 05  jmp   $05ea             ; set GAIN
 
-; transpose table used by vcmd fb
+; transpose table used by vcmd fb ($08fd+y)
 ; -2oct,-1oct,-1,0,+1,+1oct,+2oct
+; -24, -12, -1, 0, 1, 12, 24
 08fe: db $e8,$f4,$ff,$00,$01,$0c,$18
 
-; vcmd fb
+; vcmd fb - set voice params
 0905: 1c        asl   a
 0906: 1c        asl   a
-0907: fd        mov   y,a               ; index a * 4
-0908: f7 b6     mov   a,($b6)+y         ; $b6/7 is set by vcmd fa
+0907: fd        mov   y,a               ; index: arg1 (voice param index) * 4
+0908: f7 b6     mov   a,($b6)+y         ; $b6/7: predefined voice param table (set by vcmd fa)
 090a: fc        inc   y
-090b: 2d        push  a                 ; param1, instrument #
+090b: 2d        push  a                 ; offset +0, instrument #
 090c: f7 b6     mov   a,($b6)+y
 090e: fc        inc   y
-090f: d5 51 02  mov   $0251+x,a         ; param2, volume
+090f: d5 51 02  mov   $0251+x,a         ; offset +1, volume
 0912: f7 b6     mov   a,($b6)+y
 0914: fc        inc   y
-0915: d5 a1 02  mov   $02a1+x,a         ; param3, pan
+0915: d5 a1 02  mov   $02a1+x,a         ; offset +2, pan
 0918: 28 1f     and   a,#$1f
 091a: d5 81 02  mov   $0281+x,a
 091d: e8 00     mov   a,#$00
 091f: d5 80 02  mov   $0280+x,a
 0922: d5 50 02  mov   $0250+x,a
-0925: d4 ba     mov   $ba+x,a
-0927: f7 b6     mov   a,($b6)+y
+0925: d4 ba     mov   $ba+x,a           ; zero duration rate
+0927: f7 b6     mov   a,($b6)+y         ; offset +3: transpose/tuning
 0929: c4 0a     mov   $0a,a
 092b: 28 0f     and   a,#$0f
 092d: f0 07     beq   $0936
-092f: 9c        dec   a
+; lower 4 bits: tuning (skip if 0)
+092f: 9c        dec   a                 ; ((value & 15) - 1) * 5 => 0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70
 0930: 8d 05     mov   y,#$05
 0932: cf        mul   ya
-0933: d5 d1 02  mov   $02d1+x,a         ; param4 lo-byte, tuning
+0933: d5 d1 02  mov   $02d1+x,a         ; tuning
+;
 0936: e4 0a     mov   a,$0a
 0938: 28 70     and   a,#$70
 093a: f0 08     beq   $0944
+; higher 3 bits: transpose (skip if 0)
 093c: 9f        xcn   a
 093d: fd        mov   y,a
-093e: f6 fd 08  mov   a,$08fd+y
-0941: d5 41 03  mov   $0341+x,a         ; param4 hi-byte, transpose
+093e: f6 fd 08  mov   a,$08fd+y         ; get transpose amount from lookup table
+0941: d5 41 03  mov   $0341+x,a         ; transpose
 0944: ae        pop   a
 ; vcmd d6 - set instrument
 0945: d5 11 02  mov   $0211+x,a
@@ -735,7 +751,7 @@
 0954: da 0e     movw  $0e,ya
 0956: 60        clrc
 0957: 98 80 0e  adc   $0e,#$80
-095a: 98 19 0f  adc   $0f,#$19
+095a: 98 19 0f  adc   $0f,#$19          ; instrument table $1980
 095d: e4 14     mov   a,$14
 095f: 24 32     and   a,$32
 0961: d0 41     bne   $09a4
@@ -746,7 +762,7 @@
 0967: 08 04     or    a,#$04            ; voice X SRCN
 0969: 5d        mov   x,a
 096a: 8d 00     mov   y,#$00
-096c: f7 0e     mov   a,($0e)+y
+096c: f7 0e     mov   a,($0e)+y         ; offset +0: SRCN
 096e: 10 0e     bpl   $097e
 0970: 28 1f     and   a,#$1f            ; sample > 80: noise, freq in low bits
 0972: 38 20 34  and   $34,#$20          ;  keep echo bit from FLG
@@ -762,16 +778,16 @@
 098b: 3d        inc   x
 098c: fc        inc   y
 098d: ad 04     cmp   y,#$04
-098f: d0 f2     bne   $0983             ; set SRCN, ADSR1/2, GAIN from table
+098f: d0 f2     bne   $0983             ; set SRCN, ADSR(1), ADSR(2), GAIN from table
 0991: ce        pop   x
 0992: f7 0e     mov   a,($0e)+y
-0994: d5 21 02  mov   $0221+x,a
+0994: d5 21 02  mov   $0221+x,a         ; offset +4: pitch multiplier
 0997: fc        inc   y
 0998: f7 0e     mov   a,($0e)+y
-099a: d5 20 02  mov   $0220+x,a         ; set pitch multiplier
+099a: d5 20 02  mov   $0220+x,a         ; offset +5: set pitch multiplier
 099d: 8d 01     mov   y,#$01
 099f: f7 0e     mov   a,($0e)+y
-09a1: d5 51 03  mov   $0351+x,a
+09a1: d5 51 03  mov   $0351+x,a         ; offset +1: ADSR(1)
 09a4: 6f        ret
 
 ; vcmd d7 - pan
@@ -929,27 +945,29 @@
 0aa0: d4 23     mov   $23+x,a
 0aa2: 6f        ret
 
-; vcmd f1
+; vcmd f1 - echo on
 0aa3: e4 14     mov   a,$14
 0aa5: 24 32     and   a,$32
 0aa7: f0 06     beq   $0aaf
-0aa9: e4 32     mov   a,$32
+; set channel bit of $0192 (another EON shadow, not in use?)
+0aa9: e4 32     mov   a,$32             ; channel bitmask
 0aab: 0e 92 01  tset1 $0192
 0aae: 6f        ret
-
-0aaf: 09 32 36  or    ($36),($32)
+; turn echo on
+0aaf: 09 32 36  or    ($36),($32)       ; set channel bit of EON shadow
 0ab2: 6f        ret
 
-; vcmd f2
+; vcmd f2 - echo off
 0ab3: e4 14     mov   a,$14
 0ab5: 24 32     and   a,$32
 0ab7: f0 06     beq   $0abf
-0ab9: e4 32     mov   a,$32
+; clear channel bit of $0192 (another EON shadow, not in use?)
+0ab9: e4 32     mov   a,$32             ; channel bitmask
 0abb: 4e 92 01  tclr1 $0192
 0abe: 6f        ret
-
+; turn echo off
 0abf: e4 32     mov   a,$32
-0ac1: 4e 36 00  tclr1 $0036
+0ac1: 4e 36 00  tclr1 $0036             ; clear channel bit of EON shadow
 0ac4: 6f        ret
 
 ; vcmd eb - set echo vbits/volume
@@ -973,14 +991,14 @@
 0ae5: 3f 57 08  call  $0857
 0ae8: c4 54     mov   $54,a
 0aea: 80        setc
-0aeb: a4 4c     sbc   a,$4c
+0aeb: a4 4c     sbc   a,$4c             ; EVOL(L)
 0aed: f8 53     mov   x,$53
 0aef: 3f d8 0b  call  $0bd8
 0af2: da 4f     movw  $4f,ya
 0af4: 3f 57 08  call  $0857
 0af7: c4 55     mov   $55,a
 0af9: 80        setc
-0afa: a4 4e     sbc   a,$4e
+0afa: a4 4e     sbc   a,$4e             ; EVOL(R)
 0afc: f8 53     mov   x,$53
 0afe: 3f d8 0b  call  $0bd8
 0b01: da 51     movw  $51,ya
@@ -1085,20 +1103,20 @@
 0bb6: c4 0a     mov   $0a,a
 0bb8: 6f        ret
 
-; vcmd f3
-0bb9: e4 32     mov   a,$32
+; vcmd f3 - legato on
+0bb9: e4 32     mov   a,$32             ; channel bitmask
 0bbb: 0e b8 00  tset1 $00b8
 0bbe: 6f        ret
 
-; vcmd f4
-0bbf: e4 32     mov   a,$32
+; vcmd f4 - legato off
+0bbf: e4 32     mov   a,$32             ; channel bitmask
 0bc1: 4e b8 00  tclr1 $00b8
 0bc4: 6f        ret
 
-; vcmd f7
+; vcmd f7 - relational jump (conditional)
 0bc5: 2d        push  a
 0bc6: e4 b9     mov   a,$b9
-0bc8: 24 32     and   a,$32
+0bc8: 24 32     and   a,$32             ; channel bitmask
 0bca: ae        pop   a
 0bcb: f0 01     beq   $0bce
 0bcd: 6f        ret
@@ -1262,26 +1280,30 @@
 0cfb: c4 11     mov   $11,a
 0cfd: f4 22     mov   a,$22+x
 0cff: fb 23     mov   y,$23+x
-0d01: da 0e     movw  $0e,ya
+0d01: da 0e     movw  $0e,ya            ; set current voice ptr to $0e/f
 0d03: 8d 00     mov   y,#$00
-0d05: f7 0e     mov   a,($0e)+y
+0d05: f7 0e     mov   a,($0e)+y         ; readahead
 0d07: f0 1c     beq   $0d25
 0d09: 30 05     bmi   $0d10
+; vcmd readahead 01-7f - note param
 0d0b: fc        inc   y
 0d0c: f7 0e     mov   a,($0e)+y
-0d0e: 10 fb     bpl   $0d0b
+0d0e: 10 fb     bpl   $0d0b             ; skip while byte <= 0x7f
+; 80-ff
 0d10: 68 c8     cmp   a,#$c8
 0d12: f0 55     beq   $0d69
 0d14: 68 e5     cmp   a,#$e5
 0d16: f0 29     beq   $0d41
 0d18: 68 d6     cmp   a,#$d6
 0d1a: 90 30     bcc   $0d4c
+; vcmd readahead d6-ff (excluding e5)
 0d1c: 6d        push  y
 0d1d: fd        mov   y,a
 0d1e: ae        pop   a
 0d1f: 96 47 07  adc   a,$0747+y         ; vcmd lengths
 0d22: fd        mov   y,a
 0d23: 2f e0     bra   $0d05
+; vcmd readahead 00 - end/return
 0d25: e4 11     mov   a,$11
 0d27: f0 23     beq   $0d4c
 0d29: 8b 11     dec   $11
@@ -1298,7 +1320,7 @@
 0d3b: f5 40 02  mov   a,$0240+x
 0d3e: ee        pop   y
 0d3f: 2f c0     bra   $0d01
-;
+; vcmd readahead e5 - call subroutine
 0d41: fc        inc   y
 0d42: f7 0e     mov   a,($0e)+y
 0d44: 2d        push  a
@@ -1307,12 +1329,13 @@
 0d48: fd        mov   y,a
 0d49: ae        pop   a
 0d4a: 2f b5     bra   $0d01
+; vcmd readahead 80-d5 (excluding c8) - note
 0d4c: e4 b8     mov   a,$b8
-0d4e: 24 32     and   a,$32
-0d50: d0 17     bne   $0d69
+0d4e: 24 32     and   a,$32             ; test channel bit of $b8
+0d50: d0 17     bne   $0d69             ; skip keyoff if it's set
 0d52: e4 32     mov   a,$32
 0d54: 8d 5c     mov   y,#$5c
-0d56: 3f ea 05  call  $05ea
+0d56: 3f ea 05  call  $05ea             ; set KOF
 0d59: f4 ba     mov   a,$ba+x
 0d5b: f0 0c     beq   $0d69
 0d5d: 7d        mov   a,x
@@ -1321,7 +1344,8 @@
 0d60: 08 05     or    a,#$05
 0d62: fd        mov   y,a
 0d63: f5 51 03  mov   a,$0351+x
-0d66: 3f ea 05  call  $05ea
+0d66: 3f ea 05  call  $05ea             ; set ADSR(1)
+; vcmd readahead c8 - tie
 0d69: f2 0d     clr7  $0d
 0d6b: f4 86     mov   a,$86+x
 0d6d: f0 13     beq   $0d82
@@ -1569,7 +1593,7 @@
 0f86: 24 36     and   a,$36
 0f88: 0e 92 01  tset1 $0192
 0f8b: e4 df     mov   a,$df
-0f8d: 24 35     and   a,$35
+0f8d: 24 35     and   a,$35             ; NON shadow
 0f8f: 0e 93 01  tset1 $0193
 0f92: 2f 03     bra   $0f97
 0f94: 3f 16 11  call  $1116
@@ -1619,16 +1643,16 @@
 0ff1: d0 06     bne   $0ff9
 0ff3: ba f4     movw  ya,$f4
 0ff5: 5a f4     cmpw  ya,$f4
-0ff7: d0 fa     bne   $0ff3
+0ff7: d0 fa     bne   $0ff3             ; wait until APU port #0 changes
 0ff9: da 00     movw  $00,ya
 0ffb: ba 06     movw  ya,$06
 0ffd: da f6     movw  $f6,ya
 0fff: 8d 00     mov   y,#$00
 1001: e5 6c 01  mov   a,$016c
-1004: d0 06     bne   $100c
+1004: d0 06     bne   $100c             ; skip if ($016c) == 0
 1006: ba f6     movw  ya,$f6
 1008: 5a f6     cmpw  ya,$f6
-100a: d0 fa     bne   $1006
+100a: d0 fa     bne   $1006             ; wait until APU port #2 changes
 100c: da 02     movw  $02,ya
 100e: e8 00     mov   a,#$00
 1010: c5 bd 03  mov   $03bd,a

@@ -49,8 +49,8 @@
 06bd: e6        mov   a,(x)
 06be: c4 f3     mov   $f3,a             ; write to DSP reg
 06c0: fe e4     dbnz  y,$06a6           ; loop for each reg
-06c2: cb 1e     mov   $1e,y
-06c4: cb 1f     mov   $1f,y
+06c2: cb 1e     mov   $1e,y             ; KON shadow
+06c4: cb 1f     mov   $1f,y             ; KOF shadow
 06c6: e4 12     mov   a,$12
 06c8: 44 13     eor   a,$13
 06ca: 5c        lsr   a
@@ -424,7 +424,7 @@
 096a: 08 05     or    a,#$05
 096c: c4 f2     mov   $f2,a
 096e: f4 b2     mov   a,$b2+x
-0970: c4 f3     mov   $f3,a
+0970: c4 f3     mov   $f3,a             ; set ADSR(1)
 0972: 2f 03     bra   $0977
 0974: 3f f8 0d  call  $0df8             ; do readahead
 0977: 3f cf 0c  call  $0ccf
@@ -502,15 +502,15 @@
 0a04: dw $0c56  ; f2 - echo volume fade
 0a06: dw $0cdd  ; f3 - pitch slide
 0a08: dw $0cce  ; f4 - set perc patch base (NYI)
-0a0a: dw $0ac0  ; f5
-0a0c: dw $0ace  ; f6
-0a0e: dw $0ade  ; f7
-0a10: dw $0ade  ; f8
-0a12: dw $0ae7  ; f9
-0a14: dw $0a61  ; fa
-0a16: dw $0aea  ; fb
-0a18: dw $0a78  ; fc
-0a1a: dw $0aad  ; fd
+0a0a: dw $0ac0  ; f5 - echo on
+0a0c: dw $0ace  ; f6 - echo off
+0a0e: dw $0ade  ; f7 - set GAIN
+0a10: dw $0ade  ; f8 - set GAIN
+0a12: dw $0ae7  ; f9 - set GAIN (for release time)
+0a14: dw $0a61  ; fa - define voice params
+0a16: dw $0aea  ; fb - set voice params
+0a18: dw $0a78  ; fc - unknown (copy bytes to unused area?)
+0a1a: dw $0aad  ; fd - sub-command (set/clear $00c3)
                 ; fe-ff undefined
 
 ; vcmd lengths ($09c2)
@@ -546,14 +546,14 @@
 
 0a5e: 5f 9b 18  jmp   $189b
 
-; vcmd fa
-0a61: 30 fb     bmi   $0a5e
+; vcmd fa - define voice params
+0a61: 30 fb     bmi   $0a5e             ; do something different if arg1 < 0
 0a63: f4 27     mov   a,$27+x
 0a65: c4 c1     mov   $c1,a
 0a67: f4 28     mov   a,$28+x
-0a69: c4 c2     mov   $c2,a             ; set reading ptr to $c1/2
+0a69: c4 c2     mov   $c2,a             ; save current address into $c1/2 (predefined voice param table, see vcmd fb)
 0a6b: e8 04     mov   a,#$04
-0a6d: cf        mul   ya                ; skip arg1*4 bytes
+0a6d: cf        mul   ya                ; skip arg1 (number of items) * 4 bytes
 ; add A to reading ptr
 0a6e: 60        clrc
 0a6f: 94 27     adc   a,$27+x
@@ -567,70 +567,72 @@
 0a7a: fb 28     mov   y,$28+x
 0a7c: cb 0f     mov   $0f,y
 0a7e: fb 27     mov   y,$27+x
-0a80: cb 0e     mov   $0e,y             ; set reading ptr to $0e/f
-0a82: 2d        push  a
+0a80: cb 0e     mov   $0e,y             ; save current address into $0e/f
+0a82: 2d        push  a                 ; push arg1
 0a83: 8d 03     mov   y,#$03
 0a85: cf        mul   ya
 0a86: 6d        push  y
-0a87: ce        pop   x
-0a88: ae        pop   a
+0a87: ce        pop   x                 ; x => 0
+0a88: ae        pop   a                 ; pop arg1
 0a89: 28 0f     and   a,#$0f
 0a8b: bc        inc   a
-0a8c: c4 0b     mov   $0b,a
+0a8c: c4 0b     mov   $0b,a             ; (arg1 & 15) + 1
 0a8e: 8d 03     mov   y,#$03
-0a90: cf        mul   ya
+0a90: cf        mul   ya                ; y => 0
 0a91: 2d        push  a
-0a92: f7 0e     mov   a,($0e)+y
+0a92: f7 0e     mov   a,($0e)+y         ; offset +0: ?
 0a94: d5 00 01  mov   $0100+x,a
 0a97: fc        inc   y
-0a98: f7 0e     mov   a,($0e)+y
+0a98: f7 0e     mov   a,($0e)+y         ; offset +1: ?
 0a9a: d5 10 01  mov   $0110+x,a
 0a9d: fc        inc   y
-0a9e: f7 0e     mov   a,($0e)+y
+0a9e: f7 0e     mov   a,($0e)+y         ; offset +2: ?
 0aa0: d5 20 01  mov   $0120+x,a
 0aa3: fc        inc   y
 0aa4: 3d        inc   x
-0aa5: 6e 0b ea  dbnz  $0b,$0a92
+0aa5: 6e 0b ea  dbnz  $0b,$0a92         ; repeat for (arg1 & 15) + 1 times
 0aa8: f8 16     mov   x,$16
 0aaa: ae        pop   a
 0aab: 2f c1     bra   $0a6e             ; skip (((arg1 & 15) + 1) * 3) bytes
-; vcmd fd
+; vcmd fd - sub-command (set/clear $00c3)
 0aad: 68 01     cmp   a,#$01
 0aaf: f0 05     beq   $0ab6             ; 1 byte arg
 0ab1: 68 02     cmp   a,#$02
 0ab3: f0 06     beq   $0abb             ; 1 byte arg
 0ab5: 6f        ret
-; vcmd fd :: 01
-0ab6: 01        tcall 0
-0ab7: 0e c3 00  tset1 $00c3
+; when arg1 == 1:
+0ab6: 01        tcall 0                 ; arg2 (bitflags)
+0ab7: 0e c3 00  tset1 $00c3             ; set $c3
 0aba: 6f        ret
-; vcmd fd :: 02
-0abb: 01        tcall 0
-0abc: 4e c3 00  tclr1 $00c3
+; when arg1 == 2:
+0abb: 01        tcall 0                 ; arg2 (bitflags)
+0abc: 4e c3 00  tclr1 $00c3             ; clear $c3
 0abf: 6f        ret
 
-; vcmd f5
+; vcmd f5 - echo on
 0ac0: e4 14     mov   a,$14
-0ac2: 24 15     and   a,$15
+0ac2: 24 15     and   a,$15             ; channel bitmask
 0ac4: f0 04     beq   $0aca
+; set channel bit of $02c6 (another EON shadow, not in use?)
 0ac6: 0e c6 02  tset1 $02c6
 0ac9: 6f        ret
-
-0aca: 09 15 19  or    ($19),($15)
+; turn echo on
+0aca: 09 15 19  or    ($19),($15)       ; set channel bit of EON shadow
 0acd: 6f        ret
 
-; vcmd f6
+; vcmd f6 - echo off
 0ace: e4 14     mov   a,$14
-0ad0: 24 15     and   a,$15
+0ad0: 24 15     and   a,$15             ; channel bitmask
 0ad2: f0 04     beq   $0ad8
+; clear channel bit of $02c6 (another EON shadow, not in use?)
 0ad4: 4e c6 02  tclr1 $02c6
 0ad7: 6f        ret
-
+; turn echo off
 0ad8: e4 15     mov   a,$15
-0ada: 4e 19 00  tclr1 $0019
+0ada: 4e 19 00  tclr1 $0019             ; clear channel bit of EON shadow
 0add: 6f        ret
 
-; vcmds f7,f8
+; vcmds f7,f8 - set GAIN
 0ade: 2d        push  a
 0adf: 7d        mov   a,x
 0ae0: 9f        xcn   a
@@ -638,41 +640,41 @@
 0ae2: 08 07     or    a,#$07
 0ae4: fd        mov   y,a
 0ae5: ae        pop   a
-0ae6: 21        tcall 2
-; vcmd f9
+0ae6: 21        tcall 2                 ; arg1: set GAIN
+; vcmd f9 - set GAIN (for release time)
 0ae7: d4 b1     mov   $b1+x,a
 0ae9: 6f        ret
 
-; vcmd fb
+; vcmd fb - set voice params
 0aea: c4 0b     mov   $0b,a
 0aec: 1c        asl   a
 0aed: 1c        asl   a
-0aee: fd        mov   y,a
-0aef: f7 c1     mov   a,($c1)+y
-0af1: 2d        push  a
+0aee: fd        mov   y,a               ; index: arg1 (voice param index) * 4
+0aef: f7 c1     mov   a,($c1)+y         ; $c1/2: predefined voice param table (set by vcmd fa)
+0af1: 2d        push  a                 ; offset +0, instrument #
 0af2: fc        inc   y
 0af3: f7 c1     mov   a,($c1)+y
-0af5: d5 31 01  mov   $0131+x,a
+0af5: d5 31 01  mov   $0131+x,a         ; offset +1, volume
 0af8: fc        inc   y
 0af9: f7 c1     mov   a,($c1)+y
 0afb: 2d        push  a
 0afc: 28 1f     and   a,#$1f
-0afe: d5 81 01  mov   $0181+x,a
+0afe: d5 81 01  mov   $0181+x,a         ; offset +2, pan
 0b01: d5 61 01  mov   $0161+x,a
 0b04: fc        inc   y
-0b05: f7 c1     mov   a,($c1)+y
+0b05: f7 c1     mov   a,($c1)+y         ; offset +3: transpose
 0b07: d5 b1 02  mov   $02b1+x,a
-0b0a: ae        pop   a
-0b0b: 28 e0     and   a,#$e0
+0b0a: ae        pop   a                 ; pop instrument #
+0b0b: 28 e0     and   a,#$e0            ; extract upper 3 bits
 0b0d: 9f        xcn   a
 0b0e: 5c        lsr   a
 0b0f: 8d 05     mov   y,#$05
-0b11: cf        mul   ya
-0b12: d5 b1 01  mov   $01b1+x,a
+0b11: cf        mul   ya                ; (inst >> 5) * 5
+0b12: d5 b1 01  mov   $01b1+x,a         ; tuning
 0b15: dd        mov   a,y
 0b16: d5 60 01  mov   $0160+x,a
 0b19: d5 30 01  mov   $0130+x,a
-0b1c: d4 b1     mov   $b1+x,a
+0b1c: d4 b1     mov   $b1+x,a           ; zero GAIN
 0b1e: f3 0b 03  bbc7  $0b,$0b24
 0b21: 3f 8e 0b  call  $0b8e
 0b24: d3 0b 02  bbc6  $0b,$0b29
@@ -690,7 +692,7 @@
 0b34: 24 15     and   a,$15
 0b36: d0 2a     bne   $0b62
 0b38: 60        clrc
-0b39: 98 fe 0f  adc   $0f,#$fe
+0b39: 98 fe 0f  adc   $0f,#$fe          ; instrument table $fe00
 0b3c: 4d        push  x
 0b3d: 7d        mov   a,x
 0b3e: 9f        xcn   a
@@ -705,14 +707,14 @@
 0b4b: ad 04     cmp   y,#$04
 0b4d: d0 f4     bne   $0b43             ; set SRCN, ADSR1/2, GAIN from table
 0b4f: ce        pop   x
-0b50: f7 0e     mov   a,($0e)+y
+0b50: f7 0e     mov   a,($0e)+y         ; offset +4: set pitch multiplier
 0b52: d5 01 02  mov   $0201+x,a
 0b55: fc        inc   y
 0b56: f7 0e     mov   a,($0e)+y
-0b58: d5 00 02  mov   $0200+x,a         ; set pitch multiplier
+0b58: d5 00 02  mov   $0200+x,a         ; offset +5: set pitch multiplier
 0b5b: 8d 01     mov   y,#$01
 0b5d: f7 0e     mov   a,($0e)+y
-0b5f: d5 b2 00  mov   $00b2+x,a
+0b5f: d5 b2 00  mov   $00b2+x,a         ; offset +1: ADSR(1)
 0b62: 6f        ret
 
 ; vcmd db - pan
@@ -889,14 +891,14 @@
 0c58: 01        tcall 0
 0c59: c4 4f     mov   $4f,a
 0c5b: 80        setc
-0c5c: a4 47     sbc   a,$47
+0c5c: a4 47     sbc   a,$47             ; EVOL(L)
 0c5e: f8 4e     mov   x,$4e
 0c60: 31        tcall 3
 0c61: da 4a     movw  $4a,ya
 0c63: 01        tcall 0
 0c64: c4 50     mov   $50,a
 0c66: 80        setc
-0c67: a4 49     sbc   a,$49
+0c67: a4 49     sbc   a,$49             ; EVOL(R)
 0c69: f8 4e     mov   x,$4e
 0c6b: 31        tcall 3
 0c6c: da 4c     movw  $4c,ya
@@ -911,7 +913,7 @@
 ; vcmd f1 - set echo params
 0c76: 3f 92 0c  call  $0c92             ; set echo delay from arg1
 0c79: 01        tcall 0
-0c7a: c4 1d     mov   $1d,a             ; set echo feedback shadow from arg2
+0c7a: c4 1d     mov   $1d,a             ; set EFB shadow from arg2
 0c7c: 01        tcall 0
 0c7d: 1c        asl   a
 0c7e: 1c        asl   a
@@ -1106,7 +1108,7 @@
 0de0: 48 ff     eor   a,#$ff
 0de2: bc        inc   a
 0de3: fa 0c f2  mov   ($f2),($0c)
-0de6: c4 f3     mov   $f3,a
+0de6: c4 f3     mov   $f3,a             ; set VOL(L),VOL(R)
 0de8: 03 0c 0c  bbs0  $0c,$0df7
 0deb: 8d 14     mov   y,#$14
 0ded: e8 00     mov   a,#$00
@@ -1123,26 +1125,30 @@
 0dfe: c4 11     mov   $11,a
 0e00: f4 27     mov   a,$27+x
 0e02: fb 28     mov   y,$28+x
-0e04: da 0e     movw  $0e,ya
+0e04: da 0e     movw  $0e,ya            ; set current voice ptr to $0e/f
 0e06: 8d 00     mov   y,#$00
-0e08: f7 0e     mov   a,($0e)+y
+0e08: f7 0e     mov   a,($0e)+y         ; readahead
 0e0a: f0 1c     beq   $0e28
 0e0c: 30 05     bmi   $0e13
+; vcmd readahead 01-7f - note param
 0e0e: fc        inc   y
 0e0f: f7 0e     mov   a,($0e)+y
-0e11: 10 fb     bpl   $0e0e
+0e11: 10 fb     bpl   $0e0e             ; skip while byte <= 0x7f
+; 80-ff
 0e13: 68 c8     cmp   a,#$c8
 0e15: f0 61     beq   $0e78
 0e17: 68 e9     cmp   a,#$e9
 0e19: f0 27     beq   $0e42
 0e1b: 68 da     cmp   a,#$da
 0e1d: 90 38     bcc   $0e57
+; vcmd readahead da-ff (excluding e9)
 0e1f: 6d        push  y
 0e20: fd        mov   y,a
 0e21: ae        pop   a
 0e22: 96 42 09  adc   a,$0942+y         ; vcmd lengths
 0e25: fd        mov   y,a
 0e26: 2f e0     bra   $0e08
+; vcmd readahead 00 - end/return
 0e28: e4 11     mov   a,$11
 0e2a: f0 2b     beq   $0e57
 0e2c: 8b 11     dec   $11
@@ -1157,7 +1163,7 @@
 0e3c: fd        mov   y,a
 0e3d: f5 40 02  mov   a,$0240+x
 0e40: 2f c2     bra   $0e04
-;
+; vcmd readahead e5 - call subroutine
 0e42: fc        inc   y
 0e43: f7 0e     mov   a,($0e)+y
 0e45: 2d        push  a
@@ -1166,11 +1172,13 @@
 0e49: fd        mov   y,a
 0e4a: ae        pop   a
 0e4b: 2f b7     bra   $0e04
+; vcmd readahead 80-d9 (excluding c8) - note
 0e4d: f4 52     mov   a,$52+x
 0e4f: f0 27     beq   $0e78
-0e51: 9b 52     dec   $52+x
+0e51: 9b 52     dec   $52+x             ; decrease duration timer
 0e53: f0 a7     beq   $0dfc
 0e55: 2f 21     bra   $0e78
+;
 0e57: e4 15     mov   a,$15
 0e59: 24 14     and   a,$14
 0e5b: d0 1b     bne   $0e78
@@ -1178,16 +1186,17 @@
 0e5f: 9c        dec   a
 0e60: f0 10     beq   $0e72
 0e62: f4 b1     mov   a,$b1+x
-0e64: f0 0c     beq   $0e72
+0e64: f0 0c     beq   $0e72             ; KOF if GAIN is not set
 0e66: 7d        mov   a,x
 0e67: 9f        xcn   a
 0e68: 5c        lsr   a
 0e69: 08 05     or    a,#$05
 0e6b: c4 f2     mov   $f2,a
-0e6d: 8f 00 f3  mov   $f3,#$00
+0e6d: 8f 00 f3  mov   $f3,#$00          ; set ADSR(1)
 0e70: 2f 06     bra   $0e78
 0e72: 8f 5c f2  mov   $f2,#$5c
-0e75: fa 15 f3  mov   ($f3),($15)
+0e75: fa 15 f3  mov   ($f3),($15)       ; set KOF
+; vcmd readahead c8 - tie
 0e78: f2 0d     clr7  $0d
 0e7a: f4 81     mov   a,$81+x
 0e7c: f0 2c     beq   $0eaa
@@ -1195,6 +1204,7 @@
 0e80: f0 04     beq   $0e86
 0e82: 9b 82     dec   $82+x
 0e84: 2f 24     bra   $0eaa
+;
 0e86: e2 0d     set7  $0d
 0e88: 9b 81     dec   $81+x
 0e8a: d0 0b     bne   $0e97
@@ -1209,6 +1219,7 @@
 0ea1: f5 91 01  mov   a,$0191+x
 0ea4: 95 a1 01  adc   a,$01a1+x
 0ea7: d5 91 01  mov   $0191+x,a
+;
 0eaa: 40        setp
 0eab: fb 91     mov   y,$91+x
 0ead: f4 90     mov   a,$90+x
@@ -1260,7 +1271,7 @@
 0f07: 5c        lsr   a
 0f08: 08 08     or    a,#$08
 0f0a: c4 f2     mov   $f2,a
-0f0c: e4 f3     mov   a,$f3
+0f0c: e4 f3     mov   a,$f3             ; get ENVX
 0f0e: f0 0e     beq   $0f1e
 0f10: e4 15     mov   a,$15
 0f12: 24 14     and   a,$14
@@ -1387,7 +1398,7 @@
 0fec: dw $0fcd
 0fee: dw $10be
 
-; EVOL(L),EVOL(R),EFB,EON,FLG,KOL,NON,PMON,KOF
+; EVOL(L),EVOL(R),EFB,EON,FLG,KON,NON,PMON,KOF
 ; dsp shadow addrs ($0ff8+1) for dsp regs ($0fef+1)
 0ff0: db $2c,$3c,$0d,$4d,$6c,$4c,$3d,$2d,$5c
 0ff9: db $47,$49,$1d,$19,$17,$1e,$18,$1a,$1f
@@ -1621,7 +1632,7 @@
 121f: d4 c9     mov   $c9+x,a
 1221: e4 15     mov   a,$15
 1223: 8f 5c f2  mov   $f2,#$5c
-1226: c4 f3     mov   $f3,a
+1226: c4 f3     mov   $f3,a             ; set KOF
 1228: f7 c7     mov   a,($c7)+y
 122a: 2d        push  a
 122b: 28 f0     and   a,#$f0
@@ -1698,12 +1709,12 @@
 12cb: 25 c7 02  and   a,$02c7
 12ce: 0e 18 00  tset1 $0018
 12d1: f5 21 02  mov   a,$0221+x
-12d4: 51        tcall 5
+12d4: 51        tcall 5                 ; set sample
 12d5: e4 ea     mov   a,$ea
 12d7: 08 07     or    a,#$07
 12d9: fd        mov   y,a
 12da: f4 b1     mov   a,$b1+x
-12dc: 11        tcall 1
+12dc: 11        tcall 1                 ; set GAIN
 12dd: 2f 03     bra   $12e2
 12df: 3f 0e 13  call  $130e
 12e2: 3d        inc   x
@@ -1713,15 +1724,15 @@
 12e8: e5 c4 02  mov   a,$02c4
 12eb: c4 18     mov   $18,a
 12ed: 8f 3d f2  mov   $f2,#$3d
-12f0: c4 f3     mov   $f3,a
+12f0: c4 f3     mov   $f3,a             ; set NON
 12f2: 8f 4c f2  mov   $f2,#$4c
-12f5: fa 1e f3  mov   ($f3),($1e)
+12f5: fa 1e f3  mov   ($f3),($1e)       ; set KON
 12f8: e4 17     mov   a,$17
 12fa: 28 e0     and   a,#$e0
 12fc: 05 c5 02  or    a,$02c5
 12ff: c4 17     mov   $17,a
 1301: 8f 5c f2  mov   $f2,#$5c
-1304: fa 1f f3  mov   ($f3),($1f)
+1304: fa 1f f3  mov   ($f3),($1f)       ; set KOF
 1307: e8 00     mov   a,#$00
 1309: c4 1e     mov   $1e,a
 130b: c4 1f     mov   $1f,a
@@ -1874,7 +1885,7 @@
 1448: 48 ff     eor   a,#$ff
 144a: bc        inc   a
 144b: fa 0d f2  mov   ($f2),($0d)
-144e: c4 f3     mov   $f3,a
+144e: c4 f3     mov   $f3,a             ;
 1450: 03 0d 0c  bbs0  $0d,$145f
 1453: ab 0d     inc   $0d
 1455: 8d 1e     mov   y,#$1e
@@ -2050,23 +2061,23 @@
 15a8: e4 ea     mov   a,$ea
 15aa: 08 08     or    a,#$08
 15ac: c4 f2     mov   $f2,a
-15ae: e4 f3     mov   a,$f3
+15ae: e4 f3     mov   a,$f3             ; get ENVX
 15b0: d0 0a     bne   $15bc
 15b2: 6f        ret
 
 15b3: 8f 7c f2  mov   $f2,#$7c
-15b6: e4 f3     mov   a,$f3
+15b6: e4 f3     mov   a,$f3             ; get ENDX
 15b8: 24 15     and   a,$15
 15ba: d0 11     bne   $15cd
 15bc: 1a c7     decw  $c7
 15be: e8 01     mov   a,#$01
 15c0: 2f da     bra   $159c
 15c2: 8f 7c f2  mov   $f2,#$7c
-15c5: e4 f3     mov   a,$f3
+15c5: e4 f3     mov   a,$f3             ; get ENDX
 15c7: 24 15     and   a,$15
 15c9: f0 f1     beq   $15bc
 15cb: 62 07     set3  $07
-15cd: c4 f3     mov   $f3,a
+15cd: c4 f3     mov   $f3,a             ; set ENDX
 15cf: 6f        ret
 
 15d0: d5 69 03  mov   $0369+x,a
@@ -2223,7 +2234,7 @@
 16eb: da 0e     movw  $0e,ya
 16ed: 60        clrc
 16ee: 98 00 0e  adc   $0e,#$00
-16f1: 98 fe 0f  adc   $0f,#$fe
+16f1: 98 fe 0f  adc   $0f,#$fe          ; instrument table $fe00
 16f4: e4 ea     mov   a,$ea
 16f6: 08 04     or    a,#$04
 16f8: 5d        mov   x,a
@@ -2231,17 +2242,17 @@
 16fb: f7 0e     mov   a,($0e)+y
 16fd: fc        inc   y
 16fe: d8 f2     mov   $f2,x
-1700: c4 f3     mov   $f3,a
+1700: c4 f3     mov   $f3,a             ; set SRCN
 1702: 3d        inc   x
 1703: 93 e9 0a  bbc4  $e9,$1710
 1706: f7 0e     mov   a,($0e)+y
 1708: fc        inc   y
 1709: d8 f2     mov   $f2,x
-170b: c4 f3     mov   $f3,a
+170b: c4 f3     mov   $f3,a             ; set ADSR(1)
 170d: 3d        inc   x
 170e: f7 0e     mov   a,($0e)+y
 1710: d8 f2     mov   $f2,x
-1712: c4 f3     mov   $f3,a
+1712: c4 f3     mov   $f3,a             ; set ADSR(2)
 1714: f8 16     mov   x,$16
 1716: 8d 04     mov   y,#$04
 1718: f7 0e     mov   a,($0e)+y
@@ -2264,8 +2275,8 @@
 1737: d4 c9     mov   $c9+x,a
 1739: ae        pop   a
 173a: ae        pop   a
-173b: e4 15     mov   a,$15
-173d: 0e 1f 00  tset1 $001f
+173b: e4 15     mov   a,$15             ; channel flag bit
+173d: 0e 1f 00  tset1 $001f             ; set KOF shadow
 1740: 6f        ret
 
 1741: 2d        push  a
@@ -2283,7 +2294,7 @@
 1754: 08 05     or    a,#$05
 1756: fd        mov   y,a
 1757: cb f2     mov   $f2,y
-1759: e4 f3     mov   a,$f3
+1759: e4 f3     mov   a,$f3             ; set ADSR(1)
 175b: 60        clrc
 175c: 88 80     adc   a,#$80
 175e: 5f 29 08  jmp   $0829
@@ -2446,6 +2457,7 @@
 1875: 1c        asl   a
 1876: 5d        mov   x,a
 1877: 3f 38 18  call  $1838
+;
 187a: f5 29 04  mov   a,$0429+x
 187d: f0 07     beq   $1886
 187f: e4 0a     mov   a,$0a
@@ -2461,7 +2473,7 @@
 1895: d5 29 04  mov   $0429+x,a
 1898: f8 16     mov   x,$16
 189a: 6f        ret
-
+; when vcmd fa arg1 < 0:
 189b: 8d 03     mov   y,#$03
 189d: 28 0f     and   a,#$0f
 189f: cf        mul   ya
@@ -2469,22 +2481,22 @@
 18a1: f5 bd 18  mov   a,$18bd+x
 18a4: fd        mov   y,a
 18a5: f5 bc 18  mov   a,$18bc+x
-18a8: da 0e     movw  $0e,ya
+18a8: da 0e     movw  $0e,ya            ; offset +0/1: address
 18aa: 8f 0f 0b  mov   $0b,#$0f
 18ad: f5 be 18  mov   a,$18be+x
 18b0: 5d        mov   x,a
-18b1: 28 f8     and   a,#$f8
-18b3: c4 0a     mov   $0a,a
+18b1: 28 f8     and   a,#$f8            ; extract upper 5 bits
+18b3: c4 0a     mov   $0a,a             ; $0a/b = $0fxx
 18b5: 7d        mov   a,x
-18b6: 28 07     and   a,#$07
+18b6: 28 07     and   a,#$07            ; extract lower 3 bits (channel #?)
 18b8: 1c        asl   a
-18b9: 5d        mov   x,a
+18b9: 5d        mov   x,a               ; set it to X as index
 18ba: 2f be     bra   $187a
 ;
 18bc: dw $22e6 ; 00
-18be: db $11
+18be: db $11   ; ($10 + 1)
 18bf: dw $2326 ; 01
-18c1: db $10
+18c1: db $10   ; ($10 + 0)
 
 18c2: 3a c7     incw  $c7
 18c4: 5d        mov   x,a
@@ -2658,7 +2670,7 @@
 19ea: c4 0b     mov   $0b,a
 19ec: e8 09     mov   a,#$09
 19ee: c4 f2     mov   $f2,a
-19f0: eb f3     mov   y,$f3
+19f0: eb f3     mov   y,$f3             ; get ENVX
 19f2: f0 03     beq   $19f7
 19f4: 09 15 0b  or    ($0b),($15)
 19f7: 60        clrc
@@ -2688,7 +2700,7 @@
 1a21: 8d 5c     mov   y,#$5c
 1a23: e4 14     mov   a,$14
 1a25: 48 ff     eor   a,#$ff
-1a27: 11        tcall 1
+1a27: 11        tcall 1                           ; set KOF
 1a28: 4e 19 00  tclr1 $0019
 1a2b: 4e 18 00  tclr1 $0018
 1a2e: 4e c4 02  tclr1 $02c4
@@ -2709,7 +2721,7 @@
 1a52: f5 59 03  mov   a,$0359+x
 1a55: d0 17     bne   $1a6e
 1a57: f5 21 02  mov   a,$0221+x
-1a5a: 51        tcall 5
+1a5a: 51        tcall 5                 ; set sample
 1a5b: 7d        mov   a,x
 1a5c: 9f        xcn   a
 1a5d: 5c        lsr   a
@@ -2717,13 +2729,13 @@
 1a5f: 08 07     or    a,#$07
 1a61: fd        mov   y,a
 1a62: f4 b1     mov   a,$b1+x
-1a64: 11        tcall 1
+1a64: 11        tcall 1                 ; set GAIN
 1a65: 3f 94 07  call  $0794
 1a68: ee        pop   y
 1a69: e8 00     mov   a,#$00
-1a6b: 11        tcall 1
+1a6b: 11        tcall 1                 ; set VOL(L)
 1a6c: fc        inc   y
-1a6d: 11        tcall 1
+1a6d: 11        tcall 1                 ; set VOL(R)
 1a6e: 3d        inc   x
 1a6f: 3d        inc   x
 1a70: 0b 15     asl   $15
@@ -2835,7 +2847,7 @@
 1b32: 5f c0 ff  jmp   $ffc0
 
 1b35: 8f 5c f2  mov   $f2,#$5c
-1b38: 8f ff f3  mov   $f3,#$ff
+1b38: 8f ff f3  mov   $f3,#$ff          ; set KOF
 1b3b: 5f 92 0c  jmp   $0c92
 
 1b3e: f8 fd     mov   x,$fd
@@ -2850,7 +2862,7 @@
 1b50: e4 14     mov   a,$14
 1b52: 48 ff     eor   a,#$ff
 1b54: 8f 5c f2  mov   $f2,#$5c
-1b57: c4 f3     mov   $f3,a
+1b57: c4 f3     mov   $f3,a             ; set KOF
 1b59: eb 00     mov   y,$00
 1b5b: cb f5     mov   $f5,y
 1b5d: cb f4     mov   $f4,y
