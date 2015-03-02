@@ -975,12 +975,13 @@
 0f20: d8 c3     mov   $c3,x
 0f22: e8 00     mov   a,#$00
 0f24: c5 60 05  mov   $0560,a
+; find a unused track to start new track
 0f27: f8 c3     mov   x,$c3
 0f29: f5 1d 05  mov   a,$051d+x
-0f2c: 3f d8 0f  call  $0fd8
-0f2f: 90 03     bcc   $0f34
+0f2c: 3f d8 0f  call  $0fd8             ; search $03dd+N and find unused track, return: x = N
+0f2f: 90 03     bcc   $0f34             ; setup new track if a unused track is available
 0f31: 5f a2 0e  jmp   $0ea2
-;
+; setup new track
 0f34: f7 c0     mov   a,($c0)+y
 0f36: fc        inc   y
 0f37: d4 00     mov   $00+x,a
@@ -1012,7 +1013,7 @@
 0f75: e8 80     mov   a,#$80
 0f77: d4 31     mov   $31+x,a           ; volume #$80
 0f79: e4 c3     mov   a,$c3
-0f7b: d5 dd 03  mov   $03dd+x,a
+0f7b: d5 dd 03  mov   $03dd+x,a         ; this track is used by song slot $a3
 0f7e: e5 60 05  mov   a,$0560
 0f81: d5 e5 04  mov   $04e5+x,a
 0f84: 3f 9d 0f  call  $0f9d
@@ -1061,8 +1062,10 @@
 0fd6: 80        setc
 0fd7: 6f        ret
 
+; search unused track
 0fd8: 65 8c 21  cmp   a,$218c
 0fdb: b0 11     bcs   $0fee
+; forward search
 0fdd: cd 00     mov   x,#$00
 0fdf: f5 dd 03  mov   a,$03dd+x
 0fe2: 68 ff     cmp   a,#$ff
@@ -1072,6 +1075,7 @@
 0fe8: c8 10     cmp   x,#$10
 0fea: d0 f3     bne   $0fdf
 0fec: 2f e8     bra   $0fd6
+; backward search
 0fee: cd 16     mov   x,#$16
 0ff0: f5 dd 03  mov   a,$03dd+x
 0ff3: 68 ff     cmp   a,#$ff
@@ -1644,16 +1648,16 @@
 ; vcmd F0 - set patch
 1413: 3f aa 15  call  $15aa             ; arg1 (patch number)
 1416: 2d        push  a
-1417: f5 dd 03  mov   a,$03dd+x
+1417: f5 dd 03  mov   a,$03dd+x         ; get song slot index to A
 141a: fd        mov   y,a
-141b: f6 1d 05  mov   a,$051d+y
-141e: fd        mov   y,a
+141b: f6 1d 05  mov   a,$051d+y         ; get instrument set # for the song slot
+141e: fd        mov   y,a               ; set it to Y
 141f: 4d        push  x
 1420: 8f 03 c4  mov   $c4,#$03
-1423: 8f 02 c5  mov   $c5,#$02          ; $c4 = instrument table
+1423: 8f 02 c5  mov   $c5,#$02          ; $c4/5 = instrument set table ($0203)
 1426: cd 00     mov   x,#$00
 1428: ad 00     cmp   y,#$00
-142a: f0 0e     beq   $143a             ; while y ~= 0 do
+142a: f0 0e     beq   $143a             ; while y (instrset #) ~= 0 do
 142c: e7 c4     mov   a,($c4+x)         ;   read instrument count
 142e: bc        inc   a
 142f: 6d        push  y
@@ -1661,13 +1665,13 @@
 1432: 7a c4     addw  ya,$c4            ;   skip (1 + instrument_count) bytes
 1434: da c4     movw  $c4,ya
 1436: ee        pop   y
-1437: dc        dec   y
+1437: dc        dec   y                 ;   y--;
 1438: 2f ee     bra   $1428             ; end
 143a: ce        pop   x
 143b: ae        pop   a                 ; patch number in A
 143c: bc        inc   a                 ; skip offset +0: number of instruments
 143d: fd        mov   y,a
-143e: f7 c4     mov   a,($c4)+y         ; read global instrument number
+143e: f7 c4     mov   a,($c4)+y         ; read global instrument number from ($c4/5)[1 + patch]
 1440: fd        mov   y,a
 1441: f6 67 05  mov   a,$0567+y
 1444: 68 ff     cmp   a,#$ff
