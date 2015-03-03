@@ -27,21 +27,21 @@
 08c4: db $00     ; end of table
 
 ; vcmd dispatch table
-08c5: dw $1bb9  ; db - flag repeat (alternative)
-08c7: dw $1bbe  ; dc - repeat once more (alternative)
+08c5: dw $1bb9  ; db - repeat break (alternative)
+08c7: dw $1bbe  ; dc - repeat twice (alternative)
 08c9: dw $1ad8  ; dd - set release rate
 08cb: dw $1ad5  ; de - set ADSR and release rate
-08cd: dw $1992  ; df
-08cf: dw $195f  ; e0 - CPU related? conditional jump
-08d1: dw $1951  ; e1
-08d3: dw $199e  ; e2
-08d5: dw $19b3  ; e3
-08d7: dw $19b7  ; e4
-08d9: dw $19bb  ; e5
+08cd: dw $1992  ; df - surround
+08cf: dw $195f  ; e0 - conditional jump
+08d1: dw $1951  ; e1 - increase counter (to communicate with CPU)
+08d3: dw $199e  ; e2 - set pitch envelope (vibrato)
+08d5: dw $19b3  ; e3 - noise on
+08d7: dw $19b7  ; e4 - noise off
+08d9: dw $19bb  ; e5 - master volume fade
 08db: dw $19d9  ; e6 - volume fade
-08dd: dw $19eb  ; e7
+08dd: dw $19eb  ; e7 - channel fade in/out?
 08df: dw $1a04  ; e8 - pan fade
-08e1: dw $1a42  ; e9
+08e1: dw $1a42  ; e9 - tuning
 08e3: dw $1a48  ; ea - jump
 08e5: dw $1a5e  ; eb - tempo (relative)
 08e7: dw $1a7a  ; ec - set duration rate directly
@@ -52,36 +52,38 @@
 08f1: dw $1ba5  ; f1 - duration copy on
 08f3: dw $1ba5  ; f2 - duration copy on (mainly used)
 08f5: dw $1bb0  ; f3 - duration copy off
-08f7: dw $1bcb  ; f4 - repeat once again
-08f9: dw $1be2  ; f5 - conditional loop
+08f7: dw $1bcb  ; f4 - repeat twice
+08f9: dw $1be2  ; f5 - repeat until
 08fb: dw $1be8  ; f6 - set volume
 08fd: dw $1bf3  ; f7 - nop
 08ff: dw $1bf4  ; f8 - call subroutine
 0901: dw $1c36  ; f9 - return from subroutine
-0903: dw $1c4f  ; fa - key shift (transpose)
+0903: dw $1c4f  ; fa - transpose (absolute)
 0905: dw $1c56  ; fb - pitch slide
-0907: dw $1c70  ; fc
-0909: dw $1c74  ; fd
-090b: dw $1c78  ; fe
+0907: dw $1c70  ; fc - echo on
+0909: dw $1c74  ; fd - echo off
+090b: dw $1c78  ; fe - run miniseq
 
+; channel # to bitmask table
 090d: db $01,$02,$04,$08,$10,$20,$40,$80
 
 ; pitch table
-0915: dw $1f02 ; 
-0917: dw $20da ; 
-0919: dw $22ce ; 
-091b: dw $24e0 ; 
-091d: dw $2711 ; 
-091f: dw $2964 ; 
-0921: dw $2bda ; 
-0923: dw $2e76 ; 
-0925: dw $3139 ; 
-0927: dw $3426 ; 
-0929: dw $3740 ; 
-092b: dw $3a89 ; 
-092d: dw $3e04 ; 
-092f: dw $41b4 ; 
+0915: dw $1f02 ; c
+0917: dw $20da ; c+
+0919: dw $22ce ; d
+091b: dw $24e0 ; d+
+091d: dw $2711 ; e
+091f: dw $2964 ; f
+0921: dw $2bda ; f+
+0923: dw $2e76 ; g
+0925: dw $3139 ; g+
+0927: dw $3426 ; a
+0929: dw $3740 ; a+
+092b: dw $3a89 ; b
+092d: dw $3e04 ; c
+092f: dw $41b4 ; c+
 
+; minivcmd sequence table
 0931: dw $097f  ; 00
 0933: dw $0982  ; 01
 0935: dw $0985  ; 02
@@ -122,46 +124,178 @@
 097b: dw $0a55  ; 25
 097d: dw $0a59  ; 26
 
-097f: db $05,$00,$ff ; 00
-0982: db $05,$01,$ff ; 01
-0985: db $05,$02,$ff ; 02
-0988: db $05,$03,$ff ; 03
-098b: db $05,$04,$ff ; 04
-098e: db $05,$05,$ff ; 05
-0991: db $05,$06,$ff ; 06
-0994: db $05,$07,$ff ; 07
-0997: db $05,$08,$ff ; 08
-099a: db $05,$09,$ff ; 09
-099d: db $05,$0a,$ff ; 0a
-09a0: db $05,$0b,$ff ; 0b
-09a3: db $05,$0c,$ff ; 0c
-09a6: db $05,$0d,$ff ; 0d
-09a9: db $05,$0e,$ff ; 0e
-09ac: db $05,$0f,$ff ; 0f
-09af: db $05,$10,$ff ; 10
-09b2: db $05,$11,$ff ; 11
-09b5: db $05,$12,$ff ; 12
-09b8: db $05,$13,$ff ; 13
-09bb: db $05,$14,$ff ; 14
-09be: db $13,$60,$60,$14,$00,$00,$ff ; 15 - set MVOL, zero EVOL
-09c5: db $10,$ff,$0a,$1e,$32,$32,$1e,$0a,$ff,$16,$0e,$17,$05,$22,$32,$42,$52,$62,$72,$82,$92,$13,$78,$78,$14,$28,$d8,$ff ; 16
-09e1: db $10,$ff,$08,$17,$24,$24,$17,$08,$ff,$16,$0c,$17,$05,$22,$32,$42,$52,$62,$72,$82,$92,$13,$7f,$7f,$14,$14,$ec,$ff ; 17
-09fd: db $10,$ff,$08,$17,$24,$24,$17,$08,$ff,$16,$32,$17,$05,$22,$32,$42,$52,$62,$72,$82,$92,$13,$6e,$6e,$14,$40,$40,$ff ; 18,19
-0a19: db $10,$ff,$0a,$1e,$32,$32,$1e,$0a,$ff,$16,$1c,$17,$04,$22,$32,$42,$52,$62,$72,$82,$92,$13,$78,$78,$14,$18,$e8,$ff ; 1a
-0a35: db $04,$ff,$ff ; 1b
-0a38: db $00,$24,$ff ; 1c
-0a3b: db $00,$44,$ff ; 1d
-0a3e: db $00,$80,$ff ; 1e
-0a41: db $11,$ff     ; 1f
-0a43: db $12,$ff     ; 20
-0a45: db $01,$ec,$38,$ff ; 21
-0a49: db $01,$14,$80,$ff ; 22
-0a4d: db $01,$f6,$24,$ff ; 23
-0a51: db $01,$0a,$80,$ff ; 24
-0a55: db $01,$e2,$24,$ff ; 25
-0a59: db $01,$1e,$80,$ff ; 26
+; minivcmd sequences
+; minivcmd 00 - master volume
+; minivcmd 01 - master volume fade
+; minivcmd 02 - set tempo
+; minivcmd 03 - nop?
+; minivcmd 04 - master volume fade variation?
+; minivcmd 05 - set variable for conditional jump
+; minivcmd 06-0f - nop
+; minivcmd 10 - set echo filter
+; minivcmd 11 - (change MVOL and EVOL)
+; minivcmd 12 - (change MVOL and EVOL)
+; minivcmd 13 - set MVOL
+; minivcmd 14 - set EVOL
+; minivcmd 15 - set noise clock
+; minivcmd 16 - set echo feedback
+; minivcmd 17 - set echo delay
+; minivcmd 18 - master volume fade variation?
+; minivcmd 19-1f - nop
+; minivcmd 20-bf (higher 4 bits - 2 = track #)
+;   minivcmd x0 - voice fade in/out?
+;   minivcmd x1 - channel master volume
+;   minivcmd x2 - echo on
+;   minivcmd x3 - echo off
+;   minivcmd x4 - noise on
+;   minivcmd x5 - noise off
+;   minivcmd x6 - stop voice (end of track)
+;   minivcmd x7 - surround (no surround)
+;   minivcmd x8 - surround (reverse left channel)
+;   minivcmd x9 - surround (reverse right channel)
+;   minivcmd xa - surround (reverse left/right channel)
+;   minivcmd xb-xf - nop
+; minivcmd c0-fd - end (unused)
+; minivcmd fe - write to dsp
+; minivcmd ff - end
 
-; TODO: unknown table (related to vcmd e2)
+; miniseq 00
+097f: db $05,$00      ; set cond_var = 0x00
+0981: db $ff
+; miniseq 01
+0982: db $05,$01      ; set cond_var = 0x01
+0984: db $ff
+; miniseq 02
+0985: db $05,$02      ; set cond_var = 0x02
+0987: db $ff
+; miniseq 03
+0988: db $05,$03      ; set cond_var = 0x03
+098a: db $ff
+; miniseq 04
+098b: db $05,$04      ; set cond_var = 0x04
+098d: db $ff
+; miniseq 05
+098e: db $05,$05      ; set cond_var = 0x05
+0990: db $ff
+; miniseq 06
+0991: db $05,$06      ; set cond_var = 0x06
+0993: db $ff
+; miniseq 07
+0994: db $05,$07      ; set cond_var = 0x07
+0996: db $ff
+; miniseq 08
+0997: db $05,$08      ; set cond_var = 0x08
+0999: db $ff
+; miniseq 09
+099a: db $05,$09      ; set cond_var = 0x09
+099c: db $ff
+; miniseq 0a
+099d: db $05,$0a      ; set cond_var = 0x0a
+099f: db $ff
+; miniseq 0b
+09a0: db $05,$0b      ; set cond_var = 0x0b
+09a2: db $ff
+; miniseq 0c
+09a3: db $05,$0c      ; set cond_var = 0x0c
+09a5: db $ff
+; miniseq 0d
+09a6: db $05,$0d      ; set cond_var = 0x0d
+09a8: db $ff
+; miniseq 0e
+09a9: db $05,$0e      ; set cond_var = 0x0e
+09ab: db $ff
+; miniseq 0f
+09ac: db $05,$0f      ; set cond_var = 0x0f
+09ae: db $ff
+; miniseq 10
+09af: db $05,$10      ; set cond_var = 0x10
+09b1: db $ff
+; miniseq 11
+09b2: db $05,$11      ; set cond_var = 0x11
+09b4: db $ff
+; miniseq 12
+09b5: db $05,$12      ; set cond_var = 0x12
+09b7: db $ff
+; miniseq 13
+09b8: db $05,$13      ; set cond_var = 0x13
+09ba: db $ff
+; miniseq 14
+09bb: db $05,$14      ; set cond_var = 0x14
+09bd: db $ff
+; miniseq 15
+09be: db $13,$60,$60  ; set MVOL L/R
+09c1: db $14,$00,$00  ; set EVOL L/R
+09c4: db $ff
+; miniseq 16
+09c5: db $10,$ff,$0a,$1e,$32,$32,$1e,$0a,$ff ; set FIR
+09ce: db $16,$0e      ; set EFB = 0x0e
+09d0: db $17,$05      ; set EDL = 5
+09d2: db $22,$32,$42,$52,$62,$72,$82,$92 ; echo on all channels
+09da: db $13,$78,$78  ; set MVOL L/R
+09dd: db $14,$28,$d8  ; set EVOL L/R
+09e0: db $ff
+; miniseq 17
+09e1: db $10,$ff,$08,$17,$24,$24,$17,$08,$ff ; set FIR
+09ea: db $16,$0c      ; set EFB
+09ec: db $17,$05      ; set EDL
+09ee: db $22,$32,$42,$52,$62,$72,$82,$92 ; echo on all channels
+09f6: db $13,$7f,$7f  ; set MVOL L/R
+09f9: db $14,$14,$ec  ; set EVOL L/R
+09fc: db $ff
+; miniseq 18,19
+09fd: db $10,$ff,$08,$17,$24,$24,$17,$08,$ff ; set FIR
+0a06: db $16,$32      ; set EFB
+0a08: db $17,$05      ; set EDL
+0a0a: db $22,$32,$42,$52,$62,$72,$82,$92 ; echo on all channels
+0a12: db $13,$6e,$6e  ; set MVOL L/R
+0a15: db $14,$40,$40  ; set EVOL L/R
+0a18: db $ff
+; miniseq 1a
+0a19: db $10,$ff,$0a,$1e,$32,$32,$1e,$0a,$ff ; set FIR
+0a22: db $16,$1c      ; set EFB
+0a24: db $17,$04      ; set EDL
+0a26: db $22,$32,$42,$52,$62,$72,$82,$92 ; echo on all channels
+0a2e: db $13,$78,$78  ; set MVOL L/R
+0a31: db $14,$18,$e8  ; set EVOL L/R
+0a34: db $ff
+; miniseq 1b
+0a35: db $04,$ff
+0a37: db $ff
+; miniseq 1c
+0a38: db $00,$24
+0a3a: db $ff
+; miniseq 1d
+0a3b: db $00,$44
+0a3d: db $ff
+; miniseq 1e
+0a3e: db $00,$80
+0a40: db $ff
+; miniseq 1f
+0a41: db $11
+0a42: db $ff
+; miniseq 20
+0a43: db $12
+0a44: db $ff
+; miniseq 21
+0a45: db $01,$ec,$38
+0a48: db $ff
+; miniseq 22
+0a49: db $01,$14,$80
+0a4c: db $ff
+; miniseq 23
+0a4d: db $01,$f6,$24
+0a50: db $ff
+; miniseq 24
+0a51: db $01,$0a,$80
+0a54: db $ff
+; miniseq 25
+0a55: db $01,$e2,$24
+0a58: db $ff
+; miniseq 26
+0a59: db $01,$1e,$80
+0a5c: db $ff
+
+; pitch envelope pointers
 0a5d: dw $0a6f  ; 00
 0a5f: dw $0ad2  ; 01
 0a61: dw $0b1f  ; 02
@@ -172,10 +306,16 @@
 0a6b: dw $0b68  ; 07
 0a6d: dw $0b81  ; 08
 
+; pitch envelope format:
+; - envelope body size (1 byte)
+; - envelope loop offset (1 byte)
+; - envelope body (N bytes)
+; - terminator $80
 0a6f: db $1e    ; 00
-0a70: db $16,$00,$05,$01,$05,$00,$05,$ff,$05,$00,$05,$02,$05,$00,$05,$fc
-0a80: db $05,$00,$05,$08,$05,$00,$05,$f4,$05,$00,$05,$0c,$05,$00
-0a8e: db $01,$80
+0a70: db $16
+0a71: db $00,$05,$01,$05,$00,$05,$ff,$05,$00,$05,$02,$05,$00,$05,$fc,$05
+0a81: db $00,$05,$08,$05,$00,$05,$f4,$05,$00,$05,$0c,$05,$00,$01
+0a8f: db $80
 0a90: db $1e    ; 04
 0a91: db $16,$00,$03,$01,$03,$00,$03,$ff,$03,$00,$03,$02,$03,$00,$03,$fc
 0aa1: db $03,$00,$03,$08,$03,$00,$03,$f4,$03,$00,$03,$0c,$03,$00
@@ -526,7 +666,7 @@
 0de4: 68 27     cmp   a,#$27
 0de6: b0 14     bcs   $0dfc
 0de8: 6d        push  y
-0de9: 3f 4e 23  call  $234e
+0de9: 3f 4e 23  call  $234e             ; run minivcmd sequence
 0dec: ee        pop   y
 0ded: 40        setp
 0dee: fc        inc   y
@@ -642,7 +782,7 @@
 0ebd: e4 b1     mov   a,$b1
 0ebf: 68 27     cmp   a,#$27
 0ec1: b0 03     bcs   $0ec6
-0ec3: 3f 4e 23  call  $234e
+0ec3: 3f 4e 23  call  $234e             ; run minivcmd sequence
 0ec6: 6f        ret
 
 0ec7: 5f f0 0c  jmp   $0cf0
@@ -1252,7 +1392,7 @@
 1347: 20        clrp
 1348: 8f 32 a9  mov   $a9,#$32
 134b: 8f 64 aa  mov   $aa,#$64
-134e: 8f 23 ab  mov   $ab,#$23
+134e: 8f 23 ab  mov   $ab,#$23          ; FLG shadow
 1351: e8 00     mov   a,#$00
 1353: c4 a8     mov   $a8,a
 1355: c4 ac     mov   $ac,a
@@ -1286,7 +1426,7 @@
 1389: e8 01     mov   a,#$01
 138b: c5 ff 03  mov   $03ff,a
 138e: e8 00     mov   a,#$00
-1390: c5 00 04  mov   $0400,a
+1390: c5 00 04  mov   $0400,a           ; zero NON shadow
 1393: c5 01 04  mov   $0401,a
 1396: c5 08 04  mov   $0408,a
 1399: c5 0e 04  mov   $040e,a
@@ -1389,7 +1529,7 @@
 145a: 20        clrp
 145b: c9 0a 04  mov   $040a,x           ; X = $040A
 145e: e8 80     mov   a,#$80
-1460: d5 a7 03  mov   $03a7+x,a
+1460: d5 a7 03  mov   $03a7+x,a         ; master volume
 1463: ae        pop   a
 1464: d5 b7 03  mov   $03b7+x,a
 1467: 2f 0a     bra   $1473
@@ -1397,7 +1537,7 @@
 1469: d5 b7 03  mov   $03b7+x,a         ; X = $040A, $03B7+X = A
 146c: 2d        push  a
 146d: e8 80     mov   a,#$80
-146f: d5 a7 03  mov   $03a7+x,a
+146f: d5 a7 03  mov   $03a7+x,a         ; master volume
 1472: ae        pop   a
 ;
 1473: c9 09 04  mov   $0409,x           ; song slot index X ($0409 will be cleared later, unfortunately)
@@ -1424,7 +1564,7 @@
 149c: e8 00     mov   a,#$00
 149e: d5 ef 03  mov   $03ef+x,a
 14a1: d5 d7 03  mov   $03d7+x,a
-14a4: d5 f7 03  mov   $03f7+x,a
+14a4: d5 f7 03  mov   $03f7+x,a         ; zero variable for conditional branch
 14a7: e8 02     mov   a,#$02
 14a9: d5 e7 03  mov   $03e7+x,a
 ; read the sequence header
@@ -1494,7 +1634,7 @@
 1538: 3f 4e 15  call  $154e
 153b: ac 06 04  inc   $0406
 153e: 6e a2 87  dbnz  $a2,$14c8         ; repeat for each channels
-1541: 38 3f ab  and   $ab,#$3f
+1541: 38 3f ab  and   $ab,#$3f          ; FLG shadow
 1544: e4 ab     mov   a,$ab
 1546: 20        clrp
 1547: 8f 6c f2  mov   $f2,#$6c
@@ -1655,16 +1795,16 @@
 
 1651: f5 cc 02  mov   a,$02cc+x
 1654: 8d 04     mov   y,#$04
-1656: 3f e9 1d  call  $1de9             ; SRCN
+1656: 3f e9 1d  call  $1de9             ; set SRCN
 1659: f5 df 02  mov   a,$02df+x
 165c: 8d 07     mov   y,#$07
-165e: 3f e9 1d  call  $1de9             ; GAIN
+165e: 3f e9 1d  call  $1de9             ; set GAIN
 1661: f5 e0 02  mov   a,$02e0+x
 1664: 8d 05     mov   y,#$05
-1666: 3f e9 1d  call  $1de9             ; ADSR(1)
+1666: 3f e9 1d  call  $1de9             ; set ADSR(1)
 1669: f5 f3 02  mov   a,$02f3+x
 166c: 8d 06     mov   y,#$06
-166e: 3f e9 1d  call  $1de9             ; ADSR(2)
+166e: 3f e9 1d  call  $1de9             ; set ADSR(2)
 1671: f5 cb 02  mov   a,$02cb+x
 1674: 28 20     and   a,#$20
 1676: f0 05     beq   $167d
@@ -1848,21 +1988,21 @@
 17b9: 20        clrp
 17ba: 6f        ret
 
-17bb: 3f 00 22  call  $2200
+17bb: 3f 00 22  call  $2200             ; process pitch envelope
 17be: 3f 63 1f  call  $1f63
 17c1: 3f 2d 20  call  $202d
 17c4: 3f 80 20  call  $2080
 17c7: 3f d1 20  call  $20d1
 17ca: f4 15     mov   a,$15+x
-17cc: f0 0a     beq   $17d8
+17cc: f0 0a     beq   $17d8             ; skip if duration counter == 0
 17ce: bc        inc   a
-17cf: f0 07     beq   $17d8
-17d1: 9b 15     dec   $15+x
-17d3: d0 03     bne   $17d8
-17d5: 3f 45 1d  call  $1d45
-17d8: 9b 14     dec   $14+x
+17cf: f0 07     beq   $17d8             ; skip if duration counter == 255
+17d1: 9b 15     dec   $15+x             ; decrease duration counter
+17d3: d0 03     bne   $17d8             ; if it becomes 0 then
+17d5: 3f 45 1d  call  $1d45             ;   note off - set ADSR(2) for release
+17d8: 9b 14     dec   $14+x             ; decrement wait counter
 17da: d0 03     bne   $17df
-17dc: 3f fb 17  call  $17fb
+17dc: 3f fb 17  call  $17fb             ; tick
 17df: f5 94 03  mov   a,$0394+x
 17e2: d0 0e     bne   $17f2
 17e4: f5 a3 02  mov   a,$02a3+x
@@ -1877,30 +2017,31 @@
 17f7: d5 94 03  mov   $0394+x,a
 17fa: 6f        ret
 
+; tick
 17fb: f5 a3 02  mov   a,$02a3+x
 17fe: 68 ff     cmp   a,#$ff
-1800: d0 01     bne   $1803
+1800: d0 01     bne   $1803             ; next unless unused track
 1802: 6f        ret
-
+; tick on sequence track
 1803: 3f 13 16  call  $1613
-1806: 3f 2a 1f  call  $1f2a
+1806: 3f 2a 1f  call  $1f2a             ; copy note length from prior track, if necessary
 1809: 3f 83 1c  call  $1c83             ; read vcmd byte
 180c: 68 a0     cmp   a,#$a0
-180e: b0 5b     bcs   $186b             ; vcmds A0-FF
+180e: b0 5b     bcs   $186b             ; branch if a0-ff
 1810: 68 50     cmp   a,#$50
-1812: 90 0d     bcc   $1821             ; vcmds 00-4F
-; vcmds 50-9F - note (with length)
+1812: 90 0d     bcc   $1821             ; branch if 00-4f
+; vcmd 50-9f - note (with length)
 1814: 2d        push  a
-1815: 3f 83 1c  call  $1c83
+1815: 3f 83 1c  call  $1c83             ; arg1 - delta-time
 1818: d5 03 02  mov   $0203+x,a
 181b: d4 14     mov   $14+x,a
 181d: ae        pop   a
 181e: 80        setc
-181f: a8 50     sbc   a,#$50
-; vcmds 00-4F,50-9F
+181f: a8 50     sbc   a,#$50            ; redirect 50-9f => 00-4f
+; 00-4f
 1821: 68 00     cmp   a,#$00
 1823: d0 10     bne   $1835
-; vcmds 00,40 - rest
+; vcmd 00,40 - rest
 1825: 3f 04 1f  call  $1f04
 1828: b0 01     bcs   $182b
 182a: fd        mov   y,a
@@ -1909,56 +2050,60 @@
 1830: e8 00     mov   a,#$00
 1832: d4 15     mov   $15+x,a
 1834: 6f        ret
-; vcmds 01-4F,51-9F - note
-1835: 68 4f     cmp   a,#$4f
-1837: f0 07     beq   $1840             ; vcmds 4F,9F - tie
+; vcmd 01-4f,51-9f - note
+1835: 68 4f     cmp   a,#$4f            ; note number from vcmd
+1837: f0 07     beq   $1840             ; skip pitch calculation if tie (4f,9f)
 1839: 60        clrc
-183a: 95 a4 02  adc   a,$02a4+x
-183d: 3f 01 1e  call  $1e01
+183a: 95 a4 02  adc   a,$02a4+x         ; add channel transpose
+183d: 3f 01 1e  call  $1e01             ; update note pitch
 1840: f4 15     mov   a,$15+x
 1842: 68 ff     cmp   a,#$ff
-1844: f0 03     beq   $1849
-1846: 3f 1e 1d  call  $1d1e
-1849: f5 03 02  mov   a,$0203+x
-184c: d4 14     mov   $14+x,a
-184e: f5 04 02  mov   a,$0204+x
+1844: f0 03     beq   $1849             ; if duration counter != 255 then
+1846: 3f 1e 1d  call  $1d1e             ;   note on
+1849: f5 03 02  mov   a,$0203+x         ; delta-time
+184c: d4 14     mov   $14+x,a           ; set wait counter
+184e: f5 04 02  mov   a,$0204+x         ; duration rate
 1851: d0 06     bne   $1859
+; duration rate == 0 (slur/tie)
 1853: e8 ff     mov   a,#$ff
-1855: d4 15     mov   $15+x,a
+1855: d4 15     mov   $15+x,a           ; invalidate duration counter
 1857: 2f 11     bra   $186a
+; or...
 1859: 68 fe     cmp   a,#$fe
 185b: d0 05     bne   $1862
+; duration rate == 254
 185d: f4 14     mov   a,$14+x
-185f: 9c        dec   a
-1860: 2f 06     bra   $1868
+185f: 9c        dec   a                 ; full length - 1
+1860: 2f 06     bra   $1868             ; update duration counter
+; anything else
 1862: fb 14     mov   y,$14+x
-1864: 3f 0f 1d  call  $1d0f             ; y *= (a + 1) / 256;
+1864: 3f 0f 1d  call  $1d0f             ; delta time * (duration rate + 1) / 256;
 1867: dd        mov   a,y
-1868: d4 15     mov   $15+x,a
+1868: d4 15     mov   $15+x,a           ; update duration counter
 186a: 6f        ret
 
-; vcmds A0-FF
+; a0-ff
 186b: 68 b6     cmp   a,#$b6
 186d: b0 03     bcs   $1872
 186f: 5f 81 1a  jmp   $1a81
-; vcmds B6-FF
+; b6-ff
 1872: 68 ff     cmp   a,#$ff
 1874: f0 64     beq   $18da
 1876: 80        setc
 1877: a8 db     sbc   a,#$db
 1879: 90 13     bcc   $188e
-; vcmds DB-FE
+; dispatch vcmd (db-fe)
 187b: 4d        push  x
 187c: 1c        asl   a
 187d: 5d        mov   x,a
 187e: f5 c5 08  mov   a,$08c5+x
 1881: c5 8c 18  mov   $188b+1,a
 1884: f5 c6 08  mov   a,$08c6+x
-1887: c5 8d 18  mov   $188b+2,a         ; overwrite call addr
+1887: c5 8d 18  mov   $188b+2,a         ; self-modify the following call op
 188a: ce        pop   x
 188b: 3f 00 00  call  $0000             ; do vcmd
-; vcmds B6-DA - reserved
-188e: 5f 09 18  jmp   $1809
+; vcmd b6-da - nop
+188e: 5f 09 18  jmp   $1809             ; do nothing, continue
 
 1891: 6f        ret
 
@@ -2000,11 +2145,12 @@
 18d6: 3f 4e 1d  call  $1d4e
 18d9: 6f        ret
 
-; vcmd FF - end of track
+; vcmd ff - pattern end / end of track
 18da: f5 40 02  mov   a,$0240+x
-18dd: f0 03     beq   $18e2
-18df: 5f 36 1c  jmp   $1c36
+18dd: f0 03     beq   $18e2             ; end of track, if stack ptr != 0
+18df: 5f 36 1c  jmp   $1c36             ; or, redirect to return from subroutine
 
+; end of track
 18e2: 3f 58 22  call  $2258
 18e5: 3f a8 22  call  $22a8
 18e8: e8 ff     mov   a,#$ff
@@ -2060,8 +2206,8 @@
 194f: ce        pop   x
 1950: 6f        ret
 
-; vcmd E1
-1951: f5 a3 02  mov   a,$02a3+x
+; vcmd e1 - increase counter (to communicate with CPU)
+1951: f5 a3 02  mov   a,$02a3+x         ; song slot
 1954: fd        mov   y,a
 1955: f6 ef 03  mov   a,$03ef+y
 1958: bc        inc   a
@@ -2069,77 +2215,78 @@
 195b: d6 ef 03  mov   $03ef+y,a
 195e: 6f        ret
 
-; vcmd E0 - CPU related? conditional jump
+; vcmd e0 - conditional jump
 195f: 3f 83 1c  call  $1c83
 1962: c4 a0     mov   $a0,a
 1964: 3f 83 1c  call  $1c83
-1967: c4 a1     mov   $a1,a             ; set arg1/2 to $A0/1
+1967: c4 a1     mov   $a1,a             ; arg1/2 - destination address to $a0/1
 1969: f5 a3 02  mov   a,$02a3+x
 196c: fd        mov   y,a
-196d: f6 f7 03  mov   a,$03f7+y
-1970: 28 7f     and   a,#$7f
+196d: f6 f7 03  mov   a,$03f7+y         ; variable for conditional branch
+1970: 28 7f     and   a,#$7f            ; extract lower 7 bits
 1972: c4 a2     mov   $a2,a
-1974: 3f 83 1c  call  $1c83
+1974: 3f 83 1c  call  $1c83             ; arg3 - condition
 1977: 64 a2     cmp   a,$a2
-1979: d0 0b     bne   $1986             ; jump if $03F7+Y == arg3
+1979: d0 0b     bne   $1986             ; branch if cond_var == arg3 (repeat end)
+; repeat again
 197b: f4 00     mov   a,$00+x
 197d: fb 01     mov   y,$01+x
 197f: 60        clrc
-1980: 7a a0     addw  ya,$a0            ; relative jump
+1980: 7a a0     addw  ya,$a0            ; otherwise, do relative jump (repeat again)
 1982: d4 00     mov   $00+x,a
 1984: db 01     mov   $01+x,y
-;
+; repeat end
 1986: f5 a3 02  mov   a,$02a3+x
 1989: fd        mov   y,a
 198a: e4 a2     mov   a,$a2
 198c: 08 80     or    a,#$80
-198e: d6 f7 03  mov   $03f7+y,a         ; $03F7+Y |= #$80
+198e: d6 f7 03  mov   $03f7+y,a         ; set7 cond_var
 1991: 6f        ret
 
-; vcmd DF
-1992: 3f 83 1c  call  $1c83
+; vcmd df - surround
+1992: 3f 83 1c  call  $1c83             ; arg1: reverse bits (bit0: negate left volume, bit1: negate right volume)
 1995: d5 80 03  mov   $0380+x,a
 1998: e8 01     mov   a,#$01
 199a: d5 94 03  mov   $0394+x,a
 199d: 6f        ret
 
-; vcmd E2 - set vibrato/tune parameters
-199e: 3f 83 1c  call  $1c83
+; vcmd e2 - set pitch envelope
+199e: 3f 83 1c  call  $1c83             ; arg1: pitch envelope #
 19a1: 68 ff     cmp   a,#$ff
-19a3: f0 01     beq   $19a6             ; #$FF = disable
+19a3: f0 01     beq   $19a6             ; disable if $ff
 19a5: 1c        asl   a
 19a6: d4 78     mov   $78+x,a
 19a8: e8 00     mov   a,#$00
-19aa: d4 8d     mov   $8d+x,a
+19aa: d4 8d     mov   $8d+x,a           ; tuning = 0
 19ac: bc        inc   a
-19ad: d4 8c     mov   $8c+x,a
+19ad: d4 8c     mov   $8c+x,a           ; delta-time = 1
 19af: bc        inc   a
-19b0: d4 79     mov   $79+x,a
+19b0: d4 79     mov   $79+x,a           ; envelope offset = 2
 19b2: 6f        ret
 
-; vcmd E3
+; vcmd e3 - noise on
 19b3: 3f 38 22  call  $2238
 19b6: 6f        ret
 
-; vcmd E4
+; vcmd e4 - noise off
 19b7: 3f 58 22  call  $2258
 19ba: 6f        ret
 
-; vcmd E5
+; vcmd e5 - master volume fade
 19bb: f5 a3 02  mov   a,$02a3+x
 19be: fd        mov   y,a
-19bf: 3f 83 1c  call  $1c83
+19bf: 3f 83 1c  call  $1c83             ; arg1: target
 19c2: d6 d7 03  mov   $03d7+y,a
 19c5: e8 80     mov   a,#$80
 19c7: d6 df 03  mov   $03df+y,a
-19ca: 3f 83 1c  call  $1c83
+19ca: 3f 83 1c  call  $1c83             ; arg2: step
 19cd: d6 af 03  mov   $03af+y,a
 19d0: f6 e7 03  mov   a,$03e7+y
 19d3: 08 04     or    a,#$04
 19d5: d6 e7 03  mov   $03e7+y,a
 19d8: 6f        ret
 
-; vcmd E6 - volume fade
+; vcmd e6 - volume fade
 19d9: 3f 83 1c  call  $1c83
 19dc: d5 43 03  mov   $0343+x,a         ; $0343+X = arg1 (target)
 19df: 3f 83 1c  call  $1c83
@@ -2148,20 +2295,20 @@
 19e7: d5 57 03  mov   $0357+x,a
 19ea: 6f        ret
 
-; vcmd E7
-19eb: 3f 83 1c  call  $1c83
+; vcmd e7 - channel fade in/out?
+19eb: 3f 83 1c  call  $1c83             ; arg1
 19ee: d5 53 02  mov   $0253+x,a
 19f1: 68 80     cmp   a,#$80
 19f3: b0 04     bcs   $19f9
-19f5: e8 00     mov   a,#$00
+19f5: e8 00     mov   a,#$00            ; mute channel
 19f7: 2f 02     bra   $19fb
-19f9: e8 ff     mov   a,#$ff
-19fb: d5 54 02  mov   $0254+x,a
+19f9: e8 ff     mov   a,#$ff            ; unmute channel
+19fb: d5 54 02  mov   $0254+x,a         ; alternate channel volume (as initial volume?)
 19fe: e8 80     mov   a,#$80
 1a00: d5 2f 03  mov   $032f+x,a
 1a03: 6f        ret
 
-; vcmd E8 - pan fade
+; vcmd e8 - pan fade
 1a04: f5 cb 02  mov   a,$02cb+x
 1a07: 28 f7     and   a,#$f7
 1a09: d5 cb 02  mov   $02cb+x,a
@@ -2195,12 +2342,12 @@
 1a3e: d5 2f 03  mov   $032f+x,a
 1a41: 6f        ret
 
-; vcmd E9
+; vcmd e9 - tuning
 1a42: 3f 83 1c  call  $1c83
-1a45: d4 8d     mov   $8d+x,a
+1a45: d4 8d     mov   $8d+x,a           ; signed
 1a47: 6f        ret
 
-; vcmd EA - jump
+; vcmd ea - jump
 1a48: 3f 83 1c  call  $1c83
 1a4b: c4 a0     mov   $a0,a
 1a4d: 3f 83 1c  call  $1c83
@@ -2213,7 +2360,7 @@
 1a5b: db 01     mov   $01+x,y
 1a5d: 6f        ret
 
-; vcmd EB - tempo (relative)
+; vcmd eb - tempo (relative)
 1a5e: 4d        push  x
 1a5f: f5 a3 02  mov   a,$02a3+x
 1a62: 2d        push  a
@@ -2232,14 +2379,14 @@
 1a78: ce        pop   x
 1a79: 6f        ret
 
-; vcmd EC - set duration rate directly
+; vcmd ec - set duration rate directly
 1a7a: 3f 83 1c  call  $1c83
 1a7d: d5 04 02  mov   $0204+x,a
 1a80: 6f        ret
 
-; vcmds A0-B5 - set duration rate from table
+; vcmd a0-b5 - set duration rate from table
 1a81: fd        mov   y,a
-1a82: f6 eb 19  mov   a,$19eb+y         ; $1A8B+(Y-#$A0)
+1a82: f6 eb 19  mov   a,$19eb+y         ; duration rate table
 1a85: d5 04 02  mov   $0204+x,a
 1a88: 5f 09 18  jmp   $1809
 
@@ -2248,47 +2395,47 @@
 1a93: db $73,$80,$8c,$99,$a6,$b3,$bf,$cc
 1a9b: db $d9,$e6,$f2,$fe,$ff,$00
 
-; vcmd ED - set channel master volume
+; vcmd ed - set channel master volume
 1aa1: 3f 83 1c  call  $1c83
 1aa4: d4 28     mov   $28+x,a
 1aa6: e8 01     mov   a,#$01
 1aa8: d5 94 03  mov   $0394+x,a
 1aab: 6f        ret
 
-; vcmd EE - set panpot
+; vcmd ee - set panpot
 1aac: 3f 83 1c  call  $1c83
 1aaf: d4 3c     mov   $3c+x,a
 1ab1: e8 01     mov   a,#$01
 1ab3: d5 94 03  mov   $0394+x,a
 1ab6: 6f        ret
 
-; vcmd EF - set ADSR1/2 param from args
+; vcmd ef - set ADSR1/2 param from args
 1ab7: 3f 83 1c  call  $1c83
 1aba: d5 e0 02  mov   $02e0+x,a
 1abd: 8d 05     mov   y,#$05
-1abf: 3f e9 1d  call  $1de9             ; ADSR(1)
+1abf: 3f e9 1d  call  $1de9             ; set ADSR(1)
 1ac2: 3f 83 1c  call  $1c83
 1ac5: d5 f3 02  mov   $02f3+x,a
 1ac8: 8d 06     mov   y,#$06
-1aca: 3f e9 1d  call  $1de9             ; ADSR(2)
+1aca: 3f e9 1d  call  $1de9             ; set ADSR(2)
 1acd: 28 e0     and   a,#$e0
 1acf: 08 19     or    a,#$19
-1ad1: d5 93 03  mov   $0393+x,a
+1ad1: d5 93 03  mov   $0393+x,a         ; set ADSR(2) for release (SL from arg2, SR=#$19)
 1ad4: 6f        ret
 
-; vcmd DE - set ADSR and release rate
+; vcmd de - set ADSR and release rate
 1ad5: 3f b7 1a  call  $1ab7             ; arg1/2 = ADSR1/2 param
-; vcmd DD - set release rate
+; vcmd dd - set release rate
 1ad8: f5 93 03  mov   a,$0393+x
 1adb: 28 e0     and   a,#$e0
 1add: c5 a0 00  mov   $00a0,a
 1ae0: 3f 83 1c  call  $1c83             ; arg1 = release rate
 1ae3: 28 1f     and   a,#$1f            ; sustain rate = 5 bit
 1ae5: 05 a0 00  or    a,$00a0
-1ae8: d5 93 03  mov   $0393+x,a
+1ae8: d5 93 03  mov   $0393+x,a         ; set ADSR(2) for release
 1aeb: 6f        ret
 
-; vcmd F0 - set patch
+; vcmd f0 - set patch
 1aec: 3f 83 1c  call  $1c83             ; arg1 (patch number)
 1aef: 2d        push  a
 1af0: f5 a3 02  mov   a,$02a3+x         ; get song slot index to A
@@ -2325,9 +2472,9 @@
 1b25: f6 10 04  mov   a,$0410+y         ; read SRCN by global instrument number
 1b28: 68 ff     cmp   a,#$ff
 1b2a: d0 15     bne   $1b41
-;
+; instrument not loaded
 1b2c: f5 cb 02  mov   a,$02cb+x
-1b2f: 08 80     or    a,#$80
+1b2f: 08 80     or    a,#$80            ; set7 $02cb+x
 1b31: d5 cb 02  mov   $02cb+x,a
 1b34: 3f 64 1d  call  $1d64
 1b37: 3f 04 1f  call  $1f04
@@ -2339,7 +2486,7 @@
 ; read sample info table (A=SRCN)
 1b41: d5 cc 02  mov   $02cc+x,a         ; save SRCN
 1b44: 8d 04     mov   y,#$04
-1b46: 3f e9 1d  call  $1de9             ; SRCN
+1b46: 3f e9 1d  call  $1de9             ; set SRCN
 1b49: 8d 08     mov   y,#$08
 1b4b: cf        mul   ya
 1b4c: 8f e6 a4  mov   $a4,#$e6
@@ -2347,57 +2494,57 @@
 1b52: 7a a4     addw  ya,$a4
 1b54: da a4     movw  $a4,ya            ; $a4 = &SampInfoTable[patch * 8]
 1b56: 8d 02     mov   y,#$02
-1b58: f7 a4     mov   a,($a4)+y         ; read offset +2
-1b5a: d5 e0 02  mov   $02e0+x,a         ; save ADSR(1)
+1b58: f7 a4     mov   a,($a4)+y
+1b5a: d5 e0 02  mov   $02e0+x,a         ; offset +2: ADSR(1)
 1b5d: 8d 05     mov   y,#$05
-1b5f: 3f e9 1d  call  $1de9             ; ADSR(1)
+1b5f: 3f e9 1d  call  $1de9             ; set ADSR(1)
 1b62: 8d 03     mov   y,#$03
-1b64: f7 a4     mov   a,($a4)+y         ; read offset +3
-1b66: d5 f3 02  mov   $02f3+x,a         ; save ADSR(2)
+1b64: f7 a4     mov   a,($a4)+y
+1b66: d5 f3 02  mov   $02f3+x,a         ; offset +3: ADSR(2)
 1b69: 8d 06     mov   y,#$06
-1b6b: 3f e9 1d  call  $1de9             ; ADSR(2)
+1b6b: 3f e9 1d  call  $1de9             ; set ADSR(2)
 1b6e: 28 e0     and   a,#$e0
 1b70: 08 19     or    a,#$19            ; SR = #$19
-1b72: d5 93 03  mov   $0393+x,a         ; save another ADSR(2) (for release?)
+1b72: d5 93 03  mov   $0393+x,a         ; save another ADSR(2) (release rate)
 1b75: 8d 04     mov   y,#$04
-1b77: f7 a4     mov   a,($a4)+y         ; read offset +4
-1b79: d5 df 02  mov   $02df+x,a         ; save GAIN
+1b77: f7 a4     mov   a,($a4)+y
+1b79: d5 df 02  mov   $02df+x,a         ; offset +4: GAIN
 1b7c: 8d 07     mov   y,#$07
-1b7e: 3f e9 1d  call  $1de9             ; GAIN
+1b7e: 3f e9 1d  call  $1de9             ; set GAIN
 1b81: 8d 05     mov   y,#$05
-1b83: f7 a4     mov   a,($a4)+y         ; read offset +5
-1b85: d5 b8 02  mov   $02b8+x,a
+1b83: f7 a4     mov   a,($a4)+y
+1b85: d5 b8 02  mov   $02b8+x,a         ; offset +5: pitch multiplier (integer)
 1b88: 8d 06     mov   y,#$06
-1b8a: f7 a4     mov   a,($a4)+y         ; read offset +6
-1b8c: d5 b7 02  mov   $02b7+x,a
+1b8a: f7 a4     mov   a,($a4)+y
+1b8c: d5 b7 02  mov   $02b7+x,a         ; offset +6: pitch multiplier (fraction)
 1b8f: 8d 07     mov   y,#$07
 1b91: f7 a4     mov   a,($a4)+y         ; read offset +7
 1b93: 08 08     or    a,#$08            ; set3
 1b95: d7 a4     mov   ($a4)+y,a         ; write it back
 1b97: f5 cb 02  mov   a,$02cb+x
 1b9a: 28 7f     and   a,#$7f
-1b9c: d5 cb 02  mov   $02cb+x,a
+1b9c: d5 cb 02  mov   $02cb+x,a         ; instrument loaded
 1b9f: e8 01     mov   a,#$01
 1ba1: d5 94 03  mov   $0394+x,a
 1ba4: 6f        ret
 
-; vcmds F1,F2 - duration copy on
+; vcmd f1,f2 - duration copy on
 1ba5: f5 cb 02  mov   a,$02cb+x
 1ba8: 08 01     or    a,#$01
-1baa: d5 cb 02  mov   $02cb+x,a
-1bad: 5f 2a 1f  jmp   $1f2a
+1baa: d5 cb 02  mov   $02cb+x,a         ; trun copy-length flag on
+1bad: 5f 2a 1f  jmp   $1f2a             ; copy note length from prior track
 
-; vcmd F3 - duration copy off
+; vcmd f3 - duration copy off
 1bb0: f5 cb 02  mov   a,$02cb+x
 1bb3: 28 fe     and   a,#$fe
-1bb5: d5 cb 02  mov   $02cb+x,a
+1bb5: d5 cb 02  mov   $02cb+x,a         ; trun copy-length flag off
 1bb8: 6f        ret
 
-; vcmd DB - flag repeat (alternative)
+; vcmd db - repeat break (alternative)
 1bb9: f5 2b 02  mov   a,$022b+x
-1bbc: 2f 19     bra   $1bd7             ; jump if it's non zero
+1bbc: 2f 19     bra   $1bd7             ; do relative jump if it's 0 (i.e. last time)
 
-; vcmd DC - repeat once more (alternative)
+; vcmd dc - repeat twice (alternative)
 1bbe: f5 2b 02  mov   a,$022b+x
 1bc1: d0 02     bne   $1bc5
 1bc3: e8 02     mov   a,#$02            ; repeat twice
@@ -2405,40 +2552,40 @@
 1bc6: d5 2b 02  mov   $022b+x,a
 1bc9: 2f 0c     bra   $1bd7
 
-; vcmd F4 - repeat once more
-1bcb: 8d 02     mov   y,#$02
+; vcmd f4 - repeat twice
+1bcb: 8d 02     mov   y,#$02            ; repeat count = 2
 ; contidional loop
 1bcd: f5 17 02  mov   a,$0217+x
 1bd0: d0 01     bne   $1bd3
 1bd2: dd        mov   a,y
 1bd3: 9c        dec   a                 ; dec repeat count
 1bd4: d5 17 02  mov   $0217+x,a
-1bd7: d0 06     bne   $1bdf             ; done?
+1bd7: d0 06     bne   $1bdf             ; do relative jump if it's not 0
 1bd9: 3f 83 1c  call  $1c83
 1bdc: 5f 83 1c  jmp   $1c83             ; just ignore arg1/2
 1bdf: 5f 48 1a  jmp   $1a48             ; relative jump
 
-; vcmd F5 - conditional loop
+; vcmd f5 - repeat until
 1be2: 3f 83 1c  call  $1c83             ; repeat count
 1be5: fd        mov   y,a
 1be6: 2f e5     bra   $1bcd
 
-; vcmd F6 - set volume
+; vcmd f6 - set volume
 1be8: 3f 83 1c  call  $1c83
 1beb: d4 29     mov   $29+x,a
 1bed: e8 01     mov   a,#$01
 1bef: d5 94 03  mov   $0394+x,a
 1bf2: 6f        ret
 
-; vcmd F7 - nop
+; vcmd f7 - nop
 1bf3: 6f        ret
 
-; vcmd F8 - call subroutine
+; vcmd f8 - call subroutine
 1bf4: 3f 83 1c  call  $1c83
 1bf7: c4 a0     mov   $a0,a
 1bf9: 3f 83 1c  call  $1c83
 1bfc: c4 a1     mov   $a1,a
-1bfe: f5 40 02  mov   a,$0240+x
+1bfe: f5 40 02  mov   a,$0240+x         ; call stack ptr
 1c01: 68 06     cmp   a,#$06
 1c03: b0 1d     bcs   $1c22             ; allows triple nest in max
 1c05: 2d        push  a
@@ -2471,7 +2618,7 @@
 1c33: da a2     movw  $a2,ya            ; $A2 = X*3 + #$0267
 1c35: 6f        ret
 
-; vcmd F9 - return from subroutine
+; vcmd f9 - return from subroutine
 1c36: f5 40 02  mov   a,$0240+x
 1c39: f0 13     beq   $1c4e             ; nothing has been called, do nothing
 1c3b: 2d        push  a
@@ -2487,12 +2634,12 @@
 1c4b: d5 40 02  mov   $0240+x,a         ; decrement stack ptr
 1c4e: 6f        ret
 
-; vcmd FA - key shift (transpose)
+; vcmd fa - transpose (absolute)
 1c4f: 3f 83 1c  call  $1c83             ; arg1 = key (signed)
 1c52: d5 a4 02  mov   $02a4+x,a
 1c55: 6f        ret
 
-; vcmd FB - pitch slide
+; vcmd fb - pitch slide
 1c56: 3f 83 1c  call  $1c83             ; arg1 = key (signed)
 1c59: 68 00     cmp   a,#$00
 1c5b: 10 05     bpl   $1c62
@@ -2506,19 +2653,19 @@
 1c6c: d5 58 03  mov   $0358+x,a
 1c6f: 6f        ret
 
-; vcmd FC
+; vcmd fc - echo on
 1c70: 3f 7a 22  call  $227a
 1c73: 6f        ret
 
-; vcmd FD
+; vcmd fd - echo off
 1c74: 3f 9a 22  call  $229a
 1c77: 6f        ret
 
-; vcmd FE
+; vcmd fe - run miniseq
 1c78: f5 a3 02  mov   a,$02a3+x
 1c7b: fd        mov   y,a
-1c7c: 3f 83 1c  call  $1c83
-1c7f: 3f 4e 23  call  $234e
+1c7c: 3f 83 1c  call  $1c83             ; arg1: miniseq #
+1c7f: 3f 4e 23  call  $234e             ; run minivcmd sequence
 1c82: 6f        ret
 
 ; read next arg
@@ -2533,7 +2680,7 @@
 1c8f: f0 0f     beq   $1ca0
 1c91: 8b a9     dec   $a9
 1c93: d0 0b     bne   $1ca0
-1c95: 38 df ab  and   $ab,#$df
+1c95: 38 df ab  and   $ab,#$df          ; FLG shadow
 1c98: e4 ab     mov   a,$ab
 1c9a: 20        clrp
 1c9b: 8f 6c f2  mov   $f2,#$6c
@@ -2604,16 +2751,17 @@
 
 ; multiply Y by (A+1)/256 with exceptions
 1d0f: bc        inc   a
-1d10: f0 0b     beq   $1d1d             ; A=255 : simply returns Y
+1d10: f0 0b     beq   $1d1d             ; a=255 : simply returns Y
 1d12: 68 81     cmp   a,#$81
 1d14: b0 01     bcs   $1d17
-1d16: 9c        dec   a                 ; 128<=A<=255 : A++
+1d16: 9c        dec   a                 ; a += 1 if a <= 0x80
 1d17: cf        mul   ya
 1d18: 68 00     cmp   a,#$00
 1d1a: 10 01     bpl   $1d1d
 1d1c: fc        inc   y                 ; round up
 1d1d: 6f        ret
 
+; note on
 1d1e: f5 cb 02  mov   a,$02cb+x
 1d21: 28 80     and   a,#$80
 1d23: f0 01     beq   $1d26
@@ -2621,23 +2769,25 @@
 
 1d26: 8d 06     mov   y,#$06
 1d28: f5 f3 02  mov   a,$02f3+x
-1d2b: 3f e9 1d  call  $1de9             ; ADSR(2)
+1d2b: 3f e9 1d  call  $1de9             ; set ADSR(2)
 1d2e: 2f 00     bra   $1d30
+;
 1d30: 3f 04 1f  call  $1f04
 1d33: b0 0b     bcs   $1d40
 1d35: fd        mov   y,a
-1d36: f6 0d 09  mov   a,$090d+y
+1d36: f6 0d 09  mov   a,$090d+y         ; get channel bitmask
 1d39: 20        clrp
 1d3a: 8f 4c f2  mov   $f2,#$4c
-1d3d: c4 f3     mov   $f3,a             ; KON
+1d3d: c4 f3     mov   $f3,a             ; set KON
 1d3f: 20        clrp
 1d40: e8 02     mov   a,#$02
 1d42: d4 79     mov   $79+x,a
 1d44: 6f        ret
 
-1d45: f5 93 03  mov   a,$0393+x
+; note off - set ADSR release
+1d45: f5 93 03  mov   a,$0393+x         ; ADSR(2) for release
 1d48: 8d 06     mov   y,#$06
-1d4a: 3f e9 1d  call  $1de9             ; ADSR(2)
+1d4a: 3f e9 1d  call  $1de9             ; set ADSR(2)
 1d4d: 6f        ret
 
 1d4e: 3f 04 1f  call  $1f04
@@ -2648,7 +2798,7 @@
 
 1d58: 6f        ret
 
-1d59: f6 0d 09  mov   a,$090d+y
+1d59: f6 0d 09  mov   a,$090d+y         ; get channel bitmask
 1d5c: 20        clrp
 1d5d: 8f 5c f2  mov   $f2,#$5c
 1d60: c4 f3     mov   $f3,a             ; KOF
@@ -2663,21 +2813,22 @@
 1d6d: c5 02 04  mov   $0402,a
 1d70: c5 03 04  mov   $0403,a
 1d73: 2f 63     bra   $1dd8
-1d75: fb 28     mov   y,$28+x           ; channel master volume
-1d77: f4 29     mov   a,$29+x           ; channel volume
+1d75: fb 28     mov   y,$28+x           ; y = channel master volume
+1d77: f4 29     mov   a,$29+x           ; a = channel volume
 1d79: 3f 0f 1d  call  $1d0f             ; y *= (a + 1) / 256;
-1d7c: f5 54 02  mov   a,$0254+x
+1d7c: f5 54 02  mov   a,$0254+x         ; alternate channel volume
 1d7f: 3f 0f 1d  call  $1d0f             ; y *= (a + 1) / 256;
-1d82: f5 a3 02  mov   a,$02a3+x
+1d82: f5 a3 02  mov   a,$02a3+x         ; song slot index
 1d85: 4d        push  x
 1d86: 5d        mov   x,a
-1d87: f5 a7 03  mov   a,$03a7+x
+1d87: f5 a7 03  mov   a,$03a7+x         ; master volume (per song)
 1d8a: ce        pop   x
 1d8b: 3f 0f 1d  call  $1d0f             ; y *= (a + 1) / 256;
 1d8e: cc 02 04  mov   $0402,y
-1d91: cc 03 04  mov   $0403,y           ; set L/R volume
+1d91: cc 03 04  mov   $0403,y           ; set L/R volume (pan will be applied later)
 1d94: e5 ff 03  mov   a,$03ff
-1d97: f0 3f     beq   $1dd8
+1d97: f0 3f     beq   $1dd8             ; branch if mono
+;
 1d99: f4 3c     mov   a,$3c+x           ; panpot (signed)
 1d9b: f0 1b     beq   $1db8             ; skip if center
 1d9d: 4d        push  x
@@ -2696,8 +2847,9 @@
 1daf: 9c        dec   a                 ; a = 255 - (a * 2 + 1)
 1db0: 3f 0f 1d  call  $1d0f             ; y *= (a + 1) / 256;
 1db3: dd        mov   a,y
-1db4: d5 02 04  mov   $0402+x,a         ; decrease weak channel volume
+1db4: d5 02 04  mov   $0402+x,a         ; decrease weak channel volume, do not change other one
 1db7: ce        pop   x
+; surround
 1db8: f5 80 03  mov   a,$0380+x
 1dbb: 28 01     and   a,#$01
 1dbd: f0 09     beq   $1dc8
@@ -2712,12 +2864,13 @@
 1dd2: 48 ff     eor   a,#$ff
 1dd4: bc        inc   a
 1dd5: c5 03 04  mov   $0403,a           ; reverse-phase right channel
+; write volume to dsp
 1dd8: e5 02 04  mov   a,$0402
 1ddb: 8d 01     mov   y,#$01
-1ddd: 3f e9 1d  call  $1de9             ; VOL(R)
+1ddd: 3f e9 1d  call  $1de9             ; set VOL(R)
 1de0: e5 03 04  mov   a,$0403
 1de3: 8d 00     mov   y,#$00
-1de5: 3f e9 1d  call  $1de9             ; VOL(L)
+1de5: 3f e9 1d  call  $1de9             ; set VOL(L)
 1de8: 6f        ret
 
 ; set a to dsp voice reg y
@@ -2738,53 +2891,57 @@
 1dff: ae        pop   a
 1e00: 6f        ret
 
-1e01: d5 18 02  mov   $0218+x,a
+; update note pitch
+1e01: d5 18 02  mov   $0218+x,a         ; save note number
 1e04: 20        clrp
 1e05: f5 cb 02  mov   a,$02cb+x
 1e08: 28 20     and   a,#$20
-1e0a: f0 14     beq   $1e20
+1e0a: f0 14     beq   $1e20             ; branch if noise off
+; noise note
 1e0c: f5 18 02  mov   a,$0218+x
-1e0f: 28 1f     and   a,#$1f
+1e0f: 28 1f     and   a,#$1f            ; noise frequency = note number & 0x1f
 1e11: 38 e0 ab  and   $ab,#$e0
 1e14: 04 ab     or    a,$ab
-1e16: c4 ab     mov   $ab,a
+1e16: c4 ab     mov   $ab,a             ; update FLG shadow
 1e18: 20        clrp
 1e19: 8f 6c f2  mov   $f2,#$6c
 1e1c: c4 f3     mov   $f3,a             ; FLG
 1e1e: 20        clrp
 1e1f: 6f        ret
-
+; regular note
 1e20: f5 cb 02  mov   a,$02cb+x
 1e23: 28 80     and   a,#$80
-1e25: d0 11     bne   $1e38
-1e27: 3f 39 1e  call  $1e39
+1e25: d0 11     bne   $1e38             ; skip if instrument not loaded
+1e27: 3f 39 1e  call  $1e39             ; calculate pitch
 1e2a: e4 a2     mov   a,$a2
 1e2c: 8d 02     mov   y,#$02
-1e2e: 3f e9 1d  call  $1de9             ; P(L)
+1e2e: 3f e9 1d  call  $1de9             ; set P(L)
 1e31: e4 a3     mov   a,$a3
 1e33: 8d 03     mov   y,#$03
-1e35: 3f e9 1d  call  $1de9             ; P(H)
+1e35: 3f e9 1d  call  $1de9             ; set P(H)
 1e38: 6f        ret
 
-1e39: f5 18 02  mov   a,$0218+x
+; calculate pitch, return pitch into $a2/3
+1e39: f5 18 02  mov   a,$0218+x         ; note number
 1e3c: 60        clrc
-1e3d: 9c        dec   a
+1e3d: 9c        dec   a                 ; decrease it (01-4f => 00-4e)
 1e3e: 8d 00     mov   y,#$00
 1e40: 4d        push  x
 1e41: cd 0c     mov   x,#$0c
 1e43: 9e        div   ya,x
 1e44: ce        pop   x
-1e45: c4 a4     mov   $a4,a
-1e47: dd        mov   a,y
+1e45: c4 a4     mov   $a4,a             ; octave
+1e47: dd        mov   a,y               ; key
 1e48: bc        inc   a
 1e49: 1c        asl   a
 1e4a: fd        mov   y,a
-1e4b: f6 15 09  mov   a,$0915+y
-1e4e: c4 a0     mov   $a0,a
+1e4b: f6 15 09  mov   a,$0915+y         ; read pitch table
+1e4e: c4 a0     mov   $a0,a             ; $a0/1 = pitch for the key
 1e50: f6 16 09  mov   a,$0916+y
 1e53: c4 a1     mov   $a1,a
-1e55: f4 8d     mov   a,$8d+x
+1e55: f4 8d     mov   a,$8d+x           ; tuning
 1e57: 30 1b     bmi   $1e74
+; positive tuning
 1e59: fc        inc   y
 1e5a: fc        inc   y
 1e5b: 2d        push  a
@@ -2793,15 +2950,16 @@
 1e60: f6 15 09  mov   a,$0915+y
 1e63: ee        pop   y
 1e64: 9a a0     subw  ya,$a0
-1e66: da a2     movw  $a2,ya
+1e66: da a2     movw  $a2,ya            ; $a2/3 - delta pitch
 1e68: ae        pop   a
-1e69: 3f e3 1e  call  $1ee3
+1e69: 3f e3 1e  call  $1ee3             ; calculate actual delta pitch
 1e6c: ba a2     movw  ya,$a2
 1e6e: 7a a0     addw  ya,$a0
 1e70: da a0     movw  $a0,ya
 1e72: 2f 20     bra   $1e94
+; negative tuning
 1e74: dc        dec   y
-1e75: dc        dec   y
+1e75: dc        dec   y                 ; can be negative if note=c?
 1e76: 48 ff     eor   a,#$ff
 1e78: bc        inc   a
 1e79: 2d        push  a
@@ -2812,17 +2970,18 @@
 1e82: da a2     movw  $a2,ya
 1e84: ba a0     movw  ya,$a0
 1e86: 9a a2     subw  ya,$a2
-1e88: da a2     movw  $a2,ya
+1e88: da a2     movw  $a2,ya            ; $a2/3 - delta pitch (absolute)
 1e8a: ae        pop   a
-1e8b: 3f e3 1e  call  $1ee3
+1e8b: 3f e3 1e  call  $1ee3             ; calculate actual delta pitch
 1e8e: ba a0     movw  ya,$a0
 1e90: 9a a2     subw  ya,$a2
 1e92: da a0     movw  $a0,ya
-1e94: f5 b7 02  mov   a,$02b7+x
+; apply per-instrument tuning
+1e94: f5 b7 02  mov   a,$02b7+x         ; per-instrument tuning (fraction)
 1e97: eb a1     mov   y,$a1
 1e99: cf        mul   ya
 1e9a: da a2     movw  $a2,ya
-1e9c: f5 b8 02  mov   a,$02b8+x
+1e9c: f5 b8 02  mov   a,$02b8+x         ; per-instrument tuning (integer)
 1e9f: eb a0     mov   y,$a0
 1ea1: cf        mul   ya
 1ea2: 7a a2     addw  ya,$a2
@@ -2849,9 +3008,9 @@
 1ec5: 28 00     and   a,#$00
 1ec7: 84 a5     adc   a,$a5
 1ec9: c4 a5     mov   $a5,a
-1ecb: e8 08     mov   a,#$08
+1ecb: e8 08     mov   a,#$08            ; target octave = 8
 1ecd: 80        setc
-1ece: a4 a4     sbc   a,$a4
+1ece: a4 a4     sbc   a,$a4             ; subtract octave
 1ed0: 30 10     bmi   $1ee2
 1ed2: f0 0e     beq   $1ee2
 1ed4: bc        inc   a
@@ -2859,17 +3018,18 @@
 1ed6: 4b a5     lsr   $a5
 1ed8: 6b a3     ror   $a3
 1eda: 6b a2     ror   $a2
-1edc: fe f8     dbnz  y,$1ed6
+1edc: fe f8     dbnz  y,$1ed6           ; apply octave
 1ede: 90 02     bcc   $1ee2
-1ee0: 3a a2     incw  $a2
+1ee0: 3a a2     incw  $a2               ; + round(0.5)
 1ee2: 6f        ret
 
+; apply tuning, a = tuning (absolute value), $a2/3 = delta pitch
 1ee3: 68 7f     cmp   a,#$7f
-1ee5: f0 1c     beq   $1f03
-1ee7: 1c        asl   a
+1ee5: f0 1c     beq   $1f03             ; tuning = 0x7f: exactly 1 semitone
+1ee7: 1c        asl   a                 ; convert to 8 bits
 1ee8: 68 80     cmp   a,#$80
 1eea: 90 01     bcc   $1eed
-1eec: bc        inc   a
+1eec: bc        inc   a                 ; +0.5 if tuning >= 0x40
 1eed: 2d        push  a
 1eee: eb a2     mov   y,$a2
 1ef0: cf        mul   ya
@@ -2903,41 +3063,42 @@
 1f1c: 6f        ret
 
 1f1d: 2d        push  a
-1f1e: f5 a3 02  mov   a,$02a3+x
+1f1e: f5 a3 02  mov   a,$02a3+x         ; song slot index
 1f21: fd        mov   y,a
-1f22: f6 b7 03  mov   a,$03b7+y
+1f22: f6 b7 03  mov   a,$03b7+y         ; instrument set #
 1f25: 65 48 2c  cmp   a,$2c48
 1f28: ae        pop   a
 1f29: 6f        ret
 
-; duplicate duration info if needed
+; copy note length from prior track, if necessary
 1f2a: f5 cb 02  mov   a,$02cb+x
 1f2d: 28 01     and   a,#$01
-1f2f: d0 01     bne   $1f32
+1f2f: d0 01     bne   $1f32             ; branch if copy requested
 1f31: 6f        ret
 ; copy duration info of from other channel
-1f32: f5 a3 02  mov   a,$02a3+x
+1f32: f5 a3 02  mov   a,$02a3+x         ; current song slot
 1f35: c4 a0     mov   $a0,a
-1f37: f5 7f 03  mov   a,$037f+x
-1f3a: f0 26     beq   $1f62
+1f37: f5 7f 03  mov   a,$037f+x         ; current track index
+1f3a: f0 26     beq   $1f62             ; quit if track #0, it does not have prior track
 1f3c: 9c        dec   a
-1f3d: c4 a2     mov   $a2,a
-1f3f: 8d 00     mov   y,#$00            ; for (Y = 0; Y < 20; Y += 2)
-1f41: f6 a3 02  mov   a,$02a3+y
+1f3d: c4 a2     mov   $a2,a             ; prior track #
+1f3f: 8d 00     mov   y,#$00            ; zero offset for voice slot
+; search for prior track and copy note lengths
+1f41: f6 a3 02  mov   a,$02a3+y         ; song slot
 1f44: 64 a0     cmp   a,$a0
-1f46: d0 14     bne   $1f5c
-1f48: f6 7f 03  mov   a,$037f+y
+1f46: d0 14     bne   $1f5c             ; continue if the song slot != current song slot
+1f48: f6 7f 03  mov   a,$037f+y         ; track index
 1f4b: 64 a2     cmp   a,$a2
-1f4d: d0 0d     bne   $1f5c             ; if ($02A3+Y == $02A3+X && $037F+Y == $037F+X - 1)
+1f4d: d0 0d     bne   $1f5c             ; continue if it's not target track (prior track)
 1f4f: f6 03 02  mov   a,$0203+y
-1f52: d5 03 02  mov   $0203+x,a
+1f52: d5 03 02  mov   $0203+x,a         ; copy delta-time
 1f55: f6 04 02  mov   a,$0204+y
-1f58: d5 04 02  mov   $0204+x,a         ;   $0203/4+X = $0203/4+Y
-1f5b: 6f        ret                     ;   return
+1f58: d5 04 02  mov   $0204+x,a         ; copy duration rate
+1f5b: 6f        ret                     ; return from function
 1f5c: fc        inc   y
-1f5d: fc        inc   y
+1f5d: fc        inc   y                 ; y += 2
 1f5e: ad 14     cmp   y,#$14
-1f60: 90 df     bcc   $1f41             ; }
+1f60: 90 df     bcc   $1f41             ; repeat for all 10 logical voice slots
 1f62: 6f        ret
 
 1f63: f5 f4 02  mov   a,$02f4+x
@@ -3230,14 +3391,14 @@
 2181: f5 e7 03  mov   a,$03e7+x
 2184: 28 04     and   a,#$04
 2186: d0 3d     bne   $21c5
-2188: f5 a7 03  mov   a,$03a7+x
+2188: f5 a7 03  mov   a,$03a7+x         ; master volume
 218b: 8e        pop   psw
 218c: ed        notc
 218d: a4 a1     sbc   a,$a1
 218f: b0 30     bcs   $21c1
 2191: e8 00     mov   a,#$00
 2193: d5 d7 03  mov   $03d7+x,a
-2196: d5 a7 03  mov   $03a7+x,a
+2196: d5 a7 03  mov   $03a7+x,a         ; master volume
 2199: f5 e7 03  mov   a,$03e7+x
 219c: 28 01     and   a,#$01
 219e: d0 01     bne   $21a1
@@ -3251,7 +3412,7 @@
 21a7: f5 e7 03  mov   a,$03e7+x
 21aa: 28 04     and   a,#$04
 21ac: d0 29     bne   $21d7
-21ae: f5 a7 03  mov   a,$03a7+x
+21ae: f5 a7 03  mov   a,$03a7+x         ; master volume
 21b1: 8e        pop   psw
 21b2: 84 a1     adc   a,$a1
 21b4: b0 04     bcs   $21ba
@@ -3260,10 +3421,10 @@
 21ba: e8 00     mov   a,#$00
 21bc: d5 d7 03  mov   $03d7+x,a
 21bf: e8 80     mov   a,#$80
-21c1: d5 a7 03  mov   $03a7+x,a
+21c1: d5 a7 03  mov   $03a7+x,a         ; master volume
 21c4: 6f        ret
 
-21c5: f5 a7 03  mov   a,$03a7+x
+21c5: f5 a7 03  mov   a,$03a7+x         ; master volume
 21c8: 8e        pop   psw
 21c9: ed        notc
 21ca: a4 a1     sbc   a,$a1
@@ -3273,7 +3434,7 @@
 21d3: d5 a7 03  mov   $03a7+x,a
 21d6: 6f        ret
 
-21d7: f5 a7 03  mov   a,$03a7+x
+21d7: f5 a7 03  mov   a,$03a7+x         ; master volume
 21da: 8e        pop   psw
 21db: 84 a1     adc   a,$a1
 21dd: b0 09     bcs   $21e8
@@ -3283,7 +3444,7 @@
 21e7: 6f        ret
 
 21e8: f5 af 03  mov   a,$03af+x
-21eb: d5 a7 03  mov   $03a7+x,a
+21eb: d5 a7 03  mov   $03a7+x,a         ; master volume
 21ee: e8 00     mov   a,#$00
 21f0: d5 d7 03  mov   $03d7+x,a
 21f3: d5 af 03  mov   $03af+x,a
@@ -3294,62 +3455,65 @@
 
 21ff: 6f        ret
 
-2200: f4 78     mov   a,$78+x
+; process pitch envelope
+2200: f4 78     mov   a,$78+x           ; pitch envelope #
 2202: 68 ff     cmp   a,#$ff
 2204: f0 31     beq   $2237
-2206: 9b 8c     dec   $8c+x
+2206: 9b 8c     dec   $8c+x             ; decrease delta-time
 2208: d0 2d     bne   $2237
 220a: fb 78     mov   y,$78+x
 220c: f6 5d 0a  mov   a,$0a5d+y
 220f: c4 a0     mov   $a0,a
 2211: f6 5e 0a  mov   a,$0a5e+y
-2214: c4 a1     mov   $a1,a
+2214: c4 a1     mov   $a1,a             ; load pitch envelope address into $a0/1
 2216: fb 79     mov   y,$79+x
 2218: f7 a0     mov   a,($a0)+y
 221a: 68 80     cmp   a,#$80
-221c: f0 19     beq   $2237
-221e: d4 8d     mov   $8d+x,a
+221c: f0 19     beq   $2237             ; $80 - stop
+221e: d4 8d     mov   $8d+x,a           ; arg1: pitch (signed tuning value)
 2220: fc        inc   y
 2221: f7 a0     mov   a,($a0)+y
 2223: fc        inc   y
-2224: d4 8c     mov   $8c+x,a
+2224: d4 8c     mov   $8c+x,a           ; arg2: delta-time
 2226: dd        mov   a,y
-2227: d4 79     mov   $79+x,a
+2227: d4 79     mov   $79+x,a           ; update envelope offset
 2229: 8d 00     mov   y,#$00
-222b: 77 a0     cmp   a,($a0)+y
+222b: 77 a0     cmp   a,($a0)+y         ; envelope size (first byte of envelope)
 222d: d0 05     bne   $2234
 222f: fc        inc   y
 2230: f7 a0     mov   a,($a0)+y
-2232: d4 79     mov   $79+x,a
-2234: 3f 04 1e  call  $1e04
+2232: d4 79     mov   $79+x,a           ; back to loop offset if it reaches to end
+2234: 3f 04 1e  call  $1e04             ; update note pitch
 2237: 6f        ret
 
+; set noise bit for track X
 2238: f5 cb 02  mov   a,$02cb+x
 223b: 08 20     or    a,#$20
-223d: d5 cb 02  mov   $02cb+x,a
+223d: d5 cb 02  mov   $02cb+x,a         ; set5 $02cb+x
 2240: 3f 04 1f  call  $1f04
 2243: b0 12     bcs   $2257
 2245: fd        mov   y,a
-2246: f6 0d 09  mov   a,$090d+y
+2246: f6 0d 09  mov   a,$090d+y         ; get channel bitmask
 2249: 05 00 04  or    a,$0400
-224c: c5 00 04  mov   $0400,a
+224c: c5 00 04  mov   $0400,a           ; set NON shadow
 224f: 8d 3d     mov   y,#$3d
 2251: 20        clrp
 2252: cb f2     mov   $f2,y
-2254: c4 f3     mov   $f3,a             ; NON
+2254: c4 f3     mov   $f3,a             ; set NON
 2256: 20        clrp
 2257: 6f        ret
 
+; clear noise bit for track X
 2258: f5 cb 02  mov   a,$02cb+x
 225b: 28 df     and   a,#$df
-225d: d5 cb 02  mov   $02cb+x,a
+225d: d5 cb 02  mov   $02cb+x,a         ; clr5 $02cb+x
 2260: 3f 04 1f  call  $1f04
 2263: b0 14     bcs   $2279
 2265: fd        mov   y,a
-2266: f6 0d 09  mov   a,$090d+y
+2266: f6 0d 09  mov   a,$090d+y         ; get channel bitmask
 2269: 48 ff     eor   a,#$ff
 226b: 25 00 04  and   a,$0400
-226e: c5 00 04  mov   $0400,a
+226e: c5 00 04  mov   $0400,a           ; clear NON shadow
 2271: 8d 3d     mov   y,#$3d
 2273: 20        clrp
 2274: cb f2     mov   $f2,y
@@ -3357,13 +3521,14 @@
 2278: 20        clrp
 2279: 6f        ret
 
+; echo on
 227a: f5 cb 02  mov   a,$02cb+x
-227d: 08 40     or    a,#$40
+227d: 08 40     or    a,#$40            ; set6 $02cb+x
 227f: d5 cb 02  mov   $02cb+x,a
 2282: 3f 04 1f  call  $1f04
 2285: b0 12     bcs   $2299
 2287: fd        mov   y,a
-2288: f6 0d 09  mov   a,$090d+y
+2288: f6 0d 09  mov   a,$090d+y         ; get channel bitmask
 228b: 05 01 04  or    a,$0401
 228e: c5 01 04  mov   $0401,a
 2291: 8d 4d     mov   y,#$4d
@@ -3373,6 +3538,7 @@
 2298: 20        clrp
 2299: 6f        ret
 
+; echo off
 229a: 3f a8 22  call  $22a8
 229d: b0 08     bcs   $22a7
 229f: 8d 4d     mov   y,#$4d
@@ -3388,7 +3554,7 @@
 22b0: 3f 04 1f  call  $1f04
 22b3: b0 0d     bcs   $22c2
 22b5: fd        mov   y,a
-22b6: f6 0d 09  mov   a,$090d+y
+22b6: f6 0d 09  mov   a,$090d+y         ; get channel bitmask
 22b9: 48 ff     eor   a,#$ff
 22bb: 25 01 04  and   a,$0401
 22be: c5 01 04  mov   $0401,a
@@ -3473,7 +3639,7 @@
 234c: bc        inc   a
 234d: 6f        ret
 
-; dispatch minivcmds
+; run minivcmd sequence A
 234e: 20        clrp
 234f: 1c        asl   a
 2350: 4d        push  x
@@ -3481,37 +3647,39 @@
 2352: f5 31 09  mov   a,$0931+x
 2355: c4 a6     mov   $a6,a
 2357: f5 32 09  mov   a,$0932+x
-235a: c4 a7     mov   $a7,a
+235a: c4 a7     mov   $a7,a             ; load minivcmd sequence address
 235c: ce        pop   x
+; switch-case for minivcmd
 235d: 4d        push  x
 235e: 6d        push  y
-235f: 3f e9 25  call  $25e9             ; read next byte from $a6
+235f: 3f e9 25  call  $25e9             ; read minivcmd into A, zero index Y
 2362: 68 10     cmp   a,#$10
 2364: b0 09     bcs   $236f
 ; 00-0f
-2366: ad 08     cmp   y,#$08
-2368: b0 26     bcs   $2390
+2366: ad 08     cmp   y,#$08            ; maximum length = 7 (minivcmd + 6 bytes)
+2368: b0 26     bcs   $2390             ; abort if exceeded
 236a: 3f a1 23  call  $23a1
-236d: 2f 1d     bra   $238c
-;
+236d: 2f 1d     bra   $238c             ; continue
+; (10-ff)
 236f: 68 20     cmp   a,#$20
 2371: b0 05     bcs   $2378
 ; 10-1f
 2373: 3f 0c 24  call  $240c
-2376: 2f 14     bra   $238c
-;
+2376: 2f 14     bra   $238c             ; continue
+; (20-ff)
 2378: 68 c0     cmp   a,#$c0
 237a: b0 09     bcs   $2385
 ; 20-bf
-237c: ad 08     cmp   y,#$08
-237e: b0 10     bcs   $2390
+237c: ad 08     cmp   y,#$08            ; maximum length = 7 (minivcmd + 6 bytes)
+237e: b0 10     bcs   $2390             ; abort if exceeded
 2380: 3f 6a 25  call  $256a
 2383: 2f 07     bra   $238c
-;
+; c0-ff
 2385: 68 fe     cmp   a,#$fe
-2387: d0 07     bne   $2390
+2387: d0 07     bne   $2390             ; abort if minivcmd c0-ff (excluding fe)
 ; fe
 2389: 3f 93 23  call  $2393
+; continue
 238c: ee        pop   y
 238d: ce        pop   x
 238e: 2f cd     bra   $235d
@@ -3520,7 +3688,7 @@
 2391: ce        pop   x
 2392: 6f        ret
 
-; minivcmd fe - set ($a6)+1 to dsp reg ($a6)
+; minivcmd fe - write to dsp
 2393: 3f e9 25  call  $25e9             ; arg1 - dsp register
 2396: fd        mov   y,a
 2397: 3f e9 25  call  $25e9             ; arg2 - value
@@ -3530,11 +3698,12 @@
 239f: 20        clrp
 23a0: 6f        ret
 
+; 00-0f
 23a1: 68 00     cmp   a,#$00
 23a3: d0 0f     bne   $23b4
-; minivcmd 00
+; minivcmd 00 - master volume
 23a5: 3f e9 25  call  $25e9             ; arg1
-23a8: d6 a7 03  mov   $03a7+y,a
+23a8: d6 a7 03  mov   $03a7+y,a         ; master volume
 23ab: f6 e7 03  mov   a,$03e7+y
 23ae: 08 02     or    a,#$02
 23b0: d6 e7 03  mov   $03e7+y,a
@@ -3542,7 +3711,7 @@
 
 23b4: 68 01     cmp   a,#$01
 23b6: d0 1a     bne   $23d2
-; minivcmd 01
+; minivcmd 01 - master volume fade
 23b8: 3f e9 25  call  $25e9             ; arg1
 23bb: d6 d7 03  mov   $03d7+y,a
 23be: e8 80     mov   a,#$80
@@ -3556,21 +3725,21 @@
 
 23d2: 68 02     cmp   a,#$02
 23d4: d0 0a     bne   $23e0
-; minivcmd 02
-23d6: 3f e9 25  call  $25e9             ; arg1
-23d9: d6 bf 03  mov   $03bf+y,a
-23dc: d6 c7 03  mov   $03c7+y,a
+; minivcmd 02 - set tempo
+23d6: 3f e9 25  call  $25e9             ; arg1 - tempo
+23d9: d6 bf 03  mov   $03bf+y,a         ; tempo
+23dc: d6 c7 03  mov   $03c7+y,a         ; base tempo
 23df: 6f        ret
 
 23e0: 68 03     cmp   a,#$03
 23e2: d0 04     bne   $23e8
-; minivcmd 03
+; minivcmd 03 - nop?
 23e4: 3f ce 25  call  $25ce
 23e7: 6f        ret
 
 23e8: 68 04     cmp   a,#$04
 23ea: d0 14     bne   $2400
-; minivcmd 04
+; minivcmd 04 - master volume fade variation?
 23ec: f6 e7 03  mov   a,$03e7+y
 23ef: 08 01     or    a,#$01
 23f1: d6 e7 03  mov   $03e7+y,a
@@ -3582,7 +3751,7 @@
 
 2400: 68 05     cmp   a,#$05
 2402: d0 07     bne   $240b
-; minivcmd 05 - set CPU-conrtoled? variable
+; minivcmd 05 - set variable for conditional jump
 2404: 3f e9 25  call  $25e9             ; arg1
 2407: d6 f7 03  mov   $03f7+y,a
 240a: 6f        ret
@@ -3609,7 +3778,7 @@
 
 2425: 68 11     cmp   a,#$11
 2427: d0 1b     bne   $2444
-; minivcmd 11
+; minivcmd 11 - (change MVOL and EVOL)
 2429: e8 00     mov   a,#$00
 242b: c5 ff 03  mov   $03ff,a
 242e: 20        clrp
@@ -3626,7 +3795,7 @@
 
 2444: 68 12     cmp   a,#$12
 2446: d0 29     bne   $2471
-; minivcmd 12
+; minivcmd 12 - (change MVOL and EVOL)
 2448: e8 01     mov   a,#$01
 244a: c5 ff 03  mov   $03ff,a
 244d: 20        clrp
@@ -3639,6 +3808,7 @@
 245c: cb f2     mov   $f2,y
 245e: c4 f3     mov   $f3,a             ; EVOL(R)
 2460: 20        clrp
+;
 2461: 8d 00     mov   y,#$00
 2463: f6 e7 03  mov   a,$03e7+y
 2466: 08 02     or    a,#$02
@@ -3712,7 +3882,7 @@
 24dc: 28 1f     and   a,#$1f
 24de: 38 e0 ab  and   $ab,#$e0
 24e1: 04 ab     or    a,$ab
-24e3: c4 ab     mov   $ab,a
+24e3: c4 ab     mov   $ab,a             ; update FLG shadow
 24e5: 20        clrp
 24e6: 8f 6c f2  mov   $f2,#$6c
 24e9: c4 f3     mov   $f3,a             ; FLG
@@ -3773,7 +3943,7 @@
 
 254a: 68 18     cmp   a,#$18
 254c: d0 1b     bne   $2569
-; minivcmd 18
+; minivcmd 18 - master volume fade variation?
 254e: 3f e9 25  call  $25e9             ; arg1
 2551: ec 0a 04  mov   y,$040a
 2554: ad 08     cmp   y,#$08
@@ -3789,25 +3959,28 @@
 ; minivcmd 19-1f - nop
 2569: 6f        ret
 
-; minivcmd 20-bf
-256a: 9f        xcn   a
+; minivcmd 20-bf - channel messages
+; lower 4 bits: command-type, upper 4 bits: track # (2..11 => 0..9)
+256a: 9f        xcn   a                 ; extract upper 4 bits of minivcmd
 256b: 9c        dec   a
-256c: 9c        dec   a
+256c: 9c        dec   a                 ; track index (0..9)
 256d: 3f f3 25  call  $25f3
 2570: 90 01     bcc   $2573
 2572: 6f        ret
 
-2573: 28 f0     and   a,#$f0
+2573: 28 f0     and   a,#$f0            ; *lower* 4 bits of minivcmd
 2575: 68 00     cmp   a,#$00
 2577: d0 0c     bne   $2585
+; minivcmd 20 (x0; x=2-b) - voice fade in/out?
 2579: 3f e9 25  call  $25e9             ; arg1
 257c: d5 53 02  mov   $0253+x,a
 257f: e8 80     mov   a,#$80
 2581: d5 2f 03  mov   $032f+x,a
 2584: 6f        ret
-
+;
 2585: 68 10     cmp   a,#$10
 2587: d0 0b     bne   $2594
+; minivcmd 21 (x0; x=2-b) - set channel master volume
 2589: 3f e9 25  call  $25e9             ; arg1
 258c: d4 28     mov   $28+x,a
 258e: e8 01     mov   a,#$01
@@ -3816,31 +3989,37 @@
 
 2594: 68 20     cmp   a,#$20
 2596: d0 04     bne   $259c
+; minivcmd 22 (x2; x=2-b) - echo on
 2598: 3f 7a 22  call  $227a
 259b: 6f        ret
 
 259c: 68 30     cmp   a,#$30
 259e: d0 04     bne   $25a4
+; minivcmd 23 (x3; x=2-b) - echo off
 25a0: 3f 9a 22  call  $229a
 25a3: 6f        ret
 
 25a4: 68 40     cmp   a,#$40
 25a6: d0 04     bne   $25ac
+; minivcmd 24 (x4; x=2-b) - noise on
 25a8: 3f 38 22  call  $2238
 25ab: 6f        ret
 
 25ac: 68 50     cmp   a,#$50
 25ae: d0 04     bne   $25b4
+; minivcmd 25 (x5; x=2-b) - noise off
 25b0: 3f 58 22  call  $2258
 25b3: 6f        ret
 
 25b4: 68 60     cmp   a,#$60
 25b6: d0 04     bne   $25bc
+; minivcmd 26 (x6; x=2-b) - stop voice (end of track)
 25b8: 3f e2 18  call  $18e2
 25bb: 6f        ret
 
 25bc: 68 b0     cmp   a,#$b0
 25be: b0 0d     bcs   $25cd
+; minivcmd 27-2a (x7-xa; x=2-b) - surround
 25c0: 9f        xcn   a
 25c1: 80        setc
 25c2: a8 07     sbc   a,#$07
@@ -3849,6 +4028,7 @@
 25c9: d5 94 03  mov   $0394+x,a
 25cc: 6f        ret
 
+; minivcmd 2b-2f (xb-xf; x=2-b) - nop
 25cd: 6f        ret
 
 25ce: 20        clrp
@@ -3858,9 +4038,9 @@
 25d4: cd 00     mov   x,#$00
 25d6: dd        mov   a,y
 25d7: 75 a3 02  cmp   a,$02a3+x
-25da: d0 05     bne   $25e1
+25da: d0 05     bne   $25e1             ; if x == song slot index then:
 25dc: 2d        push  a
-25dd: 3f e2 18  call  $18e2
+25dd: 3f e2 18  call  $18e2             ; end of track
 25e0: ae        pop   a
 25e1: 3d        inc   x
 25e2: 3d        inc   x
@@ -3878,16 +4058,17 @@
 25f1: ee        pop   y
 25f2: 6f        ret
 
+; search track A (return x: track offset, C: set if not found)
 25f3: 2d        push  a
-25f4: 28 0f     and   a,#$0f
+25f4: 28 0f     and   a,#$0f            ; target track #
 25f6: c4 a2     mov   $a2,a
 25f8: cd 00     mov   x,#$00
 25fa: dd        mov   a,y
 25fb: 75 a3 02  cmp   a,$02a3+x
-25fe: d0 07     bne   $2607
+25fe: d0 07     bne   $2607             ; continue if song slot not match
 2600: e4 a2     mov   a,$a2
 2602: 75 7f 03  cmp   a,$037f+x
-2605: f0 09     beq   $2610
+2605: f0 09     beq   $2610             ; break if track index match
 2607: 3d        inc   x
 2608: 3d        inc   x
 2609: c8 14     cmp   x,#$14
