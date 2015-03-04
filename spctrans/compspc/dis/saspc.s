@@ -1447,11 +1447,11 @@
 10be: 95 4b 03  adc   a,$034b+x
 10c1: 68 79     cmp   a,#$79
 10c3: b0 25     bcs   $10ea
-10c5: c4 38     mov   $38,a
+10c5: c4 38     mov   $38,a             ; save note number
 10c7: 6d        push  y
-10c8: f5 96 03  mov   a,$0396+x
+10c8: f5 96 03  mov   a,$0396+x         ; instrument #
 10cb: fd        mov   y,a
-10cc: f7 60     mov   a,($60)+y
+10cc: f7 60     mov   a,($60)+y         ; read per-instrument tuning (semitones)
 10ce: 60        clrc
 10cf: 84 38     adc   a,$38
 10d1: 1c        asl   a
@@ -1459,7 +1459,7 @@
 10d3: 60        clrc
 10d4: f5 0e 04  mov   a,$040e+x
 10d7: 0d        push  psw
-10d8: 96 25 16  adc   a,$1625+y
+10d8: 96 25 16  adc   a,$1625+y         ; read pitch table
 10db: d4 bc     mov   $bc+x,a
 10dd: f6 26 16  mov   a,$1626+y
 10e0: 88 00     adc   a,#$00
