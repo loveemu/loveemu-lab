@@ -40,6 +40,7 @@ int main(int argc, char *argv[])
 	}
 
 	int c1, c2, c;
+	int offset = 0;
 	while ((c1 = fgetc(fp1)) != EOF)
 	{
 		if ((c2 = fgetc(fp2)) == EOF)
@@ -63,12 +64,13 @@ int main(int argc, char *argv[])
 			}
 			else
 			{
-				printf("%08X: %02X != %02X\n", c1, c2);
+				printf("%08X: %02X != %02X\n", offset, c1, c2);
 				c = c1;
 			}
 		}
 
 		fputc(c, fpo);
+		offset++;
 	}
 
 	ret = EXIT_SUCCESS;
