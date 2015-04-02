@@ -1,5 +1,6 @@
 .LOROM
 
+; Cartridge header should be copied from the original ROM
 .SNESHEADER
  ID    "A42U"
  NAME  "goemon 3             "
@@ -41,234 +42,143 @@
 
 .BANK 0 SLOT 0
 
-.ORG $7E00
+.ORG $0000
 .SECTION "SETUP" SEMIFREE
 
-.DEFINE REQUESTCODE1 = $00FE00
-	.dw	$0008
-.DEFINE REQUESTCODE2 = $00FE02
+.EMPTYFILL $FF
+
+.DEFINE PARAM_SONG = $808000
+	.dw	$0002
+.DEFINE PARAM_IS_SFX = $808002
 	.dw	$0000
 
-Start:
-	; RESET ($80/FF90)
-;	CLC
-;	XCE
-;	SEI
+.DEFINE FrameCount = $7E0042
 
-	; setup start ($80/8000)
-	CLC
-	XCE
-	SEI
-	CLD
+; setup routine derived from the original setup ($80/8000)
+Start:
+	clc
+	xce
+	sei
+	cld
 
 	; set stack pointer
-	REP	#$30
-	LDX	#$01AF
-	TXS
+	rep	#$30
+	ldx	#$01af
+	txs
 
 	; zero memory ($0000-$1FFF)
-	REP	#$30
-	PHB
-	LDA	#$0000
-	STA	$000000.L
-	LDA	#$1FFD
-	LDX	#$0001
-	TXY
-	INY
-	MVN	$00,$00
-	PLB
+	rep	#$30
+	phb
+	lda	#$0000
+	sta	$000000.l
+	lda	#$1ffd
+	ldx	#$0001
+	txy
+	iny
+	mvn	$00,$00
+	plb
 
-	; zero memory ($7E2000-$7EFFFE)
-;	REP	#$30
-;	PHB
-;	LDA	#$0000
-;	STA	$7E2000.L
-;	LDA	#$DFFC
-;	LDX	#$2001
-;	TXY
-;	INY
-;	MVN	$7E,$7E
-;	PLB
+	; set direct page 0
+	lda	#$0000
+	tcd
 
-	; zero memory ($7F0000-$7FFFFE)
-;	REP	#$30
-;	PHB
-;	LDA	#$0000
-;	STA	$7F0000.L
-;	LDA	#$FFFC
-;	LDX	#$0001
-;	TXY
-;	INY
-;	MVN	$7F,$7F
-;	PLB
+	; clear sound area of main RAM
+	jsl	$84bab6
 
-	; direct page 0
-;	LDA	#$0000
-;	TCD
+	; transfer SPC program
+	ldx	#$88ad
+	jsl	$84bbb0
 
-;	PEA	$8100
-;	PLB
-;	PLB
-
-;	SEP	#$20
-;	LDA	$4210
-;	STZ	$4200
-
-;	LDA	#$80
-;	STA	$2100
-
-;	REP	#$20
-;	JSL	$808710
-
-;	REP	#$10
-;	LDY	#$7FFF
-;	LDX	#$0000
-;	JSL	$80BF4B
-
-	JSL	$84BAB6	; clear RAM
-
-;	JSL	$808404
-
-	LDX	#$88AD
-	JSL	$84BBB0	; transfer SPC program
-
-	SEI
-	CLD
+	sei
+	cld
 
 	; set stack pointer, again
-	REP	#$30
-	LDX	#$01AF
-	TXS
+	rep	#$30
+	ldx	#$01af
+	txs
 
-	; direct page 0
-	LDA	#$0000
-	TCD
+	; set direct page 0, again
+	lda	#$0000
+	tcd
 
-;	PEA	$8100
-;	PLB
-;	PLB
+	; clear framecount
+	lda #0
+	sta FrameCount
 
-;	JSL	$84C579	; sync $2140
+	; setup interrupt
+	rep	#$20
+	jsl	$808230
+	cli
 
-;	STZ	$1FF4
-;	JSL	$84C5BB	; checks $1FF4
-;	JSL	$808302
-;	JSL	$808710
-;	JSL	$808828
+loc_WaitDspInit:
+	wai
 
-;	REP	#$20
-;	LDA	#$7000
-;	STA	$50
-;	LDA	#$7400
-;	STA	$52
-;	LDA	#$19D2
-;	STA	$19D0
-;	LDA	#$2C00
-;	STA	$4A
-;	STZ	$1770
-;	STZ	$1778
-;	STZ	$177C
-;	STZ	$1784
-;	STZ	$178C
-;	STZ	$1790
-;	STZ	$1798
-;	STZ	$17A0
-;	STZ	$17A4
-;	STZ	$17AC
-	JSL	$808230
+	; Konami driver unsets the FLG mute bit after the initialization.
+	; However, it seems to be done with a little delay.
+	; Moreover, the SPC driver will never notify the unmute timing.
 
-	CLI
+	; Therefore, we need to wait a little, before sending a request.
+	; The mute continues for about 20 frames, but we wait for 30 frames for safe.
+	lda	FrameCount
+	cmp	#30
+	bcc	loc_WaitDspInit
 
-	LDY	REQUESTCODE1.L
-	JSL	$808950
+	lda	#0
+	sta	FrameCount
 
-_LP:
-	WAI
-;	LDA	#$0000
-;	TCD
-;	LDA	$4C
-;	BNE	loc_80F3
-;	LDA	$86
-;	ADC	$42
-;	STA	$86
-;
-;loc_80F3:
-	BRA	_LP
+loc_PlaySound:
+	lda	PARAM_IS_SFX
+	bne	loc_PlaySFX
+
+	; request BGM playback
+	lda	PARAM_SONG
+	asl	a
+	asl	a
+
+	tay
+	jsl	$808950
+
+	; TODO: sub-song?
+	;jsl	$808993
+
+	bra loc_MainLoop
+
+loc_PlaySFX:
+	; request SFX playback
+	LDA	PARAM_SONG
+	JSL	$84C594
+
+loc_MainLoop:
+	wai
+	bra	loc_MainLoop
 
 VBlank:
 	; NMI ($80/80F5)
-	REP	#$38
-	PHA
-	PHX
-	PHY
-	PHD
-	PHB
-;	LDA	#$0000
-;	TCD
-;	SEP	#$20
-;	LDA	#$81
-;	PHA
-;	PLB
-;	REP	#$20
-	LDA	$4210
-;	LDA	#$0001
-;	LDY	$44
-;	STA	$44
-;	BEQ	loc_813E
-;	JSR	$824B
-;	JSR	$81A0
-;	JSL	$808344
-;	LDA	$1E36
-;	BNE	loc_813B
-;	LDA	$001D9C
-;	PHA
-;	LDA	$001D9E
-;	PHA
-;	JSL	$84C7DD
-;	PLA
-;	STA	$001D9E
-;	PLA
-;	STA	$001D9C
-;
-;loc_813B:
-;	BRL	loc_8198
-;
-;loc_813E:
-;	SEP	#$20
-;	STZ	$420C
-;	REP	#$20
-;	JSR	$824B
-;	JSR	$81CC
-;	JSL	$809493
-;	JSL	$809570
-;	JSL	$80936E
-;	JSL	$8092F6
-;	JSR	$81A0
-;	JSL	$809784
-;	JSR	$82C8
-;	JSL	$808344
-;	JSL	$848B6C	; run if $1D60 != 0
-;	INC	$1E36
-;	JSL	$84C7DD	; run if $1E00 != 0
-;	JSL	$808622
-;	JSL	$808458
-;	STZ	$1E36
-;	JSL	$80B0A2
-;	JSL	$80C316
-;	JSL	$8097D5
-;	JSL	$84BB83	; call subroutine specified by $0100 or $1F00
-;	INC	$1E36
-	JSL	$84C523
-;	STZ	$44
-;
-;loc_8198:
-	REP	#$30
-	PLB
-	PLD
-	PLY
-	PLX
-	PLA
-	RTI
+	rep	#$38
+	pha
+	phx
+	phy
+	phd
+	phb
+
+	; clear NMI flag
+	lda	$4210
+
+	; increment framecount
+	lda FrameCount
+	inc a
+	sta FrameCount
+
+	; dispatch sound requests
+	jsl	$84c523
+
+	rep	#$30
+	plb
+	pld
+	ply
+	plx
+	pla
+	rti
 
 EmptyHandler:
 	RTI
