@@ -49,7 +49,11 @@
 
 .DEFINE PARAM_SONG = $808000
 	.dw	$0002
-.DEFINE PARAM_IS_SFX = $808002
+.DEFINE PARAM_SONG_2 = $808002
+	.dw	$0000
+.DEFINE PARAM_RESERVED_1 = $808004
+	.dw	$0000
+.DEFINE PARAM_RESERVED_2 = $808006
 	.dw	$0000
 
 .DEFINE FrameCount = $7E0042
@@ -123,30 +127,41 @@ loc_WaitDspInit:
 	cmp	#30
 	bcc	loc_WaitDspInit
 
-	lda	#0
-	sta	FrameCount
+	; Another bug note:
+	; The driver does not initialize the GAIN register.
+	; First notes in some songs might sound odd a little.
 
 loc_PlaySound:
-	lda	PARAM_IS_SFX
-	bne	loc_PlaySFX
+	lda	PARAM_SONG
+	beq	loc_PlaySFX
 
 	; request BGM playback
 	lda	PARAM_SONG
 	asl	a
 	asl	a
-
 	tay
 	jsl	$808950
 
-	; TODO: sub-song?
-	;jsl	$808993
+	lda	PARAM_SONG_2
+	asl	a
+	asl	a
+	beq	loc_EnterMainLoop
 
-	bra loc_MainLoop
+	; request the real BGM playback
+	; previous request preloads necessary samples
+	tay
+	jsl	$808950
+
+	bra loc_EnterMainLoop
 
 loc_PlaySFX:
 	; request SFX playback
-	LDA	PARAM_SONG
-	JSL	$84C594
+	lda	PARAM_SONG_2
+	jsl	$84c594
+
+loc_EnterMainLoop:
+	lda	#0
+	sta	FrameCount
 
 loc_MainLoop:
 	wai
