@@ -48,7 +48,7 @@
 .EMPTYFILL $FF
 
 .DEFINE PARAM_SONG = $808000
-	.dw	$0002
+	.dw	$0000
 .DEFINE PARAM_SONG_2 = $808002
 	.dw	$0000
 .DEFINE PARAM_RESERVED_1 = $808004
@@ -127,10 +127,6 @@ loc_WaitDspInit:
 	cmp	#30
 	bcc	loc_WaitDspInit
 
-	; Another bug note:
-	; The driver does not initialize the GAIN register.
-	; First notes in some songs might sound odd a little.
-
 loc_PlaySound:
 	lda	PARAM_SONG
 	bmi	loc_PlaySFX
@@ -141,15 +137,15 @@ loc_PlaySound:
 	asl	a
 	jsl	$80da63
 
-	lda	PARAM_SONG_2
-	asl	a
-	asl	a
-	bmi	loc_EnterMainLoop
-
-	; request the real BGM playback
-	; previous request preloads necessary samples
-	jsl	$80da63
-
+;	lda	PARAM_SONG_2
+;	asl	a
+;	asl	a
+;	beq	loc_EnterMainLoop
+;
+;	; request the real BGM playback
+;	; previous request preloads necessary samples
+;	jsl	$80da63
+;
 	bra loc_EnterMainLoop
 
 loc_PlaySFX:
