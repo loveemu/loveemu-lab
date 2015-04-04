@@ -133,8 +133,16 @@ loc_WaitDspInit:
 
 loc_PlaySound:
 	lda	PARAM_SONG
-	beq	loc_PlaySFX
+	bmi	loc_PlaySFX
+	bne loc_PlayBGM
 
+loc_PlayKonamiLogo:
+;	lda	#$0000
+	jsl	$84c6d5
+
+	bra	loc_EnterMainLoop
+
+loc_PlayBGM:
 	; request BGM playback
 	lda	PARAM_SONG
 	asl	a
@@ -143,21 +151,33 @@ loc_PlaySound:
 	jsl	$808950
 
 	lda	PARAM_SONG_2
-	asl	a
-	asl	a
 	beq	loc_EnterMainLoop
 
 	; request the real BGM playback
 	; previous request preloads necessary samples
+	asl	a
+	asl	a
 	tay
 	jsl	$808950
 
 	bra loc_EnterMainLoop
 
 loc_PlaySFX:
+	and	#$ff
+	bne	loc_PlaySFX_2
+
 	; request SFX playback
 	lda	PARAM_SONG_2
 	jsl	$84c594
+
+	bra loc_EnterMainLoop
+
+loc_PlaySFX_2:
+	; request SFX playback
+	lda	PARAM_SONG_2
+	asl	a
+	asl	a
+	jsl	$8089bd
 
 loc_EnterMainLoop:
 	lda	#0
@@ -183,6 +203,9 @@ VBlank:
 	lda FrameCount
 	inc a
 	sta FrameCount
+
+	; dispatch sampled SFXs
+	jsl	$84c7dd
 
 	; dispatch sound requests
 	jsl	$84c523
