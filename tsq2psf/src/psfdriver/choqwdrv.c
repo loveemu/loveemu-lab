@@ -34,6 +34,7 @@
 */
 #define PARAM_RTYPE         (*((unsigned char*)(PSFDRV_PARAM+0x0000)))
 #define PARAM_RDEPTH        (*((unsigned char*)(PSFDRV_PARAM+0x0001)))
+#define PARAM_MVOL          (*((unsigned short*)(PSFDRV_PARAM+0x0002)))
 #define MPARAM_SONGINDEX    (*(unsigned short*)(MINIPSF_PARAM+0x0000))
 #define MPARAM_RESERVED     (*(unsigned short*)(MINIPSF_PARAM+0x0002))
 #define MPARAM_RUSE_SUB     (*((unsigned char*)(MINIPSF_PARAM+0x0004)))
@@ -124,6 +125,7 @@ unsigned long driverinfo[] = {
   */
   (int)"rtype" , (int)(&PARAM_RTYPE ), 1,
   (int)"rdepth", (int)(&PARAM_RDEPTH), 1,
+  (int)"mvol", (int)(&PARAM_MVOL), 2,
   0
 };
 
@@ -186,7 +188,7 @@ unsigned long loopforever_data[] = {0x1000FFFF,0};
   #define SndPlayBGM(a,b)                        F2(0x8016FC6C) ((int)(a),(int)(b))
   #define SndLoadTSQ(a,b)                        F2(0x801704C4) ((int)(a),(int)(b))
   #define SndLoadTVB(a,b,c)                      F3(0x801705D4) ((int)(a),(int)(b),(int)(c))
-  #define SndSetCommonAttr(a)                    F1(0x801706D0) ((int)(a))
+  #define SndSetMasterVolume(a)                  F1(0x801706D0) ((int)(a))
   #define SndSetReverbMode(a)                    F1(0x80170740) ((int)(a))
   #define SndSetReverb(a)                        F1(0x80170800) ((int)(a))
   #define SndSetReverbDepth(a)                   F1(0x801707A4) ((int)(a))
@@ -202,6 +204,7 @@ unsigned long loopforever_data[] = {0x1000FFFF,0};
 int psfdrv(void) {
   int rtype;
   int rdepth;
+  int mvol;
 
   int ruse_sub;
   int rtype_sub;
@@ -219,6 +222,7 @@ int psfdrv(void) {
   */
   rtype  = PARAM_RTYPE;
   rdepth = PARAM_RDEPTH;
+  mvol   = PARAM_MVOL;
 
   /*
   ** Overwrite reverb parameters if requested
@@ -281,6 +285,9 @@ int psfdrv(void) {
   */
   SndLoadTSQ(tsq, bank);
   SndLoadTVB(tvb, bank, spu_adpcm_addr);
+
+  //mvol = 0x2000;
+  SndSetMasterVolume(mvol);
 
   /*
   ** Play the song
