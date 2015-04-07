@@ -9,8 +9,13 @@
 #include <io.h>
 #define FMODE_WRITEBIN "wb"
 #define FMODE_READBIN "rb"
+#if defined(_MSC_VER)
+#define SETBINMODE(f) _setmode(_fileno(f), _O_BINARY)
+#define ISATTY(f) _isatty(_fileno(f))
+#else
 #define SETBINMODE(f) setmode(fileno(f), _O_BINARY)
 #define ISATTY(f) isatty(fileno(f))
+#endif
 
 #elif definde(DJGPP)
 
@@ -458,7 +463,6 @@ BC2_ERROR bincut2(BC2_PARAM *param,  GETOPT *opt)
 
 int main(int argc, char **argv)
 {
-	int i;
 	BC2_PARAM bc2param;
 	GETOPT getopt;
 	init_param(&bc2param);
