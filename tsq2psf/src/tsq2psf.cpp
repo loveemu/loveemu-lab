@@ -261,7 +261,7 @@ bool build_choroq_psf(const char * psf_path, const uint8_t * tsq, size_t tsq_siz
 
 	uint32_t rom_size = load_end_address - load_address;
 
-	if (save_psf1(psf_path, &mem[load_address & PSX_MEMORY_MASK], load_address, rom_size, initial_pc, initial_sp, region_name, tags)) {
+	if (!save_psf1(psf_path, &mem[load_address & PSX_MEMORY_MASK], load_address, rom_size, initial_pc, initial_sp, region_name, tags)) {
 		delete[] mem;
 		return false;
 	}
