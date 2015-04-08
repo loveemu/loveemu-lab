@@ -31,6 +31,7 @@
 057b: d4 10     mov   $10+x,a
 057d: ab eb     inc   $eb
 057f: 2f dc     bra   $055d             ; restart main loop
+; received a cpu cmd from $f5
 0581: fd        mov   y,a
 0582: f6 37 05  mov   a,$0537+y
 0585: d0 1c     bne   $05a3
@@ -216,32 +217,32 @@
 06ee: bc        inc   a
 06ef: c4 ea     mov   $ea,a
 06f1: 5f 46 07  jmp   $0746
-; CPU cmd F0
-06f4: ba f6     movw  ya,$f6
+; CPU cmd F0 - transfer data from SNES
+06f4: ba f6     movw  ya,$f6            ; destination APU address
 06f6: f8 ea     mov   x,$ea
 06f8: d8 f4     mov   $f4,x
-06fa: da 34     movw  $34,ya
+06fa: da 34     movw  $34,ya            ; save the destination address
 06fc: 3e f4     cmp   x,$f4
-06fe: d0 fc     bne   $06fc
+06fe: d0 fc     bne   $06fc             ; sync
 0700: 3d        inc   x
 0701: eb f6     mov   y,$f6
-0703: d0 25     bne   $072a
+0703: d0 25     bne   $072a             ; initial offset (0)
 0705: e4 f5     mov   a,$f5
 0707: d8 f4     mov   $f4,x
-0709: d7 34     mov   ($34)+y,a
+0709: d7 34     mov   ($34)+y,a         ; write APU1
 070b: fc        inc   y
 070c: 3e f4     cmp   x,$f4
-070e: d0 fc     bne   $070c
+070e: d0 fc     bne   $070c             ; sync
 0710: 3d        inc   x
 0711: e4 f5     mov   a,$f5
-0713: d7 34     mov   ($34)+y,a
+0713: d7 34     mov   ($34)+y,a         ; write APU1
 0715: fc        inc   y
 0716: e4 f6     mov   a,$f6
-0718: d7 34     mov   ($34)+y,a
+0718: d7 34     mov   ($34)+y,a         ; write APU2
 071a: e4 f7     mov   a,$f7
 071c: d8 f4     mov   $f4,x
 071e: fc        inc   y
-071f: d7 34     mov   ($34)+y,a
+071f: d7 34     mov   ($34)+y,a         ; write APU3
 0721: fc        inc   y
 0722: d0 e8     bne   $070c
 0724: d8 ea     mov   $ea,x
