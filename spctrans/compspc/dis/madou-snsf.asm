@@ -125,6 +125,9 @@ loc_PreloadBGM:
 ;	jsl	$80ec44
 
 	; nullify the playback
+	; FIXME: broken SRCN 3 in Last Battle song
+	; The issue is caused by SPC program (not a bug of SNSF driver!)
+	; Anyway, we need to write #1 to PSRAM:$00 for the workaround, but how?
 	stz	$1c6d
 
 loc_WaitForPreload
