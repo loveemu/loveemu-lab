@@ -84,16 +84,6 @@ Start:
 	ldx	#$1fff
 	txs
 
-	phk
-	plb
-	rep	#$20
-	lda	#$cf6a
-	sta	$01
-	stz	$62
-	stz	$5e
-	stz	$60
-	stz	$420b
-
 	; setup interrupt
 	sep	#$20
 	lda	#$81
@@ -117,9 +107,10 @@ Start:
 	lda	#$01
 	jsl	$00ecb8
 
-	lda	#$f1
-	jsl	$00e87f
+;	lda	#$f1
+;	jsl	$00e87f
 
+	; enable sound processing
 	lda	#$01
 	sta	$5d
 
@@ -185,9 +176,6 @@ VBlank:
 	; disable interrupt
 	lda	#$01
 	sta	$4200
-
-	; increment framecount
-;	inc $77
 
 	lda	$5d
 	beq	loc_SkipSoundReq
