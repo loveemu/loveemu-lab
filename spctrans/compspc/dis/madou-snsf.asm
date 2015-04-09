@@ -125,10 +125,14 @@ loc_PreloadBGM:
 ;	jsl	$80ec44
 
 	; nullify the playback
-	; FIXME: broken SRCN 3 in Last Battle song
-	; The issue is caused by SPC program (not a bug of SNSF driver!)
-	; Anyway, we need to write #1 to PSRAM:$00 for the workaround, but how?
 	stz	$1c6d
+
+	; **Glitch Information**
+	; Undefined percussion notes in the Last Battle song (BGM #24):
+	; It's not a bug of the SNSF driver, but we need a workaround anyways.
+	; In the real game, writing #1 to PSRAM:$00 is working as a workaround luckily.
+	; However, at last, I decided to fix the sequence rather than editing RAM value.
+	; madou-snsf-bgm24-fix.ips will convert all the undefined notes to the rests.
 
 loc_WaitForPreload
 	; wait for data transfer
