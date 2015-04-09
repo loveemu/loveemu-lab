@@ -22,7 +22,7 @@ int main(int argc, char * argv[])
 	std::string out_basename(argv[1]);
 	std::string hexstring(argv[3]);
 
-	longval = strtol(argv[2], &endptr, 16);
+	longval = strtol(argv[2], &endptr, 10);
 	if (*endptr != '\0' || errno == ERANGE) {
 		fprintf(stderr, "Error: Number format error \"%s\"\n", argv[2]);
 		return EXIT_FAILURE;
