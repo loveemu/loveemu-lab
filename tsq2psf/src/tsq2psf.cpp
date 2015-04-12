@@ -30,7 +30,7 @@
 #endif
 
 #define APP_NAME    "tsq2psf"
-#define APP_VER     "[2015-04-07]"
+#define APP_VER     "[2015-04-12]"
 #define APP_URL     ""
 
 #define PSX_MEMORY_SIZE         0x200000

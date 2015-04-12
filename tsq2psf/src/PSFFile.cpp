@@ -320,7 +320,7 @@ bool PSFFile::save(const std::string& filename, uint8_t version, const uint8_t *
 	}
 
 	// crc32 of program area
-	uint32_t exe_crc = crc32(0L, compressed_exe, compressed_exe_size);
+	uint32_t exe_crc = (compressed_exe != NULL) ? crc32(0L, compressed_exe, compressed_exe_size) : 0;
 	data[0] = exe_crc & 0xff;
 	data[1] = (exe_crc >> 8) & 0xff;
 	data[2] = (exe_crc >> 16) & 0xff;
@@ -332,17 +332,23 @@ bool PSFFile::save(const std::string& filename, uint8_t version, const uint8_t *
 	}
 
 	// reserved area
-	if (fwrite(reserved, 1, reserved_size, fp) != reserved_size)
+	if (reserved != NULL && reserved_size != 0)
 	{
-		fclose(fp);
-		return false;
+		if (fwrite(reserved, 1, reserved_size, fp) != reserved_size)
+		{
+			fclose(fp);
+			return false;
+		}
 	}
 
 	// program area
-	if (fwrite(compressed_exe, 1, compressed_exe_size, fp) != compressed_exe_size)
+	if (compressed_exe != NULL && compressed_exe_size != 0)
 	{
-		fclose(fp);
-		return false;
+		if (fwrite(compressed_exe, 1, compressed_exe_size, fp) != compressed_exe_size)
+		{
+			fclose(fp);
+			return false;
+		}
 	}
 
 	// tags
@@ -373,5 +379,6 @@ bool PSFFile::save(const std::string& filename, uint8_t version, const uint8_t *
 		}
 	}
 
+	fclose(fp);
 	return true;
 }
