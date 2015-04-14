@@ -21,6 +21,32 @@
 #include <unistd.h>
 #endif
 
+static uint8_t readByte(uint8_t * buf)
+{
+	return buf[0];
+}
+
+static uint16_t readShort(uint8_t * buf)
+{
+	return buf[0] | (buf[1] << 8);
+}
+
+static uint32_t readInt(uint8_t * buf)
+{
+	return buf[0] | (buf[1] << 8) | (buf[2] << 16) | (buf[3] << 24);
+}
+
+static void writeByte(uint8_t * buf, uint8_t value)
+{
+	buf[0] = value;
+}
+
+static void writeShort(uint8_t * buf, uint16_t value)
+{
+	buf[0] = value & 0xff;
+	buf[1] = (value >> 8) & 0xff;
+}
+
 static void writeInt(uint8_t * buf, uint32_t value)
 {
 	buf[0] = value & 0xff;
