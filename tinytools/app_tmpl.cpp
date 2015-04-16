@@ -21,33 +21,33 @@
 #include <unistd.h>
 #endif
 
-static uint8_t readByte(uint8_t * buf)
+static uint8_t read_byte(uint8_t * buf)
 {
 	return buf[0];
 }
 
-static uint16_t readShort(uint8_t * buf)
+static uint16_t read_short(uint8_t * buf)
 {
 	return buf[0] | (buf[1] << 8);
 }
 
-static uint32_t readInt(uint8_t * buf)
+static uint32_t read_int(uint8_t * buf)
 {
 	return buf[0] | (buf[1] << 8) | (buf[2] << 16) | (buf[3] << 24);
 }
 
-static void writeByte(uint8_t * buf, uint8_t value)
+static void write_byte(uint8_t * buf, uint8_t value)
 {
 	buf[0] = value;
 }
 
-static void writeShort(uint8_t * buf, uint16_t value)
+static void write_short(uint8_t * buf, uint16_t value)
 {
 	buf[0] = value & 0xff;
 	buf[1] = (value >> 8) & 0xff;
 }
 
-static void writeInt(uint8_t * buf, uint32_t value)
+static void write_int(uint8_t * buf, uint32_t value)
 {
 	buf[0] = value & 0xff;
 	buf[1] = (value >> 8) & 0xff;
@@ -55,12 +55,78 @@ static void writeInt(uint8_t * buf, uint32_t value)
 	buf[3] = (value >> 24) & 0xff;
 }
 
+std::string get_directory(const std::string & filename)
+{
+	std::string::size_type pos_slash = filename.find_last_of('/');
+	std::string::size_type pos_backslash = filename.find_last_of('\\');
+
+	if (pos_slash == std::string::npos || (pos_backslash != std::string::npos && pos_slash < pos_backslash)) {
+		pos_slash = pos_backslash;
+	}
+
+	if (pos_slash != std::string::npos) {
+		return filename.substr(0, pos_slash + 1);
+	}
+	else {
+		return "";
+	}
+}
+
+std::string strip_directory(const std::string & filename)
+{
+	std::string::size_type pos_slash = filename.find_last_of('/');
+	std::string::size_type pos_backslash = filename.find_last_of('\\');
+
+	if (pos_slash == std::string::npos || (pos_backslash != std::string::npos && pos_slash < pos_backslash)) {
+		pos_slash = pos_backslash;
+	}
+
+	if (pos_slash != std::string::npos) {
+		return filename.substr(pos_slash + 1);
+	}
+	else {
+		return filename;
+	}
+}
+
+std::string get_extension(const std::string & filename)
+{
+	std::string::size_type pos_dot = filename.find_last_of('.');
+	std::string::size_type pos_slash = filename.find_last_of('/');
+	std::string::size_type pos_backslash = filename.find_last_of('\\');
+
+	if (pos_dot != std::string::npos &&
+		(pos_slash == std::string::npos || pos_slash < pos_dot) &&
+		(pos_backslash == std::string::npos || pos_backslash < pos_dot)) {
+		return filename.substr(pos_dot);
+	}
+	else {
+		return "";
+	}
+}
+
+std::string strip_extension(const std::string & filename)
+{
+	std::string::size_type pos_dot = filename.find_last_of('.');
+	std::string::size_type pos_slash = filename.find_last_of('/');
+	std::string::size_type pos_backslash = filename.find_last_of('\\');
+
+	if (pos_dot != std::string::npos &&
+		(pos_slash == std::string::npos || pos_slash < pos_dot) &&
+		(pos_backslash == std::string::npos || pos_backslash < pos_dot)) {
+		return filename.substr(0, pos_dot);
+	}
+	else {
+		return filename;
+	}
+}
+
 static void usage(const char * progname)
 {
 	printf("Usage\n");
 	printf("-----\n");
 	printf("\n");
-	printf("Syntax: `%s [filename]`\n", progname);
+	printf("Syntax: `%s [input file] [output file]`\n", progname);
 	printf("\n");
 
 	printf("### Options\n");
@@ -104,12 +170,13 @@ int main(int argc, char *argv[])
 	}
 
 	int argnum = argc - argi;
-	if (argnum != 1) {
+	if (argnum != 2) {
 		fprintf(stderr, "Error: Too few/many arguments\n");
 		return EXIT_FAILURE;
 	}
 
 	std::string filename(argv[argi]);
+	std::string out_filename(argv[argi + 1]);
 
 	struct stat st;
 	if (stat(filename.c_str(), &st) != 0 || st.st_size == -1) {
@@ -122,13 +189,13 @@ int main(int argc, char *argv[])
 
 	fp = fopen(filename.c_str(), "rb");
 	if (fp == NULL) {
-		fprintf(stderr, "Error: File open error\n");
+		fprintf(stderr, "Error: File open error \"%s\"\n", filename.c_str());
 		return EXIT_FAILURE;
 	}
 
 	data.resize(filesize);
 	if (fread(&data[0], 1, filesize, fp) != filesize) {
-		fprintf(stderr, "Error: File read error\n");
+		fprintf(stderr, "Error: File read error \"%s\"\n", filename.c_str());
 		fclose(fp);
 		return EXIT_FAILURE;
 	}
@@ -140,14 +207,14 @@ int main(int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 
-	fp = fopen(filename.c_str(), "wb");
+	fp = fopen(out_filename.c_str(), "wb");
 	if (fp == NULL) {
-		fprintf(stderr, "Error: File open error\n");
+		fprintf(stderr, "Error: File open error \"%s\"\n", out_filename.c_str());
 		return EXIT_FAILURE;
 	}
 
 	if (fwrite(&data[0], 1, data.size(), fp) != data.size()) {
-		fprintf(stderr, "Error: File write error\n");
+		fprintf(stderr, "Error: File write error \"%s\"\n", out_filename.c_str());
 		fclose(fp);
 		return EXIT_FAILURE;
 	}
