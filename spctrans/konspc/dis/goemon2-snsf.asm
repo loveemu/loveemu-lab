@@ -49,9 +49,9 @@
 
 .DEFINE PARAM_SONG = $808000
 	.dw	$0002
-.DEFINE PARAM_SONG_2 = $808002
+.DEFINE PARAM_SONG_PRELOAD = $808002
 	.dw	$0000
-.DEFINE PARAM_RESERVED_1 = $808004
+.DEFINE PARAM_SONG_TYPE = $808004
 	.dw	$0000
 .DEFINE PARAM_RESERVED_2 = $808006
 	.dw	$0000
@@ -129,11 +129,33 @@ loc_WaitDspInit:
 	; First notes in some songs might sound odd a little.
 
 loc_PlaySound:
-	lda	PARAM_SONG
-	bmi	loc_PlaySFX
+	lda	PARAM_SONG_TYPE
+	beq	loc_PlayBGM
+	bpl	loc_PlaySFX
+	bmi	loc_PlayVoice
 
-	cmp	#$7fff
-	bne loc_PlayBGM
+loc_PlayBGM:
+	lda	PARAM_SONG_PRELOAD
+	bpl	loc_SkipPreload
+	and	#$7fff
+
+	; request BGM playback (preload)
+	asl	a
+	asl	a
+	tay
+	jsl	$808afb
+
+loc_SkipPreload
+	lda	PARAM_SONG
+	bmi	loc_PlayKonamiLogo
+
+	; request BGM playback
+	asl	a
+	asl	a
+	tay
+	jsl	$808afb
+
+	bra	loc_EnterMainLoop
 
 loc_PlayKonamiLogo:
 	lda	#$0000
@@ -141,39 +163,16 @@ loc_PlayKonamiLogo:
 
 	bra	loc_EnterMainLoop
 
-loc_PlayBGM:
-	; request BGM playback
-	lda	PARAM_SONG
-	asl	a
-	asl	a
-	tay
-	jsl	$808afb
-
-	lda	PARAM_SONG_2
-	beq	loc_EnterMainLoop
-
-	; request the real BGM playback
-	; previous request preloads necessary samples
-	asl	a
-	asl	a
-	tay
-	jsl	$808afb
-
-	bra loc_EnterMainLoop
-
 loc_PlaySFX:
-	and	#$ff
-	bne	loc_PlaySFX_2
-
 	; request SFX playback
-	lda	PARAM_SONG_2
+	lda	PARAM_SONG
 	jsl	$80838a
 
 	bra loc_EnterMainLoop
 
-loc_PlaySFX_2:
-	; request SFX playback
-	lda	PARAM_SONG_2
+loc_PlayVoice:
+	; request sampled SFX playback
+	lda	PARAM_SONG
 	asl	a
 	asl	a
 	jsl	$80b6f3
