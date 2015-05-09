@@ -119,17 +119,17 @@ public class HokutoDMF implements DMF
                     process_event(track);
                     return;
 
-                case 0x86:
+                case 0x86: // voice slot assignment?
                     arg1 = inSEQ.read();
                     midi.getTracks()[track].add(MidiEventCreator
-                        .createProgramChangeEvent(Main.midiTick, track, arg1));
+                        .createTextEvent(Main.midiTick, "event 86 (" + arg1 + ")"));
                     track_ptr[track] += 1;
                     return;
 
                 case 0x89:
                     arg1 = inSEQ.read();
                     midi.getTracks()[track].add(MidiEventCreator
-                        .createTextEvent(Main.midiTick, "event 89 (" + arg1 + ")"));
+                        .createProgramChangeEvent(Main.midiTick, track, arg1));
                     track_ptr[track] += 1;
                     return;
 
