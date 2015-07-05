@@ -1,52 +1,77 @@
+; receive data block from CPU
+04b8: cd 00     mov   x,#$00
+04ba: e4 f4     mov   a,$f4
+04bc: 65 d6 04  cmp   a,$04d6
+04bf: f0 f9     beq   $04ba             ; APU0 sync
+04c1: c5 d6 04  mov   $04d6,a
+04c4: 28 01     and   a,#$01
+04c6: f0 0b     beq   $04d3             ; quit if APU0.bit0 == 0
+04c8: e4 f5     mov   a,$f5
+04ca: c7 f6     mov   ($f6+x),a         ; write APU1 to (APU2/APU3)
+04cc: e5 d6 04  mov   a,$04d6
+04cf: c4 f4     mov   $f4,a
+04d1: 2f e7     bra   $04ba
+; goto APU2/APU3
+04d3: 1f f6 00  jmp   ($00f6+x)
+
 05e0: 20        clrp
 05e1: cd ff     mov   x,#$ff
 05e3: bd        mov   sp,x
 05e4: e4 f4     mov   a,$f4
 05e6: c5 d6 04  mov   $04d6,a
 05e9: c4 f4     mov   $f4,a
-05eb: 3f 71 10  call  $1071
+05eb: 3f 71 10  call  $1071             ; initialize
 05ee: 8f 00 24  mov   $24,#$00
 05f1: 8f 00 ed  mov   $ed,#$00
 05f4: e8 00     mov   a,#$00
 05f6: c4 25     mov   $25,a
 05f8: 8f 00 f1  mov   $f1,#$00
-05fb: 8f ff f5  mov   $f5,#$ff
+05fb: 8f ff f5  mov   $f5,#$ff          ; set APU2 (transfer done)
+; main loop
 05fe: e4 f4     mov   a,$f4
 0600: 5d        mov   x,a
 0601: 65 d6 04  cmp   a,$04d6
 0604: f0 3b     beq   $0641
+; APU0 (sync) changed
 0606: e4 f6     mov   a,$f6
-0608: c5 d8 04  mov   $04d8,a
+0608: c5 d8 04  mov   $04d8,a           ; save APU2
 060b: e4 f5     mov   a,$f5
-060d: c9 d6 04  mov   $04d6,x
+060d: c9 d6 04  mov   $04d6,x           ; save APU0
 0610: d8 f4     mov   $f4,x
 0612: 68 ff     cmp   a,#$ff
 0614: d0 03     bne   $0619
+; cpu cmd ff - transfer data from CPU
 0616: 5f 17 07  jmp   $0717
-
+; when APU1 (cpu cmd) != 0xff:
 0619: 68 fe     cmp   a,#$fe
 061b: f0 1e     beq   $063b
 061d: 68 fd     cmp   a,#$fd
 061f: f0 0c     beq   $062d
 0621: 68 fc     cmp   a,#$fc
 0623: f0 0f     beq   $0634
-0625: e9 d8 04  mov   x,$04d8
+; cpu cmd 00..fb - play SFX
+0625: e9 d8 04  mov   x,$04d8           ; APU2
 0628: 3f 73 11  call  $1173
 062b: 2f 1e     bra   $064b
-062d: e5 d8 04  mov   a,$04d8
+; cpu cmd fd - set conditional value
+062d: e5 d8 04  mov   a,$04d8           ; APU2
 0630: c4 ed     mov   $ed,a
 0632: 2f 1b     bra   $064f
-0634: e5 d8 04  mov   a,$04d8
+; cpu cmd fc - set stereo/mono
+0634: e5 d8 04  mov   a,$04d8           ; APU2
 0637: c4 25     mov   $25,a
 0639: 2f 14     bra   $064f
+; cpu cmd fe - start timer and BGM playback
 063b: 8f 01 24  mov   $24,#$01
-063e: 8f 00 f1  mov   $f1,#$00
+063e: 8f 00 f1  mov   $f1,#$00          ; stop timers
+;
 0641: e4 24     mov   a,$24
 0643: f0 b9     beq   $05fe
-0645: fa ec fa  mov   ($fa),($ec)
-0648: 8f 01 f1  mov   $f1,#$01
+; start BGM playback
+0645: fa ec fa  mov   ($fa),($ec)       ; set timer 0 frequency
+0648: 8f 01 f1  mov   $f1,#$01          ; start timer 0
 064b: e4 fd     mov   a,$fd
-064d: f0 fc     beq   $064b
+064d: f0 fc     beq   $064b             ; wait for tick
 064f: 8f 01 f1  mov   $f1,#$01
 0652: 8f 00 28  mov   $28,#$00
 0655: 60        clrc
@@ -91,33 +116,34 @@
 06a5: 10 02     bpl   $06a9
 06a7: e8 00     mov   a,#$00
 06a9: 8f 0c f2  mov   $f2,#$0c
-06ac: c4 f3     mov   $f3,a
+06ac: c4 f3     mov   $f3,a             ; MVOL(L)
 06ae: e5 31 02  mov   a,$0231
 06b1: 8d 00     mov   y,#$00
 06b3: 9a 03     subw  ya,$03
 06b5: 10 02     bpl   $06b9
 06b7: e8 00     mov   a,#$00
 06b9: 8f 1c f2  mov   $f2,#$1c
-06bc: c4 f3     mov   $f3,a
+06bc: c4 f3     mov   $f3,a             ; MVOL(R)
 06be: e5 32 02  mov   a,$0232
 06c1: 8d 00     mov   y,#$00
 06c3: 9a 03     subw  ya,$03
 06c5: 10 02     bpl   $06c9
 06c7: e8 00     mov   a,#$00
 06c9: 8f 2c f2  mov   $f2,#$2c
-06cc: c4 f3     mov   $f3,a
+06cc: c4 f3     mov   $f3,a             ; EVOL(L)
 06ce: e5 33 02  mov   a,$0233
 06d1: 8d 00     mov   y,#$00
 06d3: 9a 03     subw  ya,$03
 06d5: 10 02     bpl   $06d9
 06d7: e8 00     mov   a,#$00
 06d9: 8f 3c f2  mov   $f2,#$3c
-06dc: c4 f3     mov   $f3,a
+06dc: c4 f3     mov   $f3,a             ; EVOL(R)
 06de: cd 00     mov   x,#$00
 06e0: e4 28     mov   a,$28
 06e2: d0 05     bne   $06e9
 06e4: 3f 17 09  call  $0917
 06e7: 2f 07     bra   $06f0
+;
 06e9: 3f 49 07  call  $0749
 06ec: 68 00     cmp   a,#$00
 06ee: d0 f9     bne   $06e9
@@ -132,6 +158,7 @@
 06fd: d0 05     bne   $0704
 06ff: 3f 17 09  call  $0917
 0702: 2f 07     bra   $070b
+;
 0704: 3f 49 07  call  $0749
 0707: 68 00     cmp   a,#$00
 0709: d0 f9     bne   $0704
@@ -144,24 +171,24 @@
 0714: 5f fe 05  jmp   $05fe
 
 0717: 8f 5c f2  mov   $f2,#$5c
-071a: 8f ff f3  mov   $f3,#$ff
+071a: 8f ff f3  mov   $f3,#$ff          ; KOF
 071d: 8f 00 f1  mov   $f1,#$00
 0720: 8f c8 fb  mov   $fb,#$c8
 0723: 8f 02 f1  mov   $f1,#$02
 0726: e4 fe     mov   a,$fe
 0728: f0 fc     beq   $0726
 072a: 8f 6c f2  mov   $f2,#$6c
-072d: 8f a0 f3  mov   $f3,#$a0
+072d: 8f a0 f3  mov   $f3,#$a0          ; FLG
 0730: cd 00     mov   x,#$00
 0732: 8f 4d f2  mov   $f2,#$4d
-0735: d8 f3     mov   $f3,x
+0735: d8 f3     mov   $f3,x             ; EON
 0737: 8f 2c f2  mov   $f2,#$2c
-073a: d8 f3     mov   $f3,x
+073a: d8 f3     mov   $f3,x             ; EVOL(L)
 073c: 8f 3c f2  mov   $f2,#$3c
-073f: d8 f3     mov   $f3,x
-0741: d8 f5     mov   $f5,x
+073f: d8 f3     mov   $f3,x             ; EVOL(R)
+0741: d8 f5     mov   $f5,x             ; clear APU2
 0743: c9 d6 04  mov   $04d6,x
-0746: 5f b8 04  jmp   $04b8
+0746: 5f b8 04  jmp   $04b8             ; transfer data from CPU
 
 0749: f5 10 01  mov   a,$0110+x
 074c: d0 03     bne   $0751
@@ -189,7 +216,7 @@
 0776: d0 08     bne   $0780
 0778: f5 ff 0f  mov   a,$0fff+x
 077b: 8f 5c f2  mov   $f2,#$5c
-077e: c4 f3     mov   $f3,a
+077e: c4 f3     mov   $f3,a             ; KOF
 0780: 3f 17 09  call  $0917
 0783: e8 00     mov   a,#$00
 0785: 6f        ret
@@ -220,16 +247,16 @@
 07ac: d0 18     bne   $07c6
 07ae: f5 ff 0f  mov   a,$0fff+x
 07b1: 8f 5c f2  mov   $f2,#$5c
-07b4: c4 f3     mov   $f3,a
+07b4: c4 f3     mov   $f3,a             ; KOF
 07b6: 7d        mov   a,x
 07b7: 28 07     and   a,#$07
 07b9: 9f        xcn   a
 07ba: 08 02     or    a,#$02
 07bc: c4 f2     mov   $f2,a
 07be: e8 00     mov   a,#$00
-07c0: c4 f3     mov   $f3,a
+07c0: c4 f3     mov   $f3,a             ; P(L)
 07c2: ab f2     inc   $f2
-07c4: c4 f3     mov   $f3,a
+07c4: c4 f3     mov   $f3,a             ; P(H)
 07c6: 5f de 08  jmp   $08de
 
 07c9: 60        clrc
@@ -280,16 +307,16 @@
 081b: 5d        mov   x,a
 081c: 28 07     and   a,#$07
 081e: 9f        xcn   a
-081f: c4 f2     mov   $f2,a
+081f: c4 f2     mov   $f2,a             ; VOL(L)
 0821: f5 a0 01  mov   a,$01a0+x
 0824: f0 03     beq   $0829
 0826: 5f de 08  jmp   $08de
 
 0829: f5 54 02  mov   a,$0254+x
-082c: c4 f3     mov   $f3,a
+082c: c4 f3     mov   $f3,a             ; VOL(L)
 082e: ab f2     inc   $f2
 0830: f5 64 02  mov   a,$0264+x
-0833: c4 f3     mov   $f3,a
+0833: c4 f3     mov   $f3,a             ; VOL(R)
 0835: ab f2     inc   $f2
 0837: f5 50 01  mov   a,$0150+x
 083a: 28 01     and   a,#$01
@@ -338,27 +365,27 @@
 08a5: d5 64 02  mov   $0264+x,a
 08a8: e4 03     mov   a,$03
 08aa: d4 8c     mov   $8c+x,a
-08ac: c4 f3     mov   $f3,a
+08ac: c4 f3     mov   $f3,a             ; P(L)
 08ae: ab f2     inc   $f2
 08b0: e4 04     mov   a,$04
 08b2: d4 7c     mov   $7c+x,a
-08b4: c4 f3     mov   $f3,a
+08b4: c4 f3     mov   $f3,a             ; P(H)
 08b6: ab f2     inc   $f2
 08b8: f5 44 02  mov   a,$0244+x
-08bb: c4 f3     mov   $f3,a
+08bb: c4 f3     mov   $f3,a             ; SRCN
 08bd: ab f2     inc   $f2
 08bf: f5 74 02  mov   a,$0274+x
-08c2: c4 f3     mov   $f3,a
+08c2: c4 f3     mov   $f3,a             ; ADSR(1)
 08c4: ab f2     inc   $f2
 08c6: f5 84 02  mov   a,$0284+x
-08c9: c4 f3     mov   $f3,a
+08c9: c4 f3     mov   $f3,a             ; ADSR(2)
 08cb: ab f2     inc   $f2
-08cd: 8f 7f f3  mov   $f3,#$7f
+08cd: 8f 7f f3  mov   $f3,#$7f          ; GAIN
 08d0: 8f 5c f2  mov   $f2,#$5c
-08d3: 8f 00 f3  mov   $f3,#$00
+08d3: 8f 00 f3  mov   $f3,#$00          ; KOF
 08d6: 8f 4c f2  mov   $f2,#$4c
 08d9: f5 ff 0f  mov   a,$0fff+x
-08dc: c4 f3     mov   $f3,a
+08dc: c4 f3     mov   $f3,a             ; KON
 08de: f5 20 01  mov   a,$0120+x
 08e1: f0 0f     beq   $08f2
 08e3: 8f 01 01  mov   $01,#$01
@@ -448,9 +475,9 @@
 098f: 08 02     or    a,#$02
 0991: c4 f2     mov   $f2,a
 0993: f4 8c     mov   a,$8c+x
-0995: c4 f3     mov   $f3,a
+0995: c4 f3     mov   $f3,a             ; P(L)
 0997: ab f2     inc   $f2
-0999: cb f3     mov   $f3,y
+0999: cb f3     mov   $f3,y             ; P(H)
 099b: 9b 9c     dec   $9c+x
 099d: d0 05     bne   $09a4
 099f: e8 ff     mov   a,#$ff
@@ -487,9 +514,9 @@
 09e0: 08 02     or    a,#$02
 09e2: c4 f2     mov   $f2,a
 09e4: f4 8c     mov   a,$8c+x
-09e6: c4 f3     mov   $f3,a
+09e6: c4 f3     mov   $f3,a             ; P(L)
 09e8: ab f2     inc   $f2
-09ea: cb f3     mov   $f3,y
+09ea: cb f3     mov   $f3,y             ; P(H)
 09ec: 9b ac     dec   $ac+x
 09ee: d0 0e     bne   $09fe
 09f0: f5 00 02  mov   a,$0200+x
@@ -530,10 +557,10 @@
 0a40: 08 00     or    a,#$00
 0a42: c4 f2     mov   $f2,a
 0a44: f5 54 02  mov   a,$0254+x
-0a47: c4 f3     mov   $f3,a
+0a47: c4 f3     mov   $f3,a             ; VOL(L)
 0a49: ab f2     inc   $f2
 0a4b: f5 64 02  mov   a,$0264+x
-0a4e: c4 f3     mov   $f3,a
+0a4e: c4 f3     mov   $f3,a             ; VOL(R)
 0a50: f5 e4 02  mov   a,$02e4+x
 0a53: 9c        dec   a
 0a54: d5 e4 02  mov   $02e4+x,a
@@ -554,7 +581,7 @@
 0a72: d0 08     bne   $0a7c
 0a74: 8f 5c f2  mov   $f2,#$5c
 0a77: f5 ff 0f  mov   a,$0fff+x
-0a7a: c4 f3     mov   $f3,a
+0a7a: c4 f3     mov   $f3,a             ; KOF
 0a7c: 7d        mov   a,x
 0a7d: 68 08     cmp   a,#$08
 0a7f: 90 31     bcc   $0ab2
@@ -568,13 +595,13 @@
 0a8e: f5 ff 0f  mov   a,$0fff+x
 0a91: 48 ff     eor   a,#$ff
 0a93: 24 f3     and   a,$f3
-0a95: c4 f3     mov   $f3,a
+0a95: c4 f3     mov   $f3,a             ; NON
 0a97: 8f 4d f2  mov   $f2,#$4d
 0a9a: f5 94 02  mov   a,$0294+x
 0a9d: f0 09     beq   $0aa8
 0a9f: f5 ff 0f  mov   a,$0fff+x
 0aa2: 04 f3     or    a,$f3
-0aa4: c4 f3     mov   $f3,a
+0aa4: c4 f3     mov   $f3,a             ; EON
 0aa6: 2f 09     bra   $0ab1
 0aa8: f5 ff 0f  mov   a,$0fff+x
 0aab: 48 ff     eor   a,#$ff
@@ -905,7 +932,7 @@
 0d00: e4 25     mov   a,$25
 0d02: f0 11     beq   $0d15
 0d04: f7 01     mov   a,($01)+y
-0d06: c4 f3     mov   $f3,a
+0d06: c4 f3     mov   $f3,a             ; MVOL(L)
 0d08: fc        inc   y
 0d09: 60        clrc
 0d0a: 97 01     adc   a,($01)+y
@@ -914,12 +941,12 @@
 0d10: 8f 1c f2  mov   $f2,#$1c
 0d13: 2f 0d     bra   $0d22
 0d15: f7 01     mov   a,($01)+y
-0d17: c4 f3     mov   $f3,a
+0d17: c4 f3     mov   $f3,a             ; MVOL(R)
 0d19: c5 30 02  mov   $0230,a
 0d1c: fc        inc   y
 0d1d: 8f 1c f2  mov   $f2,#$1c
 0d20: f7 01     mov   a,($01)+y
-0d22: c4 f3     mov   $f3,a
+0d22: c4 f3     mov   $f3,a             ; MVOL(R)
 0d24: c5 31 02  mov   $0231,a
 0d27: 8f 03 01  mov   $01,#$03
 0d2a: 5f ce 0a  jmp   $0ace
@@ -964,21 +991,21 @@
 0d6d: 8f 0d f2  mov   $f2,#$0d
 0d70: 8d 01     mov   y,#$01
 0d72: f7 01     mov   a,($01)+y
-0d74: c4 f3     mov   $f3,a
+0d74: c4 f3     mov   $f3,a             ; EFB
 0d76: fc        inc   y
 0d77: 8f 2c f2  mov   $f2,#$2c
 0d7a: f7 01     mov   a,($01)+y
 0d7c: c5 32 02  mov   $0232,a
-0d7f: c4 f3     mov   $f3,a
+0d7f: c4 f3     mov   $f3,a             ; EVOL(L)
 0d81: 8f 3c f2  mov   $f2,#$3c
 0d84: fc        inc   y
 0d85: f7 01     mov   a,($01)+y
 0d87: c5 33 02  mov   $0233,a
-0d8a: c4 f3     mov   $f3,a
+0d8a: c4 f3     mov   $f3,a             ; EVOL(R)
 0d8c: e8 00     mov   a,#$00
 0d8e: c4 0f     mov   $0f,a
 0d90: 8f 6c f2  mov   $f2,#$6c
-0d93: c4 f3     mov   $f3,a
+0d93: c4 f3     mov   $f3,a             ; FLG
 0d95: 8f 04 01  mov   $01,#$04
 0d98: 5f ce 0a  jmp   $0ace
 
@@ -987,7 +1014,7 @@
 0d9c: 8f 4d f2  mov   $f2,#$4d
 0d9f: f5 ff 0f  mov   a,$0fff+x
 0da2: 04 f3     or    a,$f3
-0da4: c4 f3     mov   $f3,a
+0da4: c4 f3     mov   $f3,a             ; EON
 0da6: e8 00     mov   a,#$00
 0da8: d4 2c     mov   $2c+x,a
 0daa: e8 01     mov   a,#$01
@@ -1002,7 +1029,7 @@
 0dba: f5 ff 0f  mov   a,$0fff+x
 0dbd: 48 ff     eor   a,#$ff
 0dbf: 24 f3     and   a,$f3
-0dc1: c4 f3     mov   $f3,a
+0dc1: c4 f3     mov   $f3,a             ; EON
 0dc3: e8 00     mov   a,#$00
 0dc5: d5 94 02  mov   $0294+x,a
 0dc8: d4 2c     mov   $2c+x,a
@@ -1019,7 +1046,7 @@
 0dda: d4 2c     mov   $2c+x,a
 0ddc: 8f 0f f2  mov   $f2,#$0f
 0ddf: f7 01     mov   a,($01)+y
-0de1: c4 f3     mov   $f3,a
+0de1: c4 f3     mov   $f3,a             ; FIR C0-C7
 0de3: fc        inc   y
 0de4: 60        clrc
 0de5: 98 10 f2  adc   $f2,#$10
@@ -1038,7 +1065,7 @@
 0dfe: c4 0e     mov   $0e,a
 0e00: 04 0f     or    a,$0f
 0e02: 8f 6c f2  mov   $f2,#$6c
-0e05: c4 f3     mov   $f3,a
+0e05: c4 f3     mov   $f3,a             ; FLG
 0e07: 8f 02 01  mov   $01,#$02
 0e0a: 5f ce 0a  jmp   $0ace
 
@@ -1047,7 +1074,7 @@
 0e0e: 8f 3d f2  mov   $f2,#$3d
 0e11: f5 ff 0f  mov   a,$0fff+x
 0e14: 04 f3     or    a,$f3
-0e16: c4 f3     mov   $f3,a
+0e16: c4 f3     mov   $f3,a             ; NON
 0e18: e8 00     mov   a,#$00
 0e1a: d4 2c     mov   $2c+x,a
 0e1c: e8 01     mov   a,#$01
@@ -1061,7 +1088,7 @@
 0e29: f5 ff 0f  mov   a,$0fff+x
 0e2c: 48 ff     eor   a,#$ff
 0e2e: 24 f3     and   a,$f3
-0e30: c4 f3     mov   $f3,a
+0e30: c4 f3     mov   $f3,a             ; NON
 0e32: 5f 18 0e  jmp   $0e18
 
 ; vcmd 1c - set volume and ADSR preset 1
@@ -1379,35 +1406,37 @@
 106d: dw $0fb9  ; 2f - tremolo
 106f: dw $0ff3  ; 30 - tremolo off
 
+; initialize
 1071: e8 00     mov   a,#$00
 1073: 8f 6c f2  mov   $f2,#$6c
-1076: 8f e0 f3  mov   $f3,#$e0
+1076: 8f e0 f3  mov   $f3,#$e0          ; FLG
 1079: e8 00     mov   a,#$00
 107b: 8f 2c f2  mov   $f2,#$2c
 107e: c5 32 02  mov   $0232,a
-1081: c4 f3     mov   $f3,a
+1081: c4 f3     mov   $f3,a             ; EVOL(L)
 1083: 8f 3c f2  mov   $f2,#$3c
 1086: c5 33 02  mov   $0233,a
-1089: c4 f3     mov   $f3,a
+1089: c4 f3     mov   $f3,a             ; EVOL(R)
 108b: 8f 4c f2  mov   $f2,#$4c
-108e: c4 f3     mov   $f3,a
+108e: c4 f3     mov   $f3,a             ; KON
 1090: 8f 5c f2  mov   $f2,#$5c
-1093: 8f ff f3  mov   $f3,#$ff
+1093: 8f ff f3  mov   $f3,#$ff          ; KOF
 1096: 8f 2d f2  mov   $f2,#$2d
-1099: c4 f3     mov   $f3,a
+1099: c4 f3     mov   $f3,a             ; PMON
 109b: 8f 3d f2  mov   $f2,#$3d
-109e: c4 f3     mov   $f3,a
+109e: c4 f3     mov   $f3,a             ; NON
 10a0: 8f 4d f2  mov   $f2,#$4d
-10a3: c4 f3     mov   $f3,a
+10a3: c4 f3     mov   $f3,a             ; EON
 10a5: 8f 7d f2  mov   $f2,#$7d
-10a8: 8f 04 f3  mov   $f3,#$04
+10a8: 8f 04 f3  mov   $f3,#$04          ; EDL
 10ab: 8f 6d f2  mov   $f2,#$6d
-10ae: 8f df f3  mov   $f3,#$df
+10ae: 8f df f3  mov   $f3,#$df          ; ESA
 10b1: 8f 0d f2  mov   $f2,#$0d
-10b4: c4 f3     mov   $f3,a
+10b4: c4 f3     mov   $f3,a             ; EFB
 10b6: 8d 00     mov   y,#$00
 10b8: cb 01     mov   $01,y
 10ba: 8f df 02  mov   $02,#$df
+; zero echo memory ($df00-feff)
 10bd: e8 00     mov   a,#$00
 10bf: d7 01     mov   ($01)+y,a
 10c1: fc        inc   y
@@ -1417,36 +1446,37 @@
 10c7: c4 02     mov   $02,a
 10c9: 68 ff     cmp   a,#$ff
 10cb: d0 f0     bne   $10bd
+;
 10cd: e8 7f     mov   a,#$7f
 10cf: c5 30 02  mov   $0230,a
 10d2: c5 31 02  mov   $0231,a
 10d5: 8f 0c f2  mov   $f2,#$0c
-10d8: c4 f3     mov   $f3,a
+10d8: c4 f3     mov   $f3,a             ; MVOL(L)
 10da: 8f 1c f2  mov   $f2,#$1c
-10dd: c4 f3     mov   $f3,a
+10dd: c4 f3     mov   $f3,a             ; MVOL(R)
 10df: 8f 5d f2  mov   $f2,#$5d
-10e2: 8f 32 f3  mov   $f3,#$32
+10e2: 8f 32 f3  mov   $f3,#$32          ; DIR
 10e5: cd 00     mov   x,#$00
 10e7: 8d 08     mov   y,#$08
 10e9: 8f 00 f2  mov   $f2,#$00
 10ec: e8 7f     mov   a,#$7f
-10ee: c4 f3     mov   $f3,a
+10ee: c4 f3     mov   $f3,a             ; VOL(L)
 10f0: ab f2     inc   $f2
-10f2: c4 f3     mov   $f3,a
+10f2: c4 f3     mov   $f3,a             ; VOL(R)
 10f4: 60        clrc
 10f5: 98 04 f2  adc   $f2,#$04
 10f8: e8 00     mov   a,#$00
-10fa: c4 f3     mov   $f3,a
+10fa: c4 f3     mov   $f3,a             ; ADSR(1)
 10fc: ab f2     inc   $f2
-10fe: c4 f3     mov   $f3,a
+10fe: c4 f3     mov   $f3,a             ; ADSR(2)
 1100: ab f2     inc   $f2
-1102: 8f ff f3  mov   $f3,#$ff
+1102: 8f ff f3  mov   $f3,#$ff          ; GAIN
 1105: 60        clrc
 1106: 98 09 f2  adc   $f2,#$09
 1109: dc        dec   y
-110a: d0 e0     bne   $10ec
+110a: d0 e0     bne   $10ec             ; for 8 voices
 110c: e8 3c     mov   a,#$3c
-110e: c4 ec     mov   $ec,a
+110e: c4 ec     mov   $ec,a             ; set timer 0 freq shadow
 1110: e8 20     mov   a,#$20
 1112: c4 0f     mov   $0f,a
 1114: 8f 08 01  mov   $01,#$08
@@ -1490,7 +1520,7 @@
 1168: c4 26     mov   $26,a
 116a: c4 29     mov   $29,a
 116c: 8f 6c f2  mov   $f2,#$6c
-116f: 8f 20 f3  mov   $f3,#$20
+116f: 8f 20 f3  mov   $f3,#$20          ; FLG
 1172: 6f        ret
 
 1173: 1c        asl   a
@@ -1501,7 +1531,7 @@
 117d: f5 ff 0f  mov   a,$0fff+x
 1180: 48 ff     eor   a,#$ff
 1182: 24 f3     and   a,$f3
-1184: c4 f3     mov   $f3,a
+1184: c4 f3     mov   $f3,a             ; NON
 1186: 7d        mov   a,x
 1187: 60        clrc
 1188: 88 08     adc   a,#$08
@@ -1534,14 +1564,14 @@
 11c8: d4 4c     mov   $4c+x,a
 11ca: fc        inc   y
 11cb: f6 80 23  mov   a,$2380+y
-11ce: d4 5c     mov   $5c+x,a
+11ce: d4 5c     mov   $5c+x,a           ; set pointer for each track
 11d0: e8 02     mov   a,#$02
 11d2: d4 3c     mov   $3c+x,a
 11d4: 8f 4d f2  mov   $f2,#$4d
 11d7: f5 ff 0f  mov   a,$0fff+x
 11da: 48 ff     eor   a,#$ff
 11dc: 24 f3     and   a,$f3
-11de: c4 f3     mov   $f3,a
+11de: c4 f3     mov   $f3,a             ; EON
 11e0: 6f        ret
 
 11e1: dw $0000
