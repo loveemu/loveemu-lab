@@ -6,7 +6,7 @@
 0407: af        mov   (x)+,a
 0408: c8 f0     cmp   x,#$f0
 040a: d0 fb     bne   $0407
-040c: c5 ff 11  mov   $11ff,a
+040c: c5 ff 11  mov   $11ff,a           ; zero patch offset for BGM
 040f: bc        inc   a
 0410: 3f a9 09  call  $09a9
 0413: a2 48     set5  $48
@@ -97,24 +97,27 @@
 04c0: d4 00     mov   $00+x,a
 04c2: 6f        ret
 
+; handle a note vcmd (80-df)
 04c3: ad ca     cmp   y,#$ca
 04c5: 90 05     bcc   $04cc
-04c7: 3f df 07  call  $07df
-04ca: 8d a4     mov   y,#$a4
+; vcmds ca-df - percussion note
+04c7: 3f df 07  call  $07df             ; set instrument by note number
+04ca: 8d a4     mov   y,#$a4            ; dispatch as note $a4
 04cc: ad c8     cmp   y,#$c8
-04ce: b0 f2     bcs   $04c2
+04ce: b0 f2     bcs   $04c2             ; quit if tie/rest
 04d0: e4 1a     mov   a,$1a
 04d2: 24 47     and   a,$47
 04d4: d0 ec     bne   $04c2
+; vcmds 80-c7 - note (note number in Y)
 04d6: dd        mov   a,y
-04d7: 28 7f     and   a,#$7f
+04d7: 28 7f     and   a,#$7f            ; 80-c7 => 00-47
 04d9: 60        clrc
-04da: 84 50     adc   a,$50
+04da: 84 50     adc   a,$50             ; add global transpose
 04dc: 60        clrc
-04dd: 95 f0 02  adc   a,$02f0+x
-04e0: d5 7d 03  mov   $037d+x,a
+04dd: 95 f0 02  adc   a,$02f0+x         ; add per-voice transpose
+04e0: d5 7d 03  mov   $037d+x,a         ; save note number (integer)
 04e3: f5 a5 03  mov   a,$03a5+x
-04e6: d5 7c 03  mov   $037c+x,a
+04e6: d5 7c 03  mov   $037c+x,a         ; save note number (fraction)
 04e9: f5 a1 02  mov   a,$02a1+x
 04ec: 5c        lsr   a
 04ed: e8 00     mov   a,#$00
@@ -289,7 +292,7 @@
 0622: 5d        mov   x,a
 0623: f5 ff 11  mov   a,$11ff+x
 0626: fd        mov   y,a
-0627: f5 fe 11  mov   a,$11fe+x
+0627: f5 fe 11  mov   a,$11fe+x         ; song table (index 0 is not used, see $1200 for the first item)
 062a: da 40     movw  $40,ya
 062c: 8f 02 0c  mov   $0c,#$02
 062f: e8 00     mov   a,#$00
@@ -515,9 +518,9 @@
 07e9: 80        setc
 07ea: a8 ca     sbc   a,#$ca            ;   ca-dd => 00-15
 07ec: 60        clrc
-07ed: 84 5f     adc   a,$5f             ; add perc patch base
+07ed: 84 5f     adc   a,$5f             ;   add perc patch base
 07ef: 60        clrc
-07f0: 85 ff 11  adc   a,$11ff           ; add patch offset for BGM (=12?)
+07f0: 85 ff 11  adc   a,$11ff           ; add patch offset for BGM (constant value = 12?)
 07f3: 2f 09     bra   $07fe
 ; SFX
 07f5: fd        mov   y,a

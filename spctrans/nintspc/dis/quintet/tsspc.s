@@ -18,25 +18,25 @@
 0320: 8f 80 fc  mov   $fc,#$80
 0323: e8 00     mov   a,#$00
 0325: 8d 0c     mov   y,#$0c
-0327: 4f 1e     pcall $1e
+0327: 4f 1e     pcall $1e               ; zero MVOL(L)
 0329: 8d 1c     mov   y,#$1c
-032b: 4f 1e     pcall $1e
+032b: 4f 1e     pcall $1e               ; zero MVOL(R)
 032d: 8d 2c     mov   y,#$2c
-032f: 4f 1e     pcall $1e
+032f: 4f 1e     pcall $1e               ; zero EVOL(L)
 0331: 8d 3c     mov   y,#$3c
-0333: 4f 1e     pcall $1e
+0333: 4f 1e     pcall $1e               ; zero EVOL(R)
 0335: e8 0f     mov   a,#$0f
 0337: 8d 5d     mov   y,#$5d
-0339: 4f 1e     pcall $1e
+0339: 4f 1e     pcall $1e               ; set DIR to $0f00
 033b: e8 07     mov   a,#$07
 033d: 8d af     mov   y,#$af
 033f: c4 f2     mov   $f2,a
 0341: cb f3     mov   $f3,y             ; set GAIN
 0343: 60        clrc
 0344: 88 10     adc   a,#$10
-0346: 10 f7     bpl   $033f
+0346: 10 f7     bpl   $033f             ; for every voices
 0348: e8 01     mov   a,#$01
-034a: 61        tcall 6
+034a: 61        tcall 6                 ; set echo delay to 1
 034b: a2 32     set5  $32               ; disable echo
 034d: 8f 07 f1  mov   $f1,#$07
 0350: 8f 20 3a  mov   $3a,#$20
@@ -443,41 +443,41 @@
 0658: bc        inc   a
 0659: d4 51     mov   $51+x,a
 065b: 2f 01     bra   $065e
-065d: f1        tcall 15
+065d: f1        tcall 15                ; do readahead
 065e: e1        tcall 14
 065f: 3d        inc   x
 0660: 3d        inc   x
 0661: 0b 27     asl   $27
-0663: d0 96     bne   $05fb
-0665: e4 3b     mov   a,$3b
+0663: d0 96     bne   $05fb             ; next voice
+0665: e4 3b     mov   a,$3b             ; tempo fade counter
 0667: f0 0b     beq   $0674
 0669: ba 3d     movw  ya,$3d
-066b: 7a 39     addw  ya,$39
+066b: 7a 39     addw  ya,$39            ; add tempo fade to tempo
 066d: 6e 3b 02  dbnz  $3b,$0672
-0670: ba 3b     movw  ya,$3b
+0670: ba 3b     movw  ya,$3b            ; last time: move tempo target to tempo
 0672: da 39     movw  $39,ya
-0674: e4 4d     mov   a,$4d
+0674: e4 4d     mov   a,$4d             ; echo vol fade counter
 0676: f0 15     beq   $068d
 0678: ba 49     movw  ya,$49
 067a: 7a 45     addw  ya,$45
-067c: da 45     movw  $45,ya
+067c: da 45     movw  $45,ya            ; add echo L delta to echo L vol
 067e: ba 4b     movw  ya,$4b
-0680: 7a 47     addw  ya,$47
+0680: 7a 47     addw  ya,$47            ; add echo R delta to echo R vol
 0682: 6e 4d 06  dbnz  $4d,$068b
 0685: ba 4d     movw  ya,$4d
 0687: da 45     movw  $45,ya
 0689: eb 4f     mov   y,$4f
 068b: da 47     movw  $47,ya
-068d: e4 41     mov   a,$41
+068d: e4 41     mov   a,$41             ; master vol fade counter
 068f: f0 0e     beq   $069f
 0691: ba 43     movw  ya,$43
-0693: 7a 3f     addw  ya,$3f
+0693: 7a 3f     addw  ya,$3f            ; add master vol delta to value
 0695: 6e 41 02  dbnz  $41,$069a
 0698: ba 41     movw  ya,$41
 069a: da 3f     movw  $3f,ya
-069c: 8f ff 1f  mov   $1f,#$ff
+069c: 8f ff 1f  mov   $1f,#$ff          ; set all vol chg flags
 069f: cd 00     mov   x,#$00
-06a1: 8f 01 27  mov   $27,#$01
+06a1: 8f 01 27  mov   $27,#$01          ; first voice
 06a4: e4 1c     mov   a,$1c
 06a6: f0 03     beq   $06ab
 06a8: 8f ff 1f  mov   $1f,#$ff
@@ -671,7 +671,7 @@
 080f: 33 12 ca  bbc1  $12,$07dc
 0812: 6f        ret
 
-; tcall 15
+; tcall 15 - voice readahead
 0813: f4 51     mov   a,$51+x
 0815: f0 61     beq   $0878
 0817: 9b 51     dec   $51+x
@@ -869,14 +869,14 @@
 098d: fd        mov   y,a
 098e: f6 ea 08  mov   a,$08ea+y
 0991: 2d        push  a
-0992: f6 e9 08  mov   a,$08e9+y
+0992: f6 e9 08  mov   a,$08e9+y         ; refs vcmd dispatch table $09a9
 0995: 2d        push  a
 0996: dd        mov   a,y
 0997: 5c        lsr   a
 0998: fd        mov   y,a
-0999: f6 89 09  mov   a,$0989+y
+0999: f6 89 09  mov   a,$0989+y         ; refs vcmd length table $09e9
 099c: f0 08     beq   $09a6
-099e: e7 be     mov   a,($be+x)
+099e: e7 be     mov   a,($be+x)         ; fetch first arg into A, if available
 09a0: bb be     inc   $be+x
 09a2: d0 02     bne   $09a6
 09a4: bb bf     inc   $bf+x
@@ -885,37 +885,37 @@
 
 ; vcmd dispatch table
 09a9: dw $0a0b  ; e0 - set instrument
-09ab: dw $0a7b  ; e1
-09ad: dw $0a89  ; e2
-09af: dw $0a9d  ; e3
-09b1: dw $0aa7  ; e4
-09b3: dw $0ab2  ; e5
-09b5: dw $0ac4  ; e6
-09b7: dw $0ad4  ; e7
-09b9: dw $0adc  ; e8
+09ab: dw $0a7b  ; e1 - pan
+09ad: dw $0a89  ; e2 - pan fade
+09af: dw $0a9d  ; e3 - vibrato on
+09b1: dw $0aa7  ; e4 - vibrato off
+09b3: dw $0ab2  ; e5 - master volume
+09b5: dw $0ac4  ; e6 - master volume fade
+09b7: dw $0ad4  ; e7 - tempo
+09b9: dw $0adc  ; e8 - tempo fade
 09bb: dw $0aec  ; e9 - global transpose
-09bd: dw $0aef  ; ea
-09bf: dw $0af3  ; eb
-09c1: dw $0afd  ; ec
-09c3: dw $0b00  ; ed
-09c5: dw $0b11  ; ee
-09c7: dw $0b25  ; ef
-09c9: dw $0b47  ; f0
-09cb: dw $0b57  ; f1
-09cd: dw $0b5b  ; f2
-09cf: dw $0b6f  ; f3
-09d1: dw $0b73  ; f4
-09d3: dw $0b77  ; f5
-09d5: dw $0b88  ; f6
-09d7: dw $0b90  ; f7
-09d9: dw $0bad  ; f8
-09db: dw $0bd8  ; f9
-09dd: dw $0bfd  ; fa
-09df: dw $0000  ; fb
-09e1: dw $0000  ; fc
-09e3: dw $0000  ; fd
-09e5: dw $0000  ; fe
-09e7: dw $0c10  ; ff
+09bd: dw $0aef  ; ea - per-voice transpose
+09bf: dw $0af3  ; eb - tremolo on
+09c1: dw $0afd  ; ec - tremolo off
+09c3: dw $0b00  ; ed - volume
+09c5: dw $0b11  ; ee - volume fade
+09c7: dw $0b25  ; ef - call subroutine
+09c9: dw $0b47  ; f0 - vibrato fade
+09cb: dw $0b57  ; f1 - pitch envelope (release)
+09cd: dw $0b5b  ; f2 - pitch envelope (attack)
+09cf: dw $0b6f  ; f3 - pitch envelope off
+09d1: dw $0b73  ; f4 - tuning
+09d3: dw $0b77  ; f5 - echo vbits/volume
+09d5: dw $0b88  ; f6 - disable echo
+09d7: dw $0b90  ; f7 - set echo params
+09d9: dw $0bad  ; f8 - echo volume fade
+09db: dw $0bd8  ; f9 - pitch slide
+09dd: dw $0bfd  ; fa - set perc patch base
+09df: dw $0000  ; fb - undefined
+09e1: dw $0000  ; fc - undefined
+09e3: dw $0000  ; fd - undefined
+09e5: dw $0000  ; fe - undefined
+09e7: dw $0c10  ; ff - set ADSR
 
 ; vcmd length table
 09e9: db $01,$01,$02,$03,$00,$01,$02,$01
@@ -928,25 +928,25 @@
 ; vcmd e0 - set instrument
 0a0b: d5 17 02  mov   $0217+x,a
 0a0e: d0 12     bne   $0a22
-;
+; BGM
 0a10: fd        mov   y,a
-0a11: 10 07     bpl   $0a1a
+0a11: 10 07     bpl   $0a1a             ; if percussion note:
 0a13: 80        setc
-0a14: a8 ca     sbc   a,#$ca
+0a14: a8 ca     sbc   a,#$ca            ;   ca-dd => 00-15
 0a16: 60        clrc
-0a17: 95 00 ff  adc   a,$ff00+x
+0a17: 95 00 ff  adc   a,$ff00+x         ;   add perc patch base
 0a1a: 4d        push  x
 0a1b: 5d        mov   x,a
-0a1c: f5 ab ff  mov   a,$ffab+x
+0a1c: f5 ab ff  mov   a,$ffab+x         ; add patch offset for BGM
 0a1f: ce        pop   x
 0a20: 2f 0a     bra   $0a2c
-;
+; SFX
 0a22: fd        mov   y,a
-0a23: 10 07     bpl   $0a2c
+0a23: 10 07     bpl   $0a2c             ; if percussion note:
 0a25: 80        setc
-0a26: a8 ca     sbc   a,#$ca
+0a26: a8 ca     sbc   a,#$ca            ;   ca-dd => 00-15
 0a28: 60        clrc
-0a29: 95 00 ff  adc   a,$ff00+x         ; percussion-specific transpose
+0a29: 95 00 ff  adc   a,$ff00+x         ; add perc patch base
 ;
 0a2c: 8d 06     mov   y,#$06
 0a2e: cf        mul   ya
@@ -959,15 +959,15 @@
 0a3c: d0 3c     bne   $0a7a
 0a3e: 4d        push  x
 0a3f: f5 ce 0d  mov   a,$0dce+x
-0a42: 08 04     or    a,#$04
+0a42: 08 04     or    a,#$04            ; voice X SRCN
 0a44: 5d        mov   x,a
 0a45: 8d 00     mov   y,#$00
 0a47: f7 16     mov   a,($16)+y
 0a49: 10 0e     bpl   $0a59
 ; SRCN >= $80 (noise)
-0a4b: 28 1f     and   a,#$1f            ; noice frequency?
-0a4d: 38 20 32  and   $32,#$20
-0a50: 0e 32 00  tset1 $0032
+0a4b: 28 1f     and   a,#$1f            ; get noice frequency by note byte
+0a4d: 38 20 32  and   $32,#$20          ; keep echo bit from FLG
+0a50: 0e 32 00  tset1 $0032             ; set noise frequency
 0a53: 09 27 35  or    ($35),($27)       ; set NON
 0a56: dd        mov   a,y
 0a57: 2f 07     bra   $0a60
@@ -993,40 +993,40 @@
 0a78: d4 d4     mov   $d4+x,a
 0a7a: 6f        ret
 
-; vcmd e1
+; vcmd e1 - pan
 0a7b: d5 6f 01  mov   $016f+x,a
 0a7e: 28 1f     and   a,#$1f
-0a80: d5 43 01  mov   $0143+x,a
+0a80: d5 43 01  mov   $0143+x,a         ; voice pan value
 0a83: e8 00     mov   a,#$00
 0a85: d5 42 01  mov   $0142+x,a
 0a88: 6f        ret
 
-; vcmd e2
+; vcmd e2 - pan fade
 0a89: d4 67     mov   $67+x,a
 0a8b: 2d        push  a
 0a8c: 4f 23     pcall $23
 0a8e: 80        setc
-0a8f: b5 43 01  sbc   a,$0143+x
+0a8f: b5 43 01  sbc   a,$0143+x         ; current pan value
 0a92: ce        pop   x
-0a93: 4f 3b     pcall $3b
+0a93: 4f 3b     pcall $3b               ; delta = pan value / steps
 0a95: d5 58 01  mov   $0158+x,a
 0a98: dd        mov   a,y
 0a99: d5 59 01  mov   $0159+x,a
 0a9c: 6f        ret
 
-; vcmd e3
-0a9d: d5 9a 02  mov   $029a+x,a
+; vcmd e3 - vibrato on
+0a9d: d5 9a 02  mov   $029a+x,a         ; vibrato delay
 0aa0: 4f 23     pcall $23
-0aa2: d5 85 02  mov   $0285+x,a
+0aa2: d5 85 02  mov   $0285+x,a         ; vibrato rate
 0aa5: 4f 23     pcall $23
-; vcmd e4
-0aa7: d4 93     mov   $93+x,a
-0aa9: d5 b1 02  mov   $02b1+x,a
+; vcmd e4 - vibrato off
+0aa7: d4 93     mov   $93+x,a           ; vibrato depth
+0aa9: d5 b1 02  mov   $02b1+x,a         ; vibrato depth
 0aac: e8 00     mov   a,#$00
 0aae: d5 9b 02  mov   $029b+x,a
 0ab1: 6f        ret
 
-; vcmd e5
+; vcmd e5 - master volume
 0ab2: d0 0f     bne   $0ac3
 0ab4: fd        mov   y,a
 0ab5: e8 00     mov   a,#$00
@@ -1037,7 +1037,7 @@
 0ac0: 8f ff 0c  mov   $0c,#$ff
 0ac3: 6f        ret
 
-; vcmd e6
+; vcmd e6 - master volume fade
 0ac4: c4 41     mov   $41,a
 0ac6: 4f 23     pcall $23
 0ac8: c4 42     mov   $42,a
@@ -1048,14 +1048,14 @@
 0ad1: da 43     movw  $43,ya
 0ad3: 6f        ret
 
-; vcmd e7
+; vcmd e7 - tempo
 0ad4: d0 05     bne   $0adb
 0ad6: fd        mov   y,a
 0ad7: e8 00     mov   a,#$00
 0ad9: da 39     movw  $39,ya
 0adb: 6f        ret
 
-; vcmd e8
+; vcmd e8 - tempo fade
 0adc: c4 3b     mov   $3b,a
 0ade: 4f 23     pcall $23
 0ae0: c4 3c     mov   $3c,a
@@ -1070,20 +1070,20 @@
 0aec: c4 21     mov   $21,a
 0aee: 6f        ret
 
-; vcmd ea
+; vcmd ea - per-voice transpose
 0aef: d5 dd 02  mov   $02dd+x,a
 0af2: 6f        ret
 
-; vcmd eb
-0af3: d5 dc 02  mov   $02dc+x,a
+; vcmd eb - tremolo on
+0af3: d5 dc 02  mov   $02dc+x,a         ; tremolo delay
 0af6: 4f 23     pcall $23
-0af8: d5 c7 02  mov   $02c7+x,a
+0af8: d5 c7 02  mov   $02c7+x,a         ; tremolo rate
 0afb: 4f 23     pcall $23
-; vcmd ec
-0afd: d4 a9     mov   $a9+x,a
+; vcmd ec - tremolo off
+0afd: d4 a9     mov   $a9+x,a           ; tremolo depth
 0aff: 6f        ret
 
-; vcmd ed
+; vcmd ed - volume
 0b00: f0 06     beq   $0b08
 0b02: 68 c8     cmp   a,#$c8
 0b04: 90 02     bcc   $0b08
@@ -1093,7 +1093,7 @@
 0b0d: d5 00 01  mov   $0100+x,a
 0b10: 6f        ret
 
-; vcmd ee
+; vcmd ee - volume fade
 0b11: d4 66     mov   $66+x,a
 0b13: 2d        push  a
 0b14: 4f 23     pcall $23
@@ -1106,24 +1106,25 @@
 0b21: d5 17 01  mov   $0117+x,a
 0b24: 6f        ret
 
-; vcmd ef
+; vcmd ef - call subroutine
 0b25: d5 42 02  mov   $0242+x,a
 0b28: 4f 23     pcall $23
-0b2a: d5 43 02  mov   $0243+x,a
+0b2a: d5 43 02  mov   $0243+x,a         ; arg1/2: destination address
 0b2d: 4f 23     pcall $23
-0b2f: d5 2c 01  mov   $012c+x,a
+0b2f: d5 2c 01  mov   $012c+x,a         ; arg3: repeat count
 0b32: f4 be     mov   a,$be+x
 0b34: d5 2c 02  mov   $022c+x,a
 0b37: f4 bf     mov   a,$bf+x
-0b39: d5 2d 02  mov   $022d+x,a
+0b39: d5 2d 02  mov   $022d+x,a         ; save return address
+; jump to $0242/3+x (loop destination)
 0b3c: f5 42 02  mov   a,$0242+x
 0b3f: d4 be     mov   $be+x,a
 0b41: f5 43 02  mov   a,$0243+x
 0b44: d4 bf     mov   $bf+x,a
 0b46: 6f        ret
 
-; vcmd f0
-0b47: d5 9b 02  mov   $029b+x,a
+; vcmd f0 - vibrato fade
+0b47: d5 9b 02  mov   $029b+x,a         ; vibrato fade length
 0b4a: 2d        push  a
 0b4b: 8d 00     mov   y,#$00
 0b4d: f4 93     mov   a,$93+x
@@ -1133,10 +1134,10 @@
 0b53: d5 b0 02  mov   $02b0+x,a
 0b56: 6f        ret
 
-; vcmd f1
+; vcmd f1 - pitch envelope (release)
 0b57: 8d 01     mov   y,#$01
 0b59: 2f 02     bra   $0b5d
-; vcmd f2
+; vcmd f2 - pitch envelope (attack)
 0b5b: 8d 00     mov   y,#$00
 0b5d: d5 59 02  mov   $0259+x,a
 0b60: dd        mov   a,y
@@ -1147,37 +1148,37 @@
 0b6b: d5 6f 02  mov   $026f+x,a
 0b6e: 6f        ret
 
-; vcmd f3
+; vcmd f3 - pitch envelope off
 0b6f: d5 58 02  mov   $0258+x,a
 0b72: 6f        ret
 
-; vcmd f4
+; vcmd f4 - tuning
 0b73: d5 b1 01  mov   $01b1+x,a
 0b76: 6f        ret
 
-; vcmd f5
-0b77: c4 2b     mov   $2b,a
+; vcmd f5 - echo vbits/volume
+0b77: c4 2b     mov   $2b,a             ; echo vbit shadow = arg1
 0b79: 4f 23     pcall $23
 0b7b: e8 00     mov   a,#$00
-0b7d: da 45     movw  $45,ya
+0b7d: da 45     movw  $45,ya            ; echo vol L shadow = arg2
 0b7f: 4f 23     pcall $23
 0b81: e8 00     mov   a,#$00
-0b83: da 47     movw  $47,ya
+0b83: da 47     movw  $47,ya            ; echo vol R shadow = arg3
 0b85: b2 32     clr5  $32               ; enable echo
 0b87: 6f        ret
 
-; vcmd f6
+; vcmd f6 - disable echo
 0b88: fd        mov   y,a
-0b89: da 45     movw  $45,ya
-0b8b: da 47     movw  $47,ya
+0b89: da 45     movw  $45,ya            ; zero echo vol L shadow
+0b8b: da 47     movw  $47,ya            ; zero echo vol R shadow
 0b8d: a2 32     set5  $32               ; disable echo
 0b8f: 6f        ret
 
-; vcmd f7
-0b90: 61        tcall 6
-0b91: 4f 23     pcall $23
+; vcmd f7 - set echo params
+0b90: 61        tcall 6                 ; set echo delay by arg1
+0b91: 4f 23     pcall $23               ; arg2: echo feedback
 0b93: c4 33     mov   $33,a             ; set EFB
-0b95: 4f 23     pcall $23
+0b95: 4f 23     pcall $23               ; arg3: echo filter index
 0b97: 8d 08     mov   y,#$08
 0b99: cf        mul   ya
 0b9a: 5d        mov   x,a
@@ -1193,7 +1194,7 @@
 0baa: f8 26     mov   x,$26
 0bac: 6f        ret
 
-; vcmd f8
+; vcmd f8 - echo volume fade
 0bad: c4 4d     mov   $4d,a
 0baf: 4f 23     pcall $23
 0bb1: c4 4e     mov   $4e,a
@@ -1219,7 +1220,7 @@
 0bd2: d0 28     bne   $0bfc
 0bd4: 4f 25     pcall $25
 0bd6: 4f 23     pcall $23
-; vcmd f9
+; vcmd f9 - pitch slide
 0bd8: d4 7d     mov   $7d+x,a
 0bda: 4f 23     pcall $23
 0bdc: d4 7c     mov   $7c+x,a
@@ -1240,7 +1241,7 @@
 0bf9: d5 9b 01  mov   $019b+x,a
 0bfc: 6f        ret
 
-; vcmd fa
+; vcmd fa - set perc patch base
 0bfd: d0 0d     bne   $0c0c
 0bff: d5 01 ff  mov   $ff01+x,a
 0c02: 8d 10     mov   y,#$10
@@ -1250,10 +1251,10 @@
 0c09: d0 f9     bne   $0c04
 0c0b: 6f        ret
 
-0c0c: d5 00 ff  mov   $ff00+x,a
+0c0c: d5 00 ff  mov   $ff00+x,a         ; set perc patch base
 0c0f: 6f        ret
 
-; vcmd ff
+; vcmd ff - set ADSR
 0c10: 2d        push  a
 0c11: f5 ce 0d  mov   a,$0dce+x
 0c14: 08 05     or    a,#$05
@@ -1428,7 +1429,7 @@
 0d51: c4 03     mov   $03,a
 0d53: 6f        ret
 
-; tcall 6
+; tcall 6 - set echo delay
 0d54: c4 37     mov   $37,a
 0d56: c4 0f     mov   $0f,a
 0d58: 8d 7d     mov   y,#$7d
@@ -1622,12 +1623,13 @@
 0ef1: dw $3e4c
 0ef3: dw $4200
 
-; pcall $16 - write A to dsp reg Y
+; pcall $16 - write A to dsp reg Y with mask
 ff16: 2d        push  a
 ff17: e4 27     mov   a,$27
 ff19: 24 28     and   a,$28
 ff1b: ae        pop   a
 ff1c: d0 04     bne   $ff22
+; pcall $1e - write A to dsp reg Y
 ff1e: cb f2     mov   $f2,y
 ff20: c4 f3     mov   $f3,a
 ff22: 6f        ret
@@ -1651,7 +1653,7 @@ ff38: fd        mov   y,a
 ff39: ae        pop   a
 ff3a: 6f        ret
 
-; pcall $3b
+; pcall $3b - signed 16 bit division
 ff3b: ed        notc
 ff3c: 6b 12     ror   $12
 ff3e: 10 03     bpl   $ff43
@@ -1700,7 +1702,7 @@ ff82: da 14     movw  $14,ya
 ff84: 6f        ret
 
 ; tcall table
-ffc0: dw $0813  ; tcall 15
+ffc0: dw $0813  ; tcall 15 - voice readahead
 ffc2: dw $0bca  ; tcall 14
 ffc4: dw $0772  ; tcall 13
 ffc6: dw $098c  ; tcall 12
@@ -1709,7 +1711,7 @@ ffca: dw $0db2  ; tcall 10
 ffcc: dw $0c60  ; tcall 9
 ffce: dw $0cd8  ; tcall 8
 ffd0: dw $0a09  ; tcall 7
-ffd2: dw $0d54  ; tcall 6
+ffd2: dw $0d54  ; tcall 6 - set echo delay
 ffd4: dw $0000  ; tcall 5
 ffd6: dw $0000  ; tcall 4
 ffd8: dw $0000  ; tcall 3
