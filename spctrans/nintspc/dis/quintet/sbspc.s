@@ -6,7 +6,7 @@
 0407: af        mov   (x)+,a
 0408: c8 f0     cmp   x,#$f0
 040a: d0 fb     bne   $0407
-040c: c5 ff 11  mov   $11ff,a           ; zero patch offset for BGM
+040c: c5 ff 0f  mov   $0fff,a
 040f: bc        inc   a
 0410: 3f a9 09  call  $09a9
 0413: a2 48     set5  $48
@@ -97,27 +97,24 @@
 04c0: d4 00     mov   $00+x,a
 04c2: 6f        ret
 
-; handle a note vcmd (80-df)
 04c3: ad ca     cmp   y,#$ca
 04c5: 90 05     bcc   $04cc
-; vcmds ca-df - percussion note
-04c7: 3f df 07  call  $07df             ; set instrument by note number
-04ca: 8d a4     mov   y,#$a4            ; dispatch as note $a4
+04c7: 3f df 07  call  $07df
+04ca: 8d a4     mov   y,#$a4
 04cc: ad c8     cmp   y,#$c8
-04ce: b0 f2     bcs   $04c2             ; quit if tie/rest
+04ce: b0 f2     bcs   $04c2
 04d0: e4 1a     mov   a,$1a
 04d2: 24 47     and   a,$47
 04d4: d0 ec     bne   $04c2
-; vcmds 80-c7 - note (note number in Y)
 04d6: dd        mov   a,y
-04d7: 28 7f     and   a,#$7f            ; 80-c7 => 00-47
+04d7: 28 7f     and   a,#$7f
 04d9: 60        clrc
-04da: 84 50     adc   a,$50             ; add global transpose
+04da: 84 50     adc   a,$50
 04dc: 60        clrc
-04dd: 95 f0 02  adc   a,$02f0+x         ; add per-voice transpose
-04e0: d5 7d 03  mov   $037d+x,a         ; save note number (integer)
+04dd: 95 f0 02  adc   a,$02f0+x
+04e0: d5 7d 03  mov   $037d+x,a
 04e3: f5 a5 03  mov   a,$03a5+x
-04e6: d5 7c 03  mov   $037c+x,a         ; save note number (fraction)
+04e6: d5 7c 03  mov   $037c+x,a
 04e9: f5 a1 02  mov   a,$02a1+x
 04ec: 5c        lsr   a
 04ed: e8 00     mov   a,#$00
@@ -244,8 +241,8 @@
 05d3: 6f        ret
 
 05d4: 2d        push  a
-05d5: e5 fd 11  mov   a,$11fd
-05d8: ec fe 11  mov   y,$11fe
+05d5: e5 fd 0f  mov   a,$0ffd
+05d8: ec fe 0f  mov   y,$0ffe
 05db: da 3b     movw  $3b,ya
 05dd: e8 00     mov   a,#$00
 05df: 5d        mov   x,a
@@ -269,7 +266,7 @@
 05fe: c2 48     set6  $48
 0600: 6f        ret
 
-0601: 3f 0c 0f  call  $0f0c
+0601: 3f 06 0f  call  $0f06
 0604: c4 08     mov   $08,a
 0606: c4 04     mov   $04,a
 0608: 6f        ret
@@ -284,15 +281,14 @@
 0617: f0 e8     beq   $0601
 0619: 6f        ret
 
-; play song in A
 061a: c4 04     mov   $04,a
 061c: 1c        asl   a
 061d: f0 26     beq   $0645
 061f: 3f d4 05  call  $05d4
 0622: 5d        mov   x,a
-0623: f5 ff 11  mov   a,$11ff+x
+0623: f5 ff 0f  mov   a,$0fff+x
 0626: fd        mov   y,a
-0627: f5 fe 11  mov   a,$11fe+x         ; song table (index 0 is not used, see $1200 for the first item)
+0627: f5 fe 0f  mov   a,$0ffe+x
 062a: da 40     movw  $40,ya
 062c: 8f 02 0c  mov   $0c,#$02
 062f: e8 00     mov   a,#$00
@@ -490,16 +486,17 @@
 07c0: d0 f3     bne   $07b5
 07c2: 6f        ret
 
+; dispatch vcmd
 07c3: 1c        asl   a
 07c4: fd        mov   y,a
 07c5: f6 95 09  mov   a,$0995+y
 07c8: 2d        push  a
-07c9: f6 94 09  mov   a,$0994+y
+07c9: f6 94 09  mov   a,$0994+y         ; refs vcmd dispatch table $0a54
 07cc: 2d        push  a
 07cd: dd        mov   a,y
 07ce: 5c        lsr   a
 07cf: fd        mov   y,a
-07d0: f6 2a 0a  mov   a,$0a2a+y
+07d0: f6 2a 0a  mov   a,$0a2a+y         ; refs vcmd length table $0a8a
 07d3: f0 08     beq   $07dd
 07d5: e7 d4     mov   a,($d4+x)
 07d7: bb d4     inc   $d4+x
@@ -520,56 +517,56 @@
 07ec: 60        clrc
 07ed: 84 5f     adc   a,$5f             ;   add perc patch base
 07ef: 60        clrc
-07f0: 85 ff 11  adc   a,$11ff           ; add patch offset for BGM (constant value = 12?)
+07f0: 85 ff 0f  adc   a,$0fff           ; add patch offset for BGM
 07f3: 2f 09     bra   $07fe
 ; SFX
 07f5: fd        mov   y,a
-07f6: 10 06     bpl   $07fe             ; if percussion note:
+07f6: 10 06     bpl   $07fe
 07f8: 80        setc
-07f9: a8 ca     sbc   a,#$ca            ;   ca-dd => 00-15
+07f9: a8 ca     sbc   a,#$ca
 07fb: 60        clrc
-07fc: 84 39     adc   a,$39             ; add perc patch base
+07fc: 84 39     adc   a,$39
 ;
 07fe: 8d 06     mov   y,#$06
 0800: cf        mul   ya
 0801: da 14     movw  $14,ya
 0803: 60        clrc
 0804: 98 00 14  adc   $14,#$00
-0807: 98 2e 15  adc   $15,#$2e          ; instrument table $2e00
+0807: 98 2e 15  adc   $15,#$2e
 080a: e4 1a     mov   a,$1a
 080c: 24 47     and   a,$47
 080e: d0 38     bne   $0848
 0810: 4d        push  x
 0811: f5 8c 0d  mov   a,$0d8c+x
-0814: 08 04     or    a,#$04            ; voice X SRCN
+0814: 08 04     or    a,#$04
 0816: 5d        mov   x,a
 0817: 8d 00     mov   y,#$00
 0819: f7 14     mov   a,($14)+y
 081b: 10 0e     bpl   $082b
-081d: 28 1f     and   a,#$1f            ; sample > 80: noise, freq in low bits
-081f: 38 20 48  and   $48,#$20          ;  keep echo bit from FLG
-0822: 0e 48 00  tset1 $0048             ;  OR in noise freq
-0825: 09 47 49  or    ($49),($47)       ;  set vbit in noise enable
-0828: dd        mov   a,y               ;  set SRCN to 0
-0829: 2f 07     bra   $0832             ; else
+081d: 28 1f     and   a,#$1f
+081f: 38 20 48  and   $48,#$20
+0822: 0e 48 00  tset1 $0048
+0825: 09 47 49  or    ($49),($47)
+0828: dd        mov   a,y
+0829: 2f 07     bra   $0832
 082b: e4 47     mov   a,$47
-082d: 4e 49 00  tclr1 $0049             ;  clear noise vbit
-0830: f7 14     mov   a,($14)+y         ;  set SRCN from table
+082d: 4e 49 00  tclr1 $0049
+0830: f7 14     mov   a,($14)+y
 0832: d8 f2     mov   $f2,x
 0834: c4 f3     mov   $f3,a
 0836: 3d        inc   x
 0837: fc        inc   y
 0838: ad 04     cmp   y,#$04
-083a: d0 f4     bne   $0830             ; set SRCN, ADSR1/2, GAIN from table
+083a: d0 f4     bne   $0830
 083c: ce        pop   x
 083d: f7 14     mov   a,($14)+y
-083f: d5 29 02  mov   $0229+x,a         ; set pitch multiplier
+083f: d5 29 02  mov   $0229+x,a
 0842: fc        inc   y
 0843: f7 14     mov   a,($14)+y
 0845: d5 28 02  mov   $0228+x,a
 0848: 6f        ret
 
-; vcmd e1 - pan
+; vcmd e1
 0849: d5 69 03  mov   $0369+x,a
 084c: 28 1f     and   a,#$1f
 084e: d5 41 03  mov   $0341+x,a
@@ -577,7 +574,7 @@
 0853: d5 40 03  mov   $0340+x,a
 0856: 6f        ret
 
-; vcmd e2 - pan fade
+; vcmd e2
 0857: d4 85     mov   $85+x,a
 0859: 2d        push  a
 085a: 3f d5 07  call  $07d5
@@ -591,19 +588,19 @@
 086c: d5 55 03  mov   $0355+x,a
 086f: 6f        ret
 
-; vcmd e3 - vibrato on
+; vcmd e3
 0870: d5 a0 02  mov   $02a0+x,a
 0873: 3f d5 07  call  $07d5
 0876: d5 8d 02  mov   $028d+x,a
 0879: 3f d5 07  call  $07d5
-; vcmd e4 - vibrato off
+; vcmd e4
 087c: d4 ad     mov   $ad+x,a
 087e: d5 b5 02  mov   $02b5+x,a
 0881: e8 00     mov   a,#$00
 0883: d5 a1 02  mov   $02a1+x,a
 0886: 6f        ret
 
-; vcmd f0 - vibrato fade
+; vcmd f0
 0887: d5 a1 02  mov   $02a1+x,a
 088a: 2d        push  a
 088b: 8d 00     mov   y,#$00
@@ -614,7 +611,7 @@
 0893: d5 b4 02  mov   $02b4+x,a
 0896: 6f        ret
 
-; vcmd e5 - master volume
+; vcmd e5
 0897: dd        mov   a,y
 0898: 80        setc
 0899: a8 00     sbc   a,#$00
@@ -623,7 +620,7 @@
 089e: da 58     movw  $58,ya
 08a0: 6f        ret
 
-; vcmd e6 - master volume fade
+; vcmd e6
 08a1: c4 5a     mov   $5a,a
 08a3: 3f d5 07  call  $07d5
 08a6: c4 5b     mov   $5b,a
@@ -634,14 +631,14 @@
 08b0: da 5c     movw  $5c,ya
 08b2: 6f        ret
 
-; vcmd e7 - tempo
+; vcmd e7
 08b3: e4 34     mov   a,$34
 08b5: d0 04     bne   $08bb
 08b7: e8 00     mov   a,#$00
 08b9: da 52     movw  $52,ya
 08bb: 6f        ret
 
-; vcmd e8 - tempo fade
+; vcmd e8
 08bc: c4 54     mov   $54,a
 08be: 3f d5 07  call  $07d5
 08c1: c4 55     mov   $55,a
@@ -652,27 +649,27 @@
 08cb: da 56     movw  $56,ya
 08cd: 6f        ret
 
-; vcmd e9 - global transpose
+; vcmd e9
 08ce: c4 50     mov   $50,a
 08d0: 6f        ret
 
-; vcmd ea - per-voice transpose
+; vcmd ea
 08d1: d5 f0 02  mov   $02f0+x,a
 08d4: 6f        ret
 
-; vcmd eb - tremolo on
+; vcmd eb
 08d5: d5 dc 02  mov   $02dc+x,a
 08d8: 3f d5 07  call  $07d5
 08db: d5 c9 02  mov   $02c9+x,a
 08de: 3f d5 07  call  $07d5
-; vcmd ec - tremolo off
+; vcmd ec
 08e1: d4 c1     mov   $c1+x,a
 08e3: 6f        ret
 
-; vcmd f1 - pitch envelope (release)
+; vcmd f1
 08e4: e8 01     mov   a,#$01
 08e6: 2f 02     bra   $08ea
-; vcmd f2 - pitch envelope (attack)
+; vcmd f2
 08e8: e8 00     mov   a,#$00
 08ea: d5 78 02  mov   $0278+x,a
 08ed: dd        mov   a,y
@@ -683,17 +680,17 @@
 08fa: d5 79 02  mov   $0279+x,a
 08fd: 6f        ret
 
-; vcmd f3 - pitch envelope off
+; vcmd f3
 08fe: d5 64 02  mov   $0264+x,a
 0901: 6f        ret
 
-; vcmd ed - volume
+; vcmd ed
 0902: d5 05 03  mov   $0305+x,a
 0905: e8 00     mov   a,#$00
 0907: d5 04 03  mov   $0304+x,a
 090a: 6f        ret
 
-; vcmd ee - volume fade
+; vcmd ee
 090b: d4 84     mov   $84+x,a
 090d: 2d        push  a
 090e: 3f d5 07  call  $07d5
@@ -707,11 +704,11 @@
 0920: d5 19 03  mov   $0319+x,a
 0923: 6f        ret
 
-; vcmd f4 - tuning
+; vcmd f4
 0924: d5 a5 03  mov   $03a5+x,a
 0927: 6f        ret
 
-; vcmd ef - call subroutine
+; vcmd ef
 0928: d5 50 02  mov   $0250+x,a
 092b: 3f d5 07  call  $07d5
 092e: d5 51 02  mov   $0251+x,a
@@ -727,7 +724,7 @@
 0949: d4 d5     mov   $d5+x,a
 094b: 6f        ret
 
-; vcmd f5 - echo vbits/volume
+; vcmd f5
 094c: c4 4a     mov   $4a,a
 094e: 3f d5 07  call  $07d5
 0951: e8 00     mov   a,#$00
@@ -738,7 +735,7 @@
 095c: b2 48     clr5  $48
 095e: 6f        ret
 
-; vcmd f8 - echo volume fade
+; vcmd f8
 095f: c4 68     mov   $68,a
 0961: 3f d5 07  call  $07d5
 0964: c4 69     mov   $69,a
@@ -756,13 +753,13 @@
 097d: da 66     movw  $66,ya
 097f: 6f        ret
 
-; vcmd f6 - disable echo
+; vcmd f6
 0980: da 60     movw  $60,ya
 0982: da 62     movw  $62,ya
 0984: a2 48     set5  $48
 0986: 6f        ret
 
-; vcmd f7 - set echo params
+; vcmd f7
 0987: 3f a9 09  call  $09a9
 098a: 3f d5 07  call  $07d5
 098d: c4 4e     mov   $4e,a
@@ -819,9 +816,10 @@
 ; vcmd fa - set perc patch base
 09eb: eb 34     mov   y,$34
 09ed: d0 03     bne   $09f2
+; BGM
 09ef: c4 5f     mov   $5f,a
 09f1: 6f        ret
-
+; SFX
 09f2: c4 39     mov   $39,a
 09f4: 6f        ret
 
@@ -832,7 +830,7 @@
 09fd: d0 2d     bne   $0a2c
 09ff: 3f d7 07  call  $07d7
 0a02: 3f d5 07  call  $07d5
-; vcmd f9 - pitch slide
+; vcmd f9
 0a05: d4 99     mov   $99+x,a
 0a07: 3f d5 07  call  $07d5
 0a0a: d4 98     mov   $98+x,a
@@ -879,34 +877,34 @@
 
 ; vcmd dispatch table
 0a54: dw $07df  ; e0 - set instrument
-0a56: dw $0849  ; e1 - pan
-0a58: dw $0857  ; e2 - pan fade
-0a5a: dw $0870  ; e3 - vibrato on
-0a5c: dw $087c  ; e4 - vibrato off
-0a5e: dw $0897  ; e5 - master volume
-0a60: dw $08a1  ; e6 - master volume fade
-0a62: dw $08b3  ; e7 - tempo
-0a64: dw $08bc  ; e8 - tempo fade
-0a66: dw $08ce  ; e9 - global transpose
-0a68: dw $08d1  ; ea - per-voice transpose
-0a6a: dw $08d5  ; eb - tremolo on
-0a6c: dw $08e1  ; ec - tremolo off
-0a6e: dw $0902  ; ed - volume
-0a70: dw $090b  ; ee - volume fade
-0a72: dw $0928  ; ef - call subroutine
-0a74: dw $0887  ; f0 - vibrato fade
-0a76: dw $08e4  ; f1 - pitch envelope (release)
-0a78: dw $08e8  ; f2 - pitch envelope (attack)
-0a7a: dw $08fe  ; f3 - pitch envelope off
-0a7c: dw $0924  ; f4 - tuning
-0a7e: dw $094c  ; f5 - echo vbits/volume
-0a80: dw $0980  ; f6 - disable echo
-0a82: dw $0987  ; f7 - set echo params
-0a84: dw $095f  ; f8 - echo volume fade
-0a86: dw $0a05  ; f9 - pitch slide
+0a56: dw $0849  ; e1
+0a58: dw $0857  ; e2
+0a5a: dw $0870  ; e3
+0a5c: dw $087c  ; e4
+0a5e: dw $0897  ; e5
+0a60: dw $08a1  ; e6
+0a62: dw $08b3  ; e7
+0a64: dw $08bc  ; e8
+0a66: dw $08ce  ; e9
+0a68: dw $08d1  ; ea
+0a6a: dw $08d5  ; eb
+0a6c: dw $08e1  ; ec
+0a6e: dw $0902  ; ed
+0a70: dw $090b  ; ee
+0a72: dw $0928  ; ef
+0a74: dw $0887  ; f0
+0a76: dw $08e4  ; f1
+0a78: dw $08e8  ; f2
+0a7a: dw $08fe  ; f3
+0a7c: dw $0924  ; f4
+0a7e: dw $094c  ; f5
+0a80: dw $0980  ; f6
+0a82: dw $0987  ; f7
+0a84: dw $095f  ; f8
+0a86: dw $0a05  ; f9
 0a88: dw $09eb  ; fa - set perc patch base
 
-; vcmd lengths
+; vcmd length table
 0a8a: db $01,$01,$02,$03,$00,$01,$02,$01
 0a92: db $02,$01,$01,$03,$00,$01,$02,$03
 0a9a: db $01,$03,$03,$00,$01,$03,$00,$03
@@ -1213,13 +1211,13 @@
 0cf9: db $7a,$7c,$7d,$7e,$7f
 
 0cfe: db $0a,$0b,$0c,$0d,$0e,$0f,$10,$11
-0c06: db $11,$12,$12,$13,$13,$13,$14,$14
-0c0e: db $14,$14,$14,$13,$13,$13,$12,$12
-0c16: db $11,$11,$10,$0f,$0e,$0d,$0c,$0b
-0c1e: db $0a,$09,$08,$07,$06,$05,$04,$03
-0c26: db $03,$02,$02,$01,$01,$01,$00,$00
-0c2e: db $00,$00,$00,$01,$01,$01,$02,$02
-0c36: db $03,$03,$04,$05,$06,$07,$08,$09
+0d06: db $11,$12,$12,$13,$13,$13,$14,$14
+0d0e: db $14,$14,$14,$13,$13,$13,$12,$12
+0d16: db $11,$11,$10,$0f,$0e,$0d,$0c,$0b
+0d1e: db $0a,$09,$08,$07,$06,$05,$04,$03
+0d26: db $03,$02,$02,$01,$01,$01,$00,$00
+0d2e: db $00,$00,$00,$01,$01,$01,$02,$02
+0d36: db $03,$03,$04,$05,$06,$07,$08,$09
 
 0d3e: db $7f,$00,$00,$00,$00,$00,$00,$00
 0d46: db $58,$bf,$db,$f0,$fe,$07,$0c,$0c
@@ -1273,7 +1271,7 @@
 0dc6: 3f 14 0e  call  $0e14
 0dc9: 8e        pop   psw
 0dca: 10 21     bpl   $0ded
-0dcc: 3f 7f 0e  call  $0e7f
+0dcc: 3f 79 0e  call  $0e79
 0dcf: 8f ff 35  mov   $35,#$ff
 0dd2: 8f 00 3f  mov   $3f,#$00
 0dd5: 8f 80 47  mov   $47,#$80
@@ -1287,7 +1285,7 @@
 0de9: d4 70     mov   $70+x,a
 0deb: 2f 1d     bra   $0e0a
 0ded: ae        pop   a
-0dee: 3f 7f 0e  call  $0e7f
+0dee: 3f 79 0e  call  $0e79
 0df1: 8f 80 47  mov   $47,#$80
 0df4: cd 12     mov   x,#$12
 0df6: e4 35     mov   a,$35
@@ -1298,166 +1296,163 @@
 0e01: 09 47 37  or    ($37),($47)
 0e04: 09 47 36  or    ($36),($47)
 0e07: 3f 14 0e  call  $0e14
-0e0a: 3f 7f 0e  call  $0e7f
+0e0a: 3f 79 0e  call  $0e79
 0e0d: 8f 00 34  mov   $34,#$00
 0e10: fa 37 1a  mov   ($1a),($37)
 0e13: 6f        ret
 
 0e14: 1c        asl   a
-0e15: 68 4e     cmp   a,#$4e
-0e17: 90 02     bcc   $0e1b
-0e19: e8 0e     mov   a,#$0e
-0e1b: 4d        push  x
-0e1c: 5d        mov   x,a
-0e1d: f5 01 24  mov   a,$2401+x
-0e20: fd        mov   y,a
-0e21: f5 00 24  mov   a,$2400+x
-0e24: ce        pop   x
-0e25: d4 d4     mov   $d4+x,a
-0e27: db d5     mov   $d5+x,y
-0e29: e8 dc     mov   a,#$dc
-0e2b: d5 05 03  mov   $0305+x,a
-0e2e: e8 0a     mov   a,#$0a
-0e30: 3f 49 08  call  $0849
-0e33: e8 00     mov   a,#$00
-0e35: d5 15 02  mov   $0215+x,a
-0e38: d5 a5 03  mov   $03a5+x,a
-0e3b: d5 f0 02  mov   $02f0+x,a
-0e3e: d5 64 02  mov   $0264+x,a
-0e41: d4 ad     mov   $ad+x,a
-0e43: d4 c1     mov   $c1+x,a
-0e45: d5 b8 03  mov   $03b8+x,a
-0e48: d4 84     mov   $84+x,a
-0e4a: d4 85     mov   $85+x,a
-0e4c: e8 02     mov   a,#$02
-0e4e: d4 70     mov   $70+x,a
-0e50: 6f        ret
+0e15: 4d        push  x
+0e16: 5d        mov   x,a
+0e17: f5 01 24  mov   a,$2401+x
+0e1a: fd        mov   y,a
+0e1b: f5 00 24  mov   a,$2400+x
+0e1e: ce        pop   x
+0e1f: d4 d4     mov   $d4+x,a
+0e21: db d5     mov   $d5+x,y
+0e23: e8 dc     mov   a,#$dc
+0e25: d5 05 03  mov   $0305+x,a
+0e28: e8 0a     mov   a,#$0a
+0e2a: 3f 49 08  call  $0849
+0e2d: e8 00     mov   a,#$00
+0e2f: d5 15 02  mov   $0215+x,a
+0e32: d5 a5 03  mov   $03a5+x,a
+0e35: d5 f0 02  mov   $02f0+x,a
+0e38: d5 64 02  mov   $0264+x,a
+0e3b: d4 ad     mov   $ad+x,a
+0e3d: d4 c1     mov   $c1+x,a
+0e3f: d5 b8 03  mov   $03b8+x,a
+0e42: d4 84     mov   $84+x,a
+0e44: d4 85     mov   $85+x,a
+0e46: e8 02     mov   a,#$02
+0e48: d4 70     mov   $70+x,a
+0e4a: 6f        ret
 
-0e51: e4 47     mov   a,$47
-0e53: 48 ff     eor   a,#$ff
-0e55: fd        mov   y,a
-0e56: 24 37     and   a,$37
-0e58: c4 37     mov   $37,a
-0e5a: dd        mov   a,y
-0e5b: 24 36     and   a,$36
-0e5d: c4 36     mov   $36,a
-0e5f: 09 47 5e  or    ($5e),($47)
-0e62: fa 47 5c  mov   ($5c),($47)
-0e65: 8f 00 34  mov   $34,#$00
-0e68: 4d        push  x
-0e69: 7d        mov   a,x
-0e6a: 80        setc
-0e6b: a8 04     sbc   a,#$04
-0e6d: 5d        mov   x,a
-0e6e: f5 15 02  mov   a,$0215+x
-0e71: 3f df 07  call  $07df
-0e74: ce        pop   x
-0e75: 8f ff 34  mov   $34,#$ff
-0e78: e8 00     mov   a,#$00
-0e7a: d4 d5     mov   $d5+x,a
-0e7c: c4 35     mov   $35,a
-0e7e: 6f        ret
+0e4b: e4 47     mov   a,$47
+0e4d: 48 ff     eor   a,#$ff
+0e4f: fd        mov   y,a
+0e50: 24 37     and   a,$37
+0e52: c4 37     mov   $37,a
+0e54: dd        mov   a,y
+0e55: 24 36     and   a,$36
+0e57: c4 36     mov   $36,a
+0e59: 09 47 5e  or    ($5e),($47)
+0e5c: fa 47 5c  mov   ($5c),($47)
+0e5f: 8f 00 34  mov   $34,#$00
+0e62: 4d        push  x
+0e63: 7d        mov   a,x
+0e64: 80        setc
+0e65: a8 04     sbc   a,#$04
+0e67: 5d        mov   x,a
+0e68: f5 15 02  mov   a,$0215+x
+0e6b: 3f df 07  call  $07df
+0e6e: ce        pop   x
+0e6f: 8f ff 34  mov   $34,#$ff
+0e72: e8 00     mov   a,#$00
+0e74: d4 d5     mov   $d5+x,a
+0e76: c4 35     mov   $35,a
+0e78: 6f        ret
 
-0e7f: f4 d5     mov   a,$d5+x
-0e81: d0 01     bne   $0e84
-0e83: 6f        ret
+0e79: f4 d5     mov   a,$d5+x
+0e7b: d0 01     bne   $0e7e
+0e7d: 6f        ret
 
-0e84: e4 35     mov   a,$35
-0e86: f0 28     beq   $0eb0
-0e88: 09 47 5e  or    ($5e),($47)
-0e8b: c8 12     cmp   x,#$12
-0e8d: d0 12     bne   $0ea1
-0e8f: e4 3f     mov   a,$3f
-0e91: ab 3f     inc   $3f
-0e93: 5c        lsr   a
-0e94: 28 3f     and   a,#$3f
-0e96: fd        mov   y,a
-0e97: f6 fe 0c  mov   a,$0cfe+y
-0e9a: 08 c0     or    a,#$c0
-0e9c: 3f 49 08  call  $0849
-0e9f: 2f 0f     bra   $0eb0
-0ea1: e4 3f     mov   a,$3f
-0ea3: 48 ff     eor   a,#$ff
-0ea5: bc        inc   a
-0ea6: 5c        lsr   a
-0ea7: 28 3f     and   a,#$3f
-0ea9: fd        mov   y,a
-0eaa: f6 fe 0c  mov   a,$0cfe+y
-0ead: 3f 49 08  call  $0849
-0eb0: d8 44     mov   $44,x
-0eb2: 9b 70     dec   $70+x
-0eb4: d0 45     bne   $0efb
-0eb6: 3f d5 07  call  $07d5
-0eb9: f0 96     beq   $0e51
-0ebb: 30 20     bmi   $0edd
-0ebd: d5 00 02  mov   $0200+x,a
-0ec0: 3f d5 07  call  $07d5
-0ec3: 30 18     bmi   $0edd
-0ec5: 2d        push  a
-0ec6: 9f        xcn   a
-0ec7: 28 07     and   a,#$07
-0ec9: fd        mov   y,a
-0eca: f6 00 2f  mov   a,$2f00+y
-0ecd: d5 01 02  mov   $0201+x,a
-0ed0: ae        pop   a
-0ed1: 28 0f     and   a,#$0f
-0ed3: fd        mov   y,a
-0ed4: f6 08 2f  mov   a,$2f08+y
-0ed7: d5 14 02  mov   $0214+x,a
-0eda: 3f d5 07  call  $07d5
-0edd: 68 e0     cmp   a,#$e0
-0edf: 90 05     bcc   $0ee6
-0ee1: 3f c3 07  call  $07c3
-0ee4: 2f d0     bra   $0eb6
-0ee6: 3f c3 04  call  $04c3
-0ee9: f5 00 02  mov   a,$0200+x
-0eec: d4 70     mov   $70+x,a
-0eee: fd        mov   y,a
-0eef: f5 01 02  mov   a,$0201+x
-0ef2: cf        mul   ya
-0ef3: dd        mov   a,y
-0ef4: d0 01     bne   $0ef7
-0ef6: bc        inc   a
-0ef7: d4 71     mov   $71+x,a
-0ef9: 2f 03     bra   $0efe
-0efb: 3f 5c 0b  call  $0b5c
-0efe: 3f f5 09  call  $09f5
-0f01: e4 30     mov   a,$30
-0f03: f0 03     beq   $0f08
-0f05: 09 47 5e  or    ($5e),($47)
-0f08: 3f a5 0a  call  $0aa5
-0f0b: 6f        ret
+0e7e: e4 35     mov   a,$35
+0e80: f0 28     beq   $0eaa
+0e82: 09 47 5e  or    ($5e),($47)
+0e85: c8 12     cmp   x,#$12
+0e87: d0 12     bne   $0e9b
+0e89: e4 3f     mov   a,$3f
+0e8b: ab 3f     inc   $3f
+0e8d: 5c        lsr   a
+0e8e: 28 3f     and   a,#$3f
+0e90: fd        mov   y,a
+0e91: f6 fe 0c  mov   a,$0cfe+y
+0e94: 08 c0     or    a,#$c0
+0e96: 3f 49 08  call  $0849
+0e99: 2f 0f     bra   $0eaa
+0e9b: e4 3f     mov   a,$3f
+0e9d: 48 ff     eor   a,#$ff
+0e9f: bc        inc   a
+0ea0: 5c        lsr   a
+0ea1: 28 3f     and   a,#$3f
+0ea3: fd        mov   y,a
+0ea4: f6 fe 0c  mov   a,$0cfe+y
+0ea7: 3f 49 08  call  $0849
+0eaa: d8 44     mov   $44,x
+0eac: 9b 70     dec   $70+x
+0eae: d0 45     bne   $0ef5
+0eb0: 3f d5 07  call  $07d5
+0eb3: f0 96     beq   $0e4b
+0eb5: 30 20     bmi   $0ed7
+0eb7: d5 00 02  mov   $0200+x,a
+0eba: 3f d5 07  call  $07d5
+0ebd: 30 18     bmi   $0ed7
+0ebf: 2d        push  a
+0ec0: 9f        xcn   a
+0ec1: 28 07     and   a,#$07
+0ec3: fd        mov   y,a
+0ec4: f6 00 2f  mov   a,$2f00+y
+0ec7: d5 01 02  mov   $0201+x,a
+0eca: ae        pop   a
+0ecb: 28 0f     and   a,#$0f
+0ecd: fd        mov   y,a
+0ece: f6 08 2f  mov   a,$2f08+y
+0ed1: d5 14 02  mov   $0214+x,a
+0ed4: 3f d5 07  call  $07d5
+0ed7: 68 e0     cmp   a,#$e0
+0ed9: 90 05     bcc   $0ee0
+0edb: 3f c3 07  call  $07c3
+0ede: 2f d0     bra   $0eb0
+0ee0: 3f c3 04  call  $04c3
+0ee3: f5 00 02  mov   a,$0200+x
+0ee6: d4 70     mov   $70+x,a
+0ee8: fd        mov   y,a
+0ee9: f5 01 02  mov   a,$0201+x
+0eec: cf        mul   ya
+0eed: dd        mov   a,y
+0eee: d0 01     bne   $0ef1
+0ef0: bc        inc   a
+0ef1: d4 71     mov   $71+x,a
+0ef3: 2f 03     bra   $0ef8
+0ef5: 3f 5c 0b  call  $0b5c
+0ef8: 3f f5 09  call  $09f5
+0efb: e4 30     mov   a,$30
+0efd: f0 03     beq   $0f02
+0eff: 09 47 5e  or    ($5e),($47)
+0f02: 3f a5 0a  call  $0aa5
+0f05: 6f        ret
 
-0f0c: 8d bb     mov   y,#$bb
-0f0e: e8 aa     mov   a,#$aa
-0f10: da f4     movw  $f4,ya
-0f12: e4 f4     mov   a,$f4
-0f14: 68 cc     cmp   a,#$cc
-0f16: d0 fa     bne   $0f12
-0f18: 2f 1e     bra   $0f38
-0f1a: eb f4     mov   y,$f4
-0f1c: d0 fc     bne   $0f1a
-0f1e: 7e f4     cmp   y,$f4
-0f20: d0 10     bne   $0f32
-0f22: cb f4     mov   $f4,y
-0f24: e4 f5     mov   a,$f5
-0f26: d6 48 a5  mov   $a548+y,a
-0f29: fc        inc   y
-0f2a: d0 f2     bne   $0f1e
-0f2c: ac 28 0f  inc   $0f28
-0f2f: 5f 1e 0f  jmp   $0f1e
+0f06: 8d bb     mov   y,#$bb
+0f08: e8 aa     mov   a,#$aa
+0f0a: da f4     movw  $f4,ya
+0f0c: e4 f4     mov   a,$f4
+0f0e: 68 cc     cmp   a,#$cc
+0f10: d0 fa     bne   $0f0c
+0f12: 2f 1e     bra   $0f32
+0f14: eb f4     mov   y,$f4
+0f16: d0 fc     bne   $0f14
+0f18: 7e f4     cmp   y,$f4
+0f1a: d0 10     bne   $0f2c
+0f1c: cb f4     mov   $f4,y
+0f1e: e4 f5     mov   a,$f5
+0f20: d6 ce 91  mov   $91ce+y,a
+0f23: fc        inc   y
+0f24: d0 f2     bne   $0f18
+0f26: ac 22 0f  inc   $0f22
+0f29: 5f 18 0f  jmp   $0f18
 
-0f32: 10 ea     bpl   $0f1e
-0f34: 7e f4     cmp   y,$f4
-0f36: 10 e6     bpl   $0f1e
-0f38: ba f6     movw  ya,$f6
-0f3a: c5 27 0f  mov   $0f27,a
-0f3d: cc 28 0f  mov   $0f28,y
-0f40: eb f4     mov   y,$f4
-0f42: e4 f5     mov   a,$f5
-0f44: cb f4     mov   $f4,y
-0f46: d0 d2     bne   $0f1a
-0f48: cd 31     mov   x,#$31
-0f4a: d8 f1     mov   $f1,x
-0f4c: 6f        ret
+0f2c: 10 ea     bpl   $0f18
+0f2e: 7e f4     cmp   y,$f4
+0f30: 10 e6     bpl   $0f18
+0f32: ba f6     movw  ya,$f6
+0f34: c5 21 0f  mov   $0f21,a
+0f37: cc 22 0f  mov   $0f22,y
+0f3a: eb f4     mov   y,$f4
+0f3c: e4 f5     mov   a,$f5
+0f3e: cb f4     mov   $f4,y
+0f40: d0 d2     bne   $0f14
+0f42: cd 31     mov   x,#$31
+0f44: d8 f1     mov   $f1,x
+0f46: 6f        ret
 

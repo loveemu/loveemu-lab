@@ -937,7 +937,7 @@
 0a17: 95 00 ff  adc   a,$ff00+x         ;   add perc patch base
 0a1a: 4d        push  x
 0a1b: 5d        mov   x,a
-0a1c: f5 ab ff  mov   a,$ffab+x         ; add patch offset for BGM
+0a1c: f5 ab ff  mov   a,$ffab+x         ; get real instrument index from lookup table
 0a1f: ce        pop   x
 0a20: 2f 0a     bra   $0a2c
 ; SFX
