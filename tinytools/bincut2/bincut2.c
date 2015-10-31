@@ -360,7 +360,7 @@ BC2_ERROR bc2_error(BC2_PARAM *param, BC2_ERROR code, char *para)
 		if (para[0])
 			fprintf(stderr, "File input error \'%s\'.\n", para);
 		else
-			fprintf(stderr, "File input error <stdin>.\n", para);
+			fprintf(stderr, "File input error <stdin>.\n");
 		break;
 	case BC2_ERROR_OUTPUT:
 		fprintf(stderr, "File output error \'%s\'.\n", param->outpath);
@@ -470,7 +470,7 @@ int main(int argc, char **argv)
 	bincut2(&bc2param, &getopt);
 	if (bc2param.help)
 	{
-		fprintf(stderr, "bincut2.1 by Mamiya\n",argv[0]);
+		fprintf(stderr, "bincut2.1 by Mamiya\n");
 		fprintf(stderr, "Usage: %s [OPTIONS] [--] SOURCE\n",argv[0]);
 		fprintf(stderr, "\tOPTIONS\n");
 		fprintf(stderr, "\t\t-o OUTPUT FILENAME\n");

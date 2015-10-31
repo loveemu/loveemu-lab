@@ -304,7 +304,7 @@ int main(int argc, char *argv[])
 
 	if (argc < 4)
 	{
-		printf("Usage: %s [funclist.txt] [optimized.rom] [unaltered.rom] [output.rom]\n");
+		printf("Usage: %s [funclist.txt] [optimized.rom] [unaltered.rom] [output.rom]\n", argv[0]);
 		printf("\n");
 		printf("funclist.txt is a list copied from IDA's Function Window\n");
 		return EXIT_FAILURE;
