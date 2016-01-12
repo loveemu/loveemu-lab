@@ -179,11 +179,8 @@
 0996: db $58,$bf,$db,$f0,$fe,$07,$0c,$0c
 099e: db $0c,$21,$2b,$2b,$13,$fe,$f3,$f9
 09a6: db $34,$33,$00,$d9,$e5,$01,$fc,$eb
+09ae: db $25,$36,$28,$0f,$f7,$ed,$fe,$10
 
-09ae: 25
-09af: 36 28 0f  and   a,$0f28+y
-09b2: f7 ed     mov   a,($ed)+y
-09b4: fe 10     dbnz  y,$09c6
 09b6: e5 f7 00  mov   a,$00f7
 09b9: 65 f7 00  cmp   a,$00f7
 09bc: d0 5f     bne   $0a1d
@@ -384,7 +381,7 @@
 0b49: d5 10 02  mov   $0210+x,a         ; voice address (hi)
 0b4c: fc        inc   y
 0b4d: f7 04     mov   a,($04)+y
-0b4f: d5 40 02  mov   $0240+x,a
+0b4f: d5 40 02  mov   $0240+x,a         ; transpose (coarse tuning)
 0b52: fc        inc   y
 0b53: f7 04     mov   a,($04)+y
 0b55: d5 50 02  mov   $0250+x,a
@@ -577,7 +574,7 @@
 0cde: 80        setc
 0cdf: a8 74     sbc   a,#$74            ; calculate note number
 0ce1: 60        clrc
-0ce2: 95 40 02  adc   a,$0240+x         ; add instrument-specific transpose
+0ce2: 95 40 02  adc   a,$0240+x         ; add transpose
 0ce5: c4 38     mov   $38,a             ; save note number
 0ce7: c8 08     cmp   x,#$08
 0ce9: b0 08     bcs   $0cf3
@@ -602,25 +599,30 @@
 0d15: d5 40 03  mov   $0340+x,a
 ; vcmd df
 0d18: fc        inc   y
-0d19: f7 08     mov   a,($08)+y
+0d19: f7 08     mov   a,($08)+y         ; arg1
 0d1b: 68 fd     cmp   a,#$fd
 0d1d: d0 0c     bne   $0d2b
+; when arg1 == 0xfd
 0d1f: fc        inc   y
 0d20: f7 08     mov   a,($08)+y
-0d22: d4 c0     mov   $c0+x,a
+0d22: d4 c0     mov   $c0+x,a           ; arg2: delta-time
 0d24: fc        inc   y
 0d25: f7 08     mov   a,($08)+y
-0d27: d4 d0     mov   $d0+x,a
+0d27: d4 d0     mov   $d0+x,a           ; arg3
 0d29: 2f 11     bra   $0d3c
+; when arg1 != 0xfd
 0d2b: 68 74     cmp   a,#$74
 0d2d: 90 09     bcc   $0d38
 0d2f: f0 07     beq   $0d38
+; when arg1 >= 0x75 (no delta-time)
 0d31: f4 50     mov   a,$50+x
-0d33: d4 c0     mov   $c0+x,a
-0d35: dc        dec   y
+0d33: d4 c0     mov   $c0+x,a           ; reuse delta-time
+0d35: dc        dec   y                 ; restore voice ptr (no arguments)
 0d36: 2f 04     bra   $0d3c
+; 00-74 - delta-time
 0d38: d4 c0     mov   $c0+x,a
-0d3a: d4 50     mov   $50+x,a
+0d3a: d4 50     mov   $50+x,a           ; save last delta-time
+;
 0d3c: fc        inc   y
 0d3d: dd        mov   a,y
 0d3e: 60        clrc
@@ -628,15 +630,18 @@
 0d41: d5 00 02  mov   $0200+x,a
 0d44: e4 09     mov   a,$09
 0d46: 88 00     adc   a,#$00
-0d48: d5 10 02  mov   $0210+x,a
-0d4b: f7 08     mov   a,($08)+y
+0d48: d5 10 02  mov   $0210+x,a         ; update voice ptr master
+0d4b: f7 08     mov   a,($08)+y         ; readahead
 0d4d: 68 f5     cmp   a,#$f5
 0d4f: d0 05     bne   $0d56
+; next vcmd is f5
 0d51: 09 34 e2  or    ($e2),($34)
 0d54: 2f 09     bra   $0d5f
+; else
 0d56: fa 34 11  mov   ($11),($34)
 0d59: 58 ff 11  eor   $11,#$ff
 0d5c: 29 11 e2  and   ($e2),($11)
+; calculate pitch
 0d5f: 6d        push  y
 0d60: 7d        mov   a,x
 0d61: c5 12 04  mov   $0412,a
@@ -718,9 +723,9 @@
 0ded: c4 0b     mov   $0b,a
 0def: cb 0c     mov   $0c,y
 0df1: e4 0b     mov   a,$0b
-0df3: d5 b0 02  mov   $02b0+x,a
+0df3: d5 b0 02  mov   $02b0+x,a         ; P(L)
 0df6: e4 0c     mov   a,$0c
-0df8: d5 c0 02  mov   $02c0+x,a
+0df8: d5 c0 02  mov   $02c0+x,a         ; P(H)
 0dfb: ee        pop   y
 0dfc: 6f        ret
 
@@ -763,37 +768,37 @@
 0e55: 1f 58 0e  jmp   ($0e58+x)
 
 ; vcmd dispatch table
-0e58: dw $0f57  ; e0
-0e5a: dw $0f67  ; e1
-0e5c: dw $0f8b  ; e2
-0e5e: dw $0fb5  ; e3
-0e60: dw $0ff2  ; e4
-0e62: dw $100c  ; e5
-0e64: dw $102c  ; e6
-0e66: dw $1036  ; e7
+0e58: dw $0f57  ; e0 - goto
+0e5a: dw $0f67  ; e1 - call subroutine
+0e5c: dw $0f8b  ; e2 - end subroutine
+0e5e: dw $0fb5  ; e3 - echo on
+0e60: dw $0ff2  ; e4 - unknown.0
+0e62: dw $100c  ; e5 - unknown.0
+0e64: dw $102c  ; e6 - unknown.0
+0e66: dw $1036  ; e7 - volume
 0e68: dw $105d  ; e8 - set instrument
-0e6a: dw $106b  ; e9
-0e6c: dw $109e  ; ea
-0e6e: dw $10ad  ; eb
-0e70: dw $111b  ; ec
-0e72: dw $113b  ; ed
-0e74: dw $115d  ; ee
-0e76: dw $1151  ; ef
-0e78: dw $11a8  ; f0
-0e7a: dw $0ee2  ; f1
-0e7c: dw $0ee7  ; f2
-0e7e: dw $0ed1  ; f3
-0e80: dw $1149  ; f4
-0e82: dw $0e9d  ; f5
-0e84: dw $0f18  ; f6
-0e86: dw $0f2e  ; f7
+0e6a: dw $106b  ; e9 - repeat start
+0e6c: dw $109e  ; ea - transpose (relative)
+0e6e: dw $10ad  ; eb - unknown.3
+0e70: dw $111b  ; ec - unknown.3
+0e72: dw $113b  ; ed - unknown.0
+0e74: dw $115d  ; ee - unknown.0
+0e76: dw $1151  ; ef - unknown.0
+0e78: dw $11a8  ; f0 - unknown.0
+0e7a: dw $0ee2  ; f1 - nop
+0e7c: dw $0ee7  ; f2 - nop
+0e7e: dw $0ed1  ; f3 - unknown.2
+0e80: dw $1149  ; f4 - unknown.0
+0e82: dw $0e9d  ; f5 - unknown.variable
+0e84: dw $0f18  ; f6 - unknown.0
+0e86: dw $0f2e  ; f7 - unknown.0
 0e88: dw $0f46  ; f8 - set ADSR
 0e8a: dw $0eec  ; f9 - set noise frequency and ADSR
 0e8c: dw $0f09  ; fa - noise off
-0e8e: dw $1047  ; fb
-0e90: dw $0e92  ; fc
+0e8e: dw $1047  ; fb - add instrument #
+0e90: dw $0e92  ; fc - tuning
 
-; vcmd fc
+; vcmd fc - tuning
 0e92: ce        pop   x
 0e93: fc        inc   y
 0e94: f7 08     mov   a,($08)+y
@@ -804,12 +809,14 @@
 ; vcmd f5
 0e9d: ce        pop   x
 0e9e: fc        inc   y
-0e9f: f7 08     mov   a,($08)+y
-0ea1: 68 74     cmp   a,#$74
+0e9f: f7 08     mov   a,($08)+y         ; readahead next voice byte
+0ea1: 68 74     cmp   a,#$74            ; arg1 (available if value <= 0x74)
 0ea3: 90 05     bcc   $0eaa
 0ea5: f0 03     beq   $0eaa
+;
 0ea7: f4 50     mov   a,$50+x
 0ea9: dc        dec   y
+;
 0eaa: d4 c0     mov   $c0+x,a
 0eac: d4 50     mov   $50+x,a
 0eae: fc        inc   y
@@ -820,12 +827,13 @@
 0eb6: e4 09     mov   a,$09
 0eb8: 88 00     adc   a,#$00
 0eba: d5 10 02  mov   $0210+x,a
-0ebd: f7 08     mov   a,($08)+y
+0ebd: f7 08     mov   a,($08)+y         ; arg2
 0ebf: 68 f5     cmp   a,#$f5
 0ec1: d0 04     bne   $0ec7
+;
 0ec3: 09 34 e2  or    ($e2),($34)
 0ec6: 6f        ret
-
+;
 0ec7: fa 34 11  mov   ($11),($34)
 0eca: 58 ff 11  eor   $11,#$ff
 0ecd: 29 11 e2  and   ($e2),($11)
@@ -835,10 +843,10 @@
 0ed1: ce        pop   x
 0ed2: fc        inc   y
 0ed3: f7 08     mov   a,($08)+y
-0ed5: c5 f2 03  mov   $03f2,a
+0ed5: c5 f2 03  mov   $03f2,a           ; arg1
 0ed8: fc        inc   y
 0ed9: f7 08     mov   a,($08)+y
-0edb: c5 f3 03  mov   $03f3,a
+0edb: c5 f3 03  mov   $03f3,a           ; arg2
 0ede: fc        inc   y
 0edf: 5f ad 0c  jmp   $0cad
 
@@ -917,24 +925,24 @@
 0f53: fc        inc   y
 0f54: 5f ad 0c  jmp   $0cad
 
-; vcmd e0
+; vcmd e0 - goto
 0f57: ce        pop   x
 0f58: fc        inc   y
 0f59: f7 08     mov   a,($08)+y
-0f5b: d5 00 02  mov   $0200+x,a
+0f5b: d5 00 02  mov   $0200+x,a         ; arg1: voice address (lo)
 0f5e: fc        inc   y
 0f5f: f7 08     mov   a,($08)+y
-0f61: d5 10 02  mov   $0210+x,a
+0f61: d5 10 02  mov   $0210+x,a         ; arg2: voice address (hi)
 0f64: 5f a1 0c  jmp   $0ca1
 
-; vcmd e1
+; vcmd e1 - call subroutine
 0f67: ce        pop   x
 0f68: fc        inc   y
 0f69: f7 08     mov   a,($08)+y
-0f6b: d5 00 02  mov   $0200+x,a
+0f6b: d5 00 02  mov   $0200+x,a         ; arg1: voice address (lo)
 0f6e: fc        inc   y
 0f6f: f7 08     mov   a,($08)+y
-0f71: d5 10 02  mov   $0210+x,a
+0f71: d5 10 02  mov   $0210+x,a         ; arg2: voice address (hi)
 0f74: fc        inc   y
 0f75: dd        mov   a,y
 0f76: 60        clrc
@@ -944,10 +952,10 @@
 0f7e: e4 08     mov   a,$08
 0f80: d5 20 02  mov   $0220+x,a
 0f83: e4 09     mov   a,$09
-0f85: d5 30 02  mov   $0230+x,a
+0f85: d5 30 02  mov   $0230+x,a         ; save return address
 0f88: 5f a1 0c  jmp   $0ca1
 
-; vcmd e2
+; vcmd e2 - end subroutine
 0f8b: ce        pop   x
 0f8c: f5 20 02  mov   a,$0220+x
 0f8f: 68 00     cmp   a,#$00
@@ -955,50 +963,53 @@
 0f93: f5 30 02  mov   a,$0230+x
 0f96: 68 00     cmp   a,#$00
 0f98: d0 04     bne   $0f9e
-0f9a: fc        inc   y
+0f9a: fc        inc   y                 ; skip through if return address is 0
 0f9b: 5f ad 0c  jmp   $0cad
-
+; return from subroutine
 0f9e: f5 20 02  mov   a,$0220+x
 0fa1: d5 00 02  mov   $0200+x,a
 0fa4: f5 30 02  mov   a,$0230+x
-0fa7: d5 10 02  mov   $0210+x,a
+0fa7: d5 10 02  mov   $0210+x,a         ; pop return address
 0faa: e8 00     mov   a,#$00
 0fac: d5 20 02  mov   $0220+x,a
-0faf: d5 30 02  mov   $0230+x,a
+0faf: d5 30 02  mov   $0230+x,a         ; clear return address
 0fb2: 5f a1 0c  jmp   $0ca1
 
-; vcmd e3
+; vcmd e3 - echo on
 0fb5: ce        pop   x
 0fb6: fc        inc   y
 0fb7: f7 08     mov   a,($08)+y
-0fb9: c4 3d     mov   $3d,a
+0fb9: c4 3d     mov   $3d,a             ; arg1: FIR filter index
 0fbb: f0 0b     beq   $0fc8
+;
 0fbd: 6d        push  y
 0fbe: e8 d0     mov   a,#$d0
 0fc0: 8d 6d     mov   y,#$6d
 0fc2: 3f 6d 13  call  $136d             ; ESA
 0fc5: ee        pop   y
 0fc6: 2f 09     bra   $0fd1
+;
 0fc8: 6d        push  y
 0fc9: e8 fe     mov   a,#$fe
 0fcb: 8d 6d     mov   y,#$6d
 0fcd: 3f 6d 13  call  $136d             ; ESA
 0fd0: ee        pop   y
+;
 0fd1: fc        inc   y
 0fd2: f7 08     mov   a,($08)+y
-0fd4: c4 1f     mov   $1f,a
+0fd4: c4 1f     mov   $1f,a             ; arg2: EDL
 0fd6: fc        inc   y
 0fd7: f7 08     mov   a,($08)+y
-0fd9: c4 3a     mov   $3a,a
+0fd9: c4 3a     mov   $3a,a             ; arg3: EVOL(L)
 0fdb: fc        inc   y
 0fdc: f7 08     mov   a,($08)+y
-0fde: c4 3b     mov   $3b,a
+0fde: c4 3b     mov   $3b,a             ; arg4: EVOL(R)
 0fe0: fc        inc   y
 0fe1: f7 08     mov   a,($08)+y
-0fe3: c4 3c     mov   $3c,a
+0fe3: c4 3c     mov   $3c,a             ; arg5: EFB
 0fe5: e4 1a     mov   a,$1a
 0fe7: 28 df     and   a,#$df
-0fe9: c4 1a     mov   $1a,a
+0fe9: c4 1a     mov   $1a,a             ; enable echo
 0feb: 8f 05 39  mov   $39,#$05
 0fee: fc        inc   y
 0fef: 5f ad 0c  jmp   $0cad
@@ -1041,18 +1052,18 @@
 1033: c4 37     mov   $37,a
 1035: 6f        ret
 
-; vcmd e7
+; vcmd e7 - volume
 1036: ce        pop   x
 1037: fc        inc   y
 1038: f7 08     mov   a,($08)+y
-103a: d5 60 02  mov   $0260+x,a
+103a: d5 60 02  mov   $0260+x,a         ; VOL(L)
 103d: fc        inc   y
 103e: f7 08     mov   a,($08)+y
-1040: d5 70 02  mov   $0270+x,a
+1040: d5 70 02  mov   $0270+x,a         ; VOL(R)
 1043: fc        inc   y
 1044: 5f ad 0c  jmp   $0cad
 
-; vcmd fb
+; vcmd fb - add instrument #
 1047: ce        pop   x
 1048: f5 40 04  mov   a,$0440+x
 104b: 10 0c     bpl   $1059
@@ -1073,47 +1084,48 @@
 1067: fc        inc   y
 1068: 5f ad 0c  jmp   $0cad
 
-; vcmd e9
+; vcmd e9 - repeat start
 106b: ce        pop   x
 106c: 4d        push  x
 106d: fc        inc   y
-106e: f7 08     mov   a,($08)+y
+106e: f7 08     mov   a,($08)+y         ; arg1: repeat slot index
 1070: 9f        xcn   a
 1071: d8 10     mov   $10,x
 1073: 60        clrc
-1074: 84 10     adc   a,$10
+1074: 84 10     adc   a,$10             ; add channel index
 1076: 5d        mov   x,a
 1077: f4 a0     mov   a,$a0+x
 1079: f0 0c     beq   $1087
 107b: fc        inc   y
-107c: 9b a0     dec   $a0+x
-107e: d0 0e     bne   $108e
+107c: 9b a0     dec   $a0+x             ; decrease repeat count
+107e: d0 0e     bne   $108e             ; repeat if non-zero
 1080: fc        inc   y
 1081: fc        inc   y
 1082: fc        inc   y
 1083: ce        pop   x
 1084: 5f ad 0c  jmp   $0cad
-
+; start new repeat
 1087: fc        inc   y
 1088: f7 08     mov   a,($08)+y
-108a: d4 a0     mov   $a0+x,a
+108a: d4 a0     mov   $a0+x,a           ; arg2: repeat count
 108c: 9b a0     dec   $a0+x
+; continue
 108e: ce        pop   x
 108f: fc        inc   y
 1090: f7 08     mov   a,($08)+y
-1092: d5 00 02  mov   $0200+x,a
+1092: d5 00 02  mov   $0200+x,a         ; arg3: voice address (lo)
 1095: fc        inc   y
 1096: f7 08     mov   a,($08)+y
-1098: d5 10 02  mov   $0210+x,a
+1098: d5 10 02  mov   $0210+x,a         ; arg4: voice address (hi)
 109b: 5f a1 0c  jmp   $0ca1
 
-; vcmd ea
+; vcmd ea - transpose (relative)
 109e: ce        pop   x
 109f: fc        inc   y
 10a0: f7 08     mov   a,($08)+y
 10a2: 60        clrc
 10a3: 95 40 02  adc   a,$0240+x
-10a6: d5 40 02  mov   $0240+x,a
+10a6: d5 40 02  mov   $0240+x,a         ; arg1: semitones
 10a9: fc        inc   y
 10aa: 5f ad 0c  jmp   $0cad
 
@@ -1121,12 +1133,12 @@
 10ad: ce        pop   x
 10ae: fc        inc   y
 10af: f7 08     mov   a,($08)+y
-10b1: d4 60     mov   $60+x,a
+10b1: d4 60     mov   $60+x,a           ; arg1
 10b3: fc        inc   y
 10b4: f7 08     mov   a,($08)+y
-10b6: d5 f0 02  mov   $02f0+x,a
+10b6: d5 f0 02  mov   $02f0+x,a         ; arg2
 10b9: fc        inc   y
-10ba: f7 08     mov   a,($08)+y
+10ba: f7 08     mov   a,($08)+y         ; arg3: note number
 10bc: 80        setc
 10bd: a8 74     sbc   a,#$74
 10bf: 60        clrc
@@ -1176,15 +1188,15 @@
 ; vcmd ec
 111b: ce        pop   x
 111c: fc        inc   y
-111d: f7 08     mov   a,($08)+y
+111d: f7 08     mov   a,($08)+y         ; arg1
 111f: d5 10 03  mov   $0310+x,a
 1122: d5 50 03  mov   $0350+x,a
 1125: fc        inc   y
 1126: f7 08     mov   a,($08)+y
-1128: d5 20 03  mov   $0320+x,a
+1128: d5 20 03  mov   $0320+x,a         ; arg2
 112b: fc        inc   y
 112c: f7 08     mov   a,($08)+y
-112e: d5 30 03  mov   $0330+x,a
+112e: d5 30 03  mov   $0330+x,a         ; arg3
 1131: fa 34 11  mov   ($11),($34)
 1134: 09 11 47  or    ($47),($11)
 1137: fc        inc   y
@@ -1235,6 +1247,7 @@
 1193: c4 1d     mov   $1d,a
 1195: 6f        ret
 
+; dead code?
 1196: 60        clrc
 1197: 89 11 08  adc   ($08),($11)
 119a: 98 00 09  adc   $09,#$00

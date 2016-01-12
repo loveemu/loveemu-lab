@@ -179,11 +179,8 @@
 0996: db $58,$bf,$db,$f0,$fe,$07,$0c,$0c
 099e: db $0c,$21,$2b,$2b,$13,$fe,$f3,$f9
 09a6: db $34,$33,$00,$d9,$e5,$01,$fc,$eb
+09ae: db $25,$36,$28,$0f,$f7,$ed,$fe,$10
 
-09ae: 25
-09af: 36 28 0f  and   a,$0f28+y
-09b2: f7 ed     mov   a,($ed)+y
-09b4: fe 10     dbnz  y,$09c6
 09b6: e5 f7 00  mov   a,$00f7
 09b9: 65 f7 00  cmp   a,$00f7
 09bc: d0 5f     bne   $0a1d
@@ -751,8 +748,8 @@
 0e1d: 1f 20 0e  jmp   ($0e20+x)
 
 ; vcmd dispatch table
-0e20: dw $0f16  ; e0
-0e22: dw $0f26  ; e1
+0e20: dw $0f16  ; e0 - goto
+0e22: dw $0f26  ; e1 - call subroutine
 0e24: dw $0f4a  ; e2
 0e26: dw $0f5a  ; e3
 0e28: dw $0f97  ; e4
@@ -900,24 +897,24 @@
 0f12: fc        inc   y
 0f13: 5f a2 0c  jmp   $0ca2
 
-; vcmd e0
+; vcmd e0 - goto
 0f16: ce        pop   x
 0f17: fc        inc   y
 0f18: f7 08     mov   a,($08)+y
-0f1a: d5 00 02  mov   $0200+x,a
+0f1a: d5 00 02  mov   $0200+x,a         ; arg1: voice address (lo)
 0f1d: fc        inc   y
 0f1e: f7 08     mov   a,($08)+y
-0f20: d5 10 02  mov   $0210+x,a
+0f20: d5 10 02  mov   $0210+x,a         ; arg2: voice address (hi)
 0f23: 5f 96 0c  jmp   $0c96
 
-; vcmd e1
+; vcmd e1 - call subroutine
 0f26: ce        pop   x
 0f27: fc        inc   y
 0f28: f7 08     mov   a,($08)+y
-0f2a: d5 00 02  mov   $0200+x,a
+0f2a: d5 00 02  mov   $0200+x,a         ; arg1: voice address (lo)
 0f2d: fc        inc   y
 0f2e: f7 08     mov   a,($08)+y
-0f30: d5 10 02  mov   $0210+x,a
+0f30: d5 10 02  mov   $0210+x,a         ; arg2: voice address (hi)
 0f33: fc        inc   y
 0f34: dd        mov   a,y
 0f35: 60        clrc
@@ -927,7 +924,7 @@
 0f3d: e4 08     mov   a,$08
 0f3f: d5 20 02  mov   $0220+x,a
 0f42: e4 09     mov   a,$09
-0f44: d5 30 02  mov   $0230+x,a
+0f44: d5 30 02  mov   $0230+x,a         ; save return address
 0f47: 5f 96 0c  jmp   $0c96
 
 ; vcmd e2
