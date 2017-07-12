@@ -29,24 +29,26 @@
 0439: 5d        mov   x,a
 043a: 1f 3d 04  jmp   ($043d+x)
 
-043d: 5d        mov   x,a
-043e: 04 64     or    a,$64
-0440: 16 2c 04  or    a,$042c+y
-0443: 2c 04 2c  rol   $2c04
-0446: 04 35     or    a,$35
-0448: 05 1d 05  or    a,$051d
-044b: 28 05     and   a,#$05
-044d: 2f 05     bra   $0454
-044f: 94 04     adc   a,$04+x
-0451: 3b 05     rol   $05+x
-0453: 2c 04 9a  rol   $9a04
-0456: 04 b1     or    a,$b1
-0458: 04 a8     or    a,$a8
-045a: 04 a1     or    a,$a1
-045c: 04 ba     or    a,$ba
-045e: f4 da     mov   a,$da+x
-0460: 14 3f     or    a,$3f+x
-0462: 44 05     eor   a,$05
+043d: dw $045d  ; 01
+043f: dw $1664  ; 02
+0441: dw $042c  ; 03
+0443: dw $042c  ; 04
+0445: dw $042c  ; 05
+0447: dw $0535  ; 06
+0449: dw $051d  ; 07
+044b: dw $0528  ; 08
+044d: dw $052f  ; 09
+044f: dw $0494  ; 0a
+0451: dw $053b  ; 0b
+0453: dw $042c  ; 0c
+0455: dw $049a  ; 0d
+0457: dw $04b1  ; 0e
+0459: dw $04a8  ; 0f
+045b: dw $04a1  ; 10
+
+045d: ba f4     movw  ya,$f4
+045f: da 14     movw  $14,ya
+0461: 3f 44 05  call  $0544
 0464: e4 f6     mov   a,$f6
 0466: f0 fc     beq   $0464
 0468: 8d 00     mov   y,#$00
@@ -175,7 +177,7 @@
 
 0559: 8f 30 f1  mov   $f1,#$30
 055c: 8f 6c f2  mov   $f2,#$6c
-055f: 8f e0 f3  mov   $f3,#$e0
+055f: 8f e0 f3  mov   $f3,#$e0          ; set FLG
 0562: cd 00     mov   x,#$00
 0564: f5 cd 05  mov   a,$05cd+x
 0567: 68 ff     cmp   a,#$ff
@@ -225,6 +227,90 @@
 05c1: 3f a2 1e  call  $1ea2
 05c4: 6f        ret
 
+; initial dsp value ($x0-$x6)
+05c5: db $00,$00,$00,$10,$00,$ff,$ff
+
+; initial dsp value
+05cd: db $1c,$00
+05cf: db $0c,$00
+05d1: db $4c,$00
+05d3: db $5c,$00
+05d5: db $2d,$00
+05d7: db $3d,$00
+05d9: db $5d,$60
+05db: db $4d,$00
+05dd: db $0d,$00
+05df: db $3c,$00
+05e1: db $2c,$00
+05e3: db $6d,$40
+05e5: db $7d,$04
+05e7: db $ff
+
+05e8: dw $0080
+05ea: dw $00a3
+05ec: dw $00f2
+05ee: dw $0110
+05f0: dw $014c
+05f2: dw $0163
+05f4: dw $017a
+05f6: dw $0195
+05f8: dw $01ac
+05fa: dw $01f4
+05fc: dw $023f
+05fe: dw $028f
+0600: dw $02c9
+0602: dw $02ec
+0604: dw $031f
+0606: dw $03ff
+0608: dw $041c
+060a: dw $045b
+060c: dw $04b5
+060e: dw $0591
+0610: dw $05ac
+0612: dw $05d1
+0614: dw $05fe
+0616: dw $0615
+0618: dw $0631
+061a: dw $0651
+061c: dw $0670
+061e: dw $0697
+0620: dw $06c7
+0622: dw $0706
+0624: dw $0760
+0626: dw $083c
+0628: dw $08bb
+062a: dw $0925
+062c: dw $094e
+062e: dw $0989
+0630: dw $09cf
+0632: dw $0b74
+0634: dw $0b9f
+0636: dw $0bbd
+0638: dw $0bd8
+063a: dw $0bef
+063c: dw $0c06
+063e: dw $0c61
+0640: dw $0ccf
+0642: dw $0cfa
+0644: dw $0d48
+0646: dw $0d66
+0648: dw $0e24
+064a: dw $0ea3
+064c: dw $0eba
+064e: dw $0ed1
+0650: dw $0ef2
+0652: dw $0f1e
+0654: dw $0f53
+0656: dw $0f74
+0658: dw $0f97
+065a: dw $0ff7
+065c: dw $100a
+065e: dw $101d
+0660: dw $1030
+0662: dw $1043
+0664: dw $1056
+0666: dw $1069
+
 1660: f7 01     mov   a,($01)+y
 1662: 0c fe 3f  asl   $3ffe
 1665: 30 18     bmi   $167f
@@ -235,17 +321,17 @@
 1672: 3f 0b 1f  call  $1f0b
 1675: e8 00     mov   a,#$00
 1677: 8f 4d f2  mov   $f2,#$4d
-167a: c4 f3     mov   $f3,a
+167a: c4 f3     mov   $f3,a             ; set EON
 167c: 8f 3c f2  mov   $f2,#$3c
-167f: c4 f3     mov   $f3,a
+167f: c4 f3     mov   $f3,a             ; set EVOL(R)
 1681: 8f 2c f2  mov   $f2,#$2c
-1684: c4 f3     mov   $f3,a
+1684: c4 f3     mov   $f3,a             ; set EVOL(L)
 1686: c5 9e 03  mov   $039e,a
 1689: 8f 3d f2  mov   $f2,#$3d
-168c: c4 f3     mov   $f3,a
+168c: c4 f3     mov   $f3,a             ; set NON
 168e: c5 9f 03  mov   $039f,a
 1691: 8f 2d f2  mov   $f2,#$2d
-1694: c4 f3     mov   $f3,a
+1694: c4 f3     mov   $f3,a             ; set PMON
 1696: c5 a0 03  mov   $03a0,a
 1699: e8 ff     mov   a,#$ff
 169b: c5 9a 03  mov   $039a,a
@@ -301,8 +387,10 @@
 170c: 8d 00     mov   y,#$00
 170e: f7 00     mov   a,($00)+y
 1710: 10 1c     bpl   $172e
+; section cmd: 80-ff(fe) - global transpose
 1712: 28 7f     and   a,#$7f
 1714: d5 30 02  mov   $0230+x,a
+; increase section pointer
 1717: f5 10 02  mov   a,$0210+x
 171a: 60        clrc
 171b: 88 01     adc   a,#$01
@@ -312,11 +400,13 @@
 1725: 88 00     adc   a,#$00
 1727: d5 18 02  mov   $0218+x,a
 172a: c4 01     mov   $01,a
-172c: 2f de     bra   $170c
-172e: d5 28 02  mov   $0228+x,a
+172c: 2f de     bra   $170c             ; continue
+; section cmd: 00-7f - section
+; note: section offset is is big-endian value.
+172e: d5 28 02  mov   $0228+x,a         ; set voice pointer (hi-byte)
 1731: fc        inc   y
 1732: f7 00     mov   a,($00)+y
-1734: d5 20 02  mov   $0220+x,a
+1734: d5 20 02  mov   $0220+x,a         ; set voice pointer (lo-byte)
 1737: d8 68     mov   $68,x
 1739: e8 80     mov   a,#$80
 173b: d5 78 02  mov   $0278+x,a
@@ -389,20 +479,25 @@
 17d2: 9c        dec   a
 17d3: d0 f5     bne   $17ca
 17d5: 2f cc     bra   $17a3
-17d7: 8c 18 8c  dec   $8c18
-17da: 18 48 18  or    $18,#$48
-17dd: 4e 18 8c  tclr1 $8c18
-17e0: 18 40 18  or    $18,#$40
-17e3: 6d        push  y
-17e4: 18 78 18  or    $18,#$78
-17e7: f7 17     mov   a,($17)+y
-17e9: 8c 18 92  dec   $9218
-17ec: 18 fd 17  or    $17,#$fd
-17ef: 8c 18 8c  dec   $8c18
-17f2: 18 8c 18  or    $18,#$8c
-17f5: 8c 18 3f  dec   $3f18
-17f8: 7f        reti
-17f9: 20        clrp
+
+17d7: dw $188c
+17d9: dw $188c
+17db: dw $1848
+17dd: dw $184e
+17df: dw $188c
+17e1: dw $1840
+17e3: dw $186d
+17e5: dw $1878
+17e7: dw $17f7
+17e9: dw $188c
+17eb: dw $1892
+17ed: dw $17fd
+17ef: dw $188c
+17f1: dw $188c
+17f3: dw $188c
+17f5: dw $188c
+
+17f7: 3f 7f 20  call  $207f
 17fa: 5f 8c 18  jmp   $188c
 
 17fd: e4 f4     mov   a,$f4
@@ -414,22 +509,22 @@
 1809: d5 00 02  mov   $0200+x,a
 180c: f5 99 1f  mov   a,$1f99+x
 180f: 8f 5c f2  mov   $f2,#$5c
-1812: c4 f3     mov   $f3,a
+1812: c4 f3     mov   $f3,a             ; set KOF
 1814: 5f 8c 18  jmp   $188c
 
 1817: 3f 30 18  call  $1830
 181a: e8 00     mov   a,#$00
 181c: 8f 4d f2  mov   $f2,#$4d
-181f: c4 f3     mov   $f3,a
+181f: c4 f3     mov   $f3,a             ; set EON
 1821: 8f 2c f2  mov   $f2,#$2c
-1824: c4 f3     mov   $f3,a
+1824: c4 f3     mov   $f3,a             ; set EVOL(L)
 1826: 8f 3c f2  mov   $f2,#$3c
-1829: c4 f3     mov   $f3,a
+1829: c4 f3     mov   $f3,a             ; set EVOL(R)
 182b: c4 f1     mov   $f1,a
 182d: 5f 2f 04  jmp   $042f
 
 1830: 8f 5c f2  mov   $f2,#$5c
-1833: 8f ff f3  mov   $f3,#$ff
+1833: 8f ff f3  mov   $f3,#$ff          ; keyoff all voices
 1836: e8 00     mov   a,#$00
 1838: c4 6b     mov   $6b,a
 183a: c4 6a     mov   $6a,a
@@ -489,55 +584,58 @@
 18b3: f5 18 03  mov   a,$0318+x
 18b6: d0 03     bne   $18bb
 18b8: 3f 8d 19  call  $198d
-18bb: 9b 30     dec   $30+x
+18bb: 9b 30     dec   $30+x             ; decrease wait counter
 18bd: d0 03     bne   $18c2
-18bf: 3f ee 18  call  $18ee
+18bf: 3f ee 18  call  $18ee             ; enter to vcmd parse loop
 18c2: ab 68     inc   $68
 18c4: 73 68 df  bbc3  $68,$18a6
 18c7: e4 6b     mov   a,$6b
 18c9: f0 09     beq   $18d4
 18cb: 8f 5c f2  mov   $f2,#$5c
-18ce: c4 f3     mov   $f3,a
+18ce: c4 f3     mov   $f3,a             ; set KOF
 18d0: 8d 40     mov   y,#$40
 18d2: fe fe     dbnz  y,$18d2
 18d4: e4 6a     mov   a,$6a
 18d6: f0 0f     beq   $18e7
 18d8: 8f 5c f2  mov   $f2,#$5c
-18db: 8f 00 f3  mov   $f3,#$00
+18db: 8f 00 f3  mov   $f3,#$00          ; set KOF
 18de: 8d 40     mov   y,#$40
 18e0: fe fe     dbnz  y,$18e0
 18e2: 8f 4c f2  mov   $f2,#$4c
-18e5: c4 f3     mov   $f3,a
+18e5: c4 f3     mov   $f3,a             ; set KON
 18e7: 8f 00 6b  mov   $6b,#$00
 18ea: 8f 00 6a  mov   $6a,#$00
 18ed: 6f        ret
 
+; vcmd parser main loop
 18ee: f8 68     mov   x,$68
 18f0: f5 20 02  mov   a,$0220+x
 18f3: c4 08     mov   $08,a
 18f5: f5 28 02  mov   a,$0228+x
-18f8: c4 09     mov   $09,a
+18f8: c4 09     mov   $09,a             ; set voice pointer of channel X to $08/9
 18fa: 8d 00     mov   y,#$00
 18fc: f7 08     mov   a,($08)+y
 18fe: 30 27     bmi   $1927
-1900: 3f c0 19  call  $19c0
+; vcmd 00-7f
+1900: 3f c0 19  call  $19c0             ; save note param
 1903: fc        inc   y
 1904: 60        clrc
-1905: 95 30 02  adc   a,$0230+x
-1908: d5 40 02  mov   $0240+x,a
+1905: 95 30 02  adc   a,$0230+x         ; add global transpose (unsigned)
+1908: d5 40 02  mov   $0240+x,a         ; note number
 190b: f7 08     mov   a,($08)+y
 190d: d4 30     mov   $30+x,a
-190f: d5 50 02  mov   $0250+x,a
+190f: d5 50 02  mov   $0250+x,a         ; arg1: delta-time
 1912: fc        inc   y
 1913: f7 08     mov   a,($08)+y
 1915: d4 38     mov   $38+x,a
-1917: d5 58 02  mov   $0258+x,a
+1917: d5 58 02  mov   $0258+x,a         ; arg2: duration
 191a: fc        inc   y
 191b: f7 08     mov   a,($08)+y
-191d: d5 48 02  mov   $0248+x,a
+191d: d5 48 02  mov   $0248+x,a         ; arg3: note volume
 1920: 8d 04     mov   y,#$04
 1922: 3f 6d 1d  call  $1d6d
 1925: 2f 23     bra   $194a
+; 80-ff
 1927: fc        inc   y
 1928: 68 f0     cmp   a,#$f0
 192a: 90 03     bcc   $192f
@@ -617,6 +715,7 @@
 19d3: ae        pop   a
 19d4: 6f        ret
 
+; dispatch vcmd
 19d5: 80        setc
 19d6: a8 f0     sbc   a,#$f0
 19d8: 1c        asl   a
@@ -630,7 +729,7 @@
 19e5: dw $19fd  ; f4
 19e7: dw $19fd  ; f5
 19e9: dw $1a23  ; f6
-19eb: dw $1a3e  ; f7
+19eb: dw $1a3e  ; f7 - instrument
 19ed: dw $19fd  ; f8
 19ef: dw $19fd  ; f9
 19f1: dw $19fd  ; fa
@@ -640,25 +739,30 @@
 19f9: dw $1b95  ; fe
 19fb: dw $1b9b  ; ff
 
+; vcmd f3-f5, f8-fa - nop?
 19fd: fc        inc   y
 19fe: 5f 6d 1d  jmp   $1d6d
 
+; vcmd f0
 1a01: 3f 65 1d  call  $1d65
 1a04: 8d 03     mov   y,#$03
 1a06: 5f 6d 1d  jmp   $1d6d
 
+; vcmd f1
 1a09: 3f 65 1d  call  $1d65
 1a0c: f7 08     mov   a,($08)+y
 1a0e: 3f 92 1e  call  $1e92
 1a11: 8d 03     mov   y,#$03
 1a13: 5f 6d 1d  jmp   $1d6d
 
+; vcmd f2
 1a16: 3f 65 1d  call  $1d65
 1a19: f7 08     mov   a,($08)+y
 1a1b: 3f 6a 1e  call  $1e6a
 1a1e: 8d 03     mov   y,#$03
 1a20: 5f 6d 1d  jmp   $1d6d
 
+; vcmd f6
 1a23: 3f 65 1d  call  $1d65
 1a26: f7 08     mov   a,($08)+y
 1a28: d5 78 02  mov   $0278+x,a
@@ -670,16 +774,18 @@
 1a39: 8d 04     mov   y,#$04
 1a3b: 5f 6d 1d  jmp   $1d6d
 
-1a3e: 3f 65 1d  call  $1d65
+; vcmd f7 - instrument
+1a3e: 3f 65 1d  call  $1d65             ; read arg1: instrument #
 1a41: f7 08     mov   a,($08)+y
 1a43: d5 38 02  mov   $0238+x,a
 1a46: f5 18 03  mov   a,$0318+x
 1a49: d0 06     bne   $1a51
 1a4b: f5 38 02  mov   a,$0238+x
-1a4e: 3f c9 1e  call  $1ec9
+1a4e: 3f c9 1e  call  $1ec9             ; set sample
 1a51: 8d 03     mov   y,#$03
 1a53: 5f 6d 1d  jmp   $1d6d
 
+; vcmd fb
 1a56: f8 68     mov   x,$68
 1a58: f5 88 02  mov   a,$0288+x
 1a5b: d0 2a     bne   $1a87
@@ -721,6 +827,7 @@
 1ab8: 8d 01     mov   y,#$01
 1aba: 5f 6d 1d  jmp   $1d6d
 
+; vcmd fc
 1abd: f8 68     mov   x,$68
 1abf: f5 d0 02  mov   a,$02d0+x
 1ac2: d0 44     bne   $1b08
@@ -784,6 +891,7 @@
 1b4d: 8d 02     mov   y,#$02
 1b4f: 5f 6d 1d  jmp   $1d6d
 
+; vcmd fd
 1b52: f8 68     mov   x,$68
 1b54: e8 00     mov   a,#$00
 1b56: d5 30 02  mov   $0230+x,a
@@ -815,10 +923,12 @@
 1b8f: d5 20 02  mov   $0220+x,a
 1b92: 5f ee 18  jmp   $18ee
 
+; vcmd fe
 1b95: e8 ff     mov   a,#$ff
 1b97: c5 6e 00  mov   $006e,a
 1b9a: 6f        ret
 
+; vcmd ff - sub-command
 1b9b: f7 08     mov   a,($08)+y
 1b9d: c4 02     mov   $02,a
 1b9f: fc        inc   y
@@ -835,46 +945,50 @@
 1bb1: 8d 03     mov   y,#$03
 1bb3: 5f 6d 1d  jmp   $1d6d
 
-1bb6: e6        mov   a,(x)
-1bb7: 1b ee     asl   $ee+x
-1bb9: 1b f8     asl   $f8+x
-1bbb: 1b 02     asl   $02+x
-1bbd: 1c        asl   a
-1bbe: 12 1c     clr0  $1c
-1bc0: 24 1c     and   a,$1c
-1bc2: 27 1c     and   a,($1c+x)
-1bc4: 2a 1c 2d  or1   c,!($0d1c,1)
-1bc7: 1c        asl   a
-1bc8: 30 1c     bmi   $1be6
-1bca: 33 1c 36  bbc1  $1c,$1c03
-1bcd: 1c        asl   a
-1bce: 48 1c     eor   a,#$1c
-1bd0: 62 1c     set3  $1c
-1bd2: 7a 1c     addw  ya,$1c
-1bd4: 8c 1c 96  dec   $961c
-1bd7: 1c        asl   a
-1bd8: a0        ei
-1bd9: 1c        asl   a
-1bda: b3 1c b6  bbc5  $1c,$1b93
-1bdd: 1c        asl   a
-1bde: cb 1c     mov   $1c,y
-1be0: d5 1c ea  mov   $ea1c+x,a
-1be3: 1c        asl   a
-1be4: f7 1c     mov   a,($1c)+y
+; voice subcmd dispatch table
+1bb6: dw $1be6  ; 00
+1bb8: dw $1bee  ; 01
+1bba: dw $1bf8  ; 02
+1bbc: dw $1c02  ; 03
+1bbe: dw $1c12  ; 04
+1bc0: dw $1c24  ; 05
+1bc2: dw $1c27  ; 06
+1bc4: dw $1c2a  ; 07
+1bc6: dw $1c2d  ; 08
+1bc8: dw $1c30  ; 09
+1bca: dw $1c33  ; 0a
+1bcc: dw $1c36  ; 0b
+1bce: dw $1c48  ; 0c
+1bd0: dw $1c62  ; 0d
+1bd2: dw $1c7a  ; 0e
+1bd4: dw $1c8c  ; 0f
+1bd6: dw $1c96  ; 10
+1bd8: dw $1ca0  ; 11
+1bda: dw $1cb3  ; 12
+1bdc: dw $1cb6  ; 13
+1bde: dw $1ccb  ; 14
+1be0: dw $1cd5  ; 15
+1be2: dw $1cea  ; 16
+1be4: dw $1cf7  ; 17
+
+; subcmd 00
 1be6: e4 03     mov   a,$03
 1be8: c5 9d 03  mov   $039d,a
 1beb: 5f ab 1b  jmp   $1bab
 
+; subcmd 01
 1bee: e4 03     mov   a,$03
 1bf0: c5 9b 03  mov   $039b,a
 1bf3: 22 74     set1  $74
 1bf5: 5f ab 1b  jmp   $1bab
 
+; subcmd 02
 1bf8: e4 03     mov   a,$03
 1bfa: c5 a3 03  mov   $03a3,a
 1bfd: 22 74     set1  $74
 1bff: 5f ab 1b  jmp   $1bab
 
+; subcmd 03
 1c02: f8 68     mov   x,$68
 1c04: f5 99 1f  mov   a,$1f99+x
 1c07: 05 9a 03  or    a,$039a
@@ -882,6 +996,7 @@
 1c0d: 42 74     set2  $74
 1c0f: 5f ab 1b  jmp   $1bab
 
+; subcmd 04
 1c12: f8 68     mov   x,$68
 1c14: f5 99 1f  mov   a,$1f99+x
 1c17: 48 ff     eor   a,#$ff
@@ -890,18 +1005,25 @@
 1c1f: 42 74     set2  $74
 1c21: 5f ab 1b  jmp   $1bab
 
+; subcmd 05
 1c24: 5f ab 1b  jmp   $1bab
 
+; subcmd 06
 1c27: 5f ab 1b  jmp   $1bab
 
+; subcmd 07
 1c2a: 5f ab 1b  jmp   $1bab
 
+; subcmd 08
 1c2d: 5f ab 1b  jmp   $1bab
 
+; subcmd 09
 1c30: 5f ab 1b  jmp   $1bab
 
+; subcmd 0a
 1c33: 5f ab 1b  jmp   $1bab
 
+; subcmd 0b
 1c36: 3f 0c 1d  call  $1d0c
 1c39: 8d 00     mov   y,#$00
 1c3b: f7 18     mov   a,($18)+y
@@ -911,6 +1033,7 @@
 1c43: c4 f3     mov   $f3,a
 1c45: 5f ab 1b  jmp   $1bab
 
+; subcmd 0c
 1c48: 3f 0c 1d  call  $1d0c
 1c4b: 8d 00     mov   y,#$00
 1c4d: f7 18     mov   a,($18)+y
@@ -926,6 +1049,7 @@
 1c5d: c4 f3     mov   $f3,a
 1c5f: 5f ab 1b  jmp   $1bab
 
+; subcmd 0d
 1c62: 3f 0c 1d  call  $1d0c
 1c65: 8d 00     mov   y,#$00
 1c67: f7 18     mov   a,($18)+y
@@ -939,6 +1063,7 @@
 1c75: c4 f3     mov   $f3,a
 1c77: 5f ab 1b  jmp   $1bab
 
+; subcmd 0e
 1c7a: 3f 0c 1d  call  $1d0c
 1c7d: 8d 00     mov   y,#$00
 1c7f: f7 18     mov   a,($18)+y
@@ -948,62 +1073,71 @@
 1c87: c4 f3     mov   $f3,a
 1c89: 5f ab 1b  jmp   $1bab
 
+; subcmd 0f
 1c8c: e4 03     mov   a,$03
 1c8e: c5 93 03  mov   $0393,a
 1c91: 42 74     set2  $74
 1c93: 5f ab 1b  jmp   $1bab
 
+; subcmd 10
 1c96: e4 03     mov   a,$03
 1c98: c5 92 03  mov   $0392,a
 1c9b: 42 74     set2  $74
 1c9d: 5f ab 1b  jmp   $1bab
 
+; subcmd 11
 1ca0: f8 68     mov   x,$68
 1ca2: f5 99 1f  mov   a,$1f99+x
 1ca5: 05 9f 03  or    a,$039f
 1ca8: c5 9f 03  mov   $039f,a
 1cab: 8f 3d f2  mov   $f2,#$3d
-1cae: c4 f3     mov   $f3,a
+1cae: c4 f3     mov   $f3,a             ; set NON
 1cb0: 5f ab 1b  jmp   $1bab
 
+; subcmd 12
 1cb3: 5f ab 1b  jmp   $1bab
 
+; subcmd 13
 1cb6: f8 68     mov   x,$68
 1cb8: f5 99 1f  mov   a,$1f99+x
 1cbb: 05 a0 03  or    a,$03a0
 1cbe: 28 fe     and   a,#$fe
 1cc0: c5 a0 03  mov   $03a0,a
 1cc3: 8f 2d f2  mov   $f2,#$2d
-1cc6: c4 f3     mov   $f3,a
+1cc6: c4 f3     mov   $f3,a             ; set PMON
 1cc8: 5f ab 1b  jmp   $1bab
 
+; subcmd 14
 1ccb: e4 03     mov   a,$03
 1ccd: 28 1f     and   a,#$1f
 1ccf: c5 9e 03  mov   $039e,a
 1cd2: 5f ab 1b  jmp   $1bab
 
+; subcmd 15
 1cd5: f8 68     mov   x,$68
 1cd7: f5 99 1f  mov   a,$1f99+x
 1cda: 48 ff     eor   a,#$ff
 1cdc: 25 9f 03  and   a,$039f
 1cdf: c5 9f 03  mov   $039f,a
 1ce2: 8f 3d f2  mov   $f2,#$3d
-1ce5: c4 f3     mov   $f3,a
+1ce5: c4 f3     mov   $f3,a             ; set NON
 1ce7: 5f ab 1b  jmp   $1bab
 
+; subcmd 16
 1cea: e4 03     mov   a,$03
 1cec: c5 93 03  mov   $0393,a
 1cef: c5 92 03  mov   $0392,a
 1cf2: 42 74     set2  $74
 1cf4: 5f ab 1b  jmp   $1bab
 
+; subcmd 17
 1cf7: f8 68     mov   x,$68
 1cf9: f5 99 1f  mov   a,$1f99+x
 1cfc: 48 ff     eor   a,#$ff
 1cfe: 25 a0 03  and   a,$03a0
 1d01: c5 a0 03  mov   $03a0,a
 1d04: 8f 2d f2  mov   $f2,#$2d
-1d07: c4 f3     mov   $f3,a
+1d07: c4 f3     mov   $f3,a             ; set PMON
 1d09: 5f ab 1b  jmp   $1bab
 
 1d0c: f8 68     mov   x,$68
@@ -1027,29 +1161,30 @@
 1d29: e5 9a 03  mov   a,$039a
 1d2c: 65 f3 00  cmp   a,$00f3
 1d2f: f0 03     beq   $1d34
-1d31: c5 f3 00  mov   $00f3,a
+1d31: c5 f3 00  mov   $00f3,a           ; set EON
 1d34: 6f        ret
 
 1d35: e5 9a 03  mov   a,$039a
 1d38: d0 0e     bne   $1d48
 1d3a: e8 00     mov   a,#$00
 1d3c: 8f 3c f2  mov   $f2,#$3c
-1d3f: c4 f3     mov   $f3,a
+1d3f: c4 f3     mov   $f3,a             ; zero EVOL(R)
 1d41: 8f 2c f2  mov   $f2,#$2c
-1d44: c4 f3     mov   $f3,a
+1d44: c4 f3     mov   $f3,a             ; zero EVOL(L)
 1d46: 2f 1c     bra   $1d64
 1d48: 8f 3c f2  mov   $f2,#$3c
 1d4b: e5 93 03  mov   a,$0393
 1d4e: 65 f3 00  cmp   a,$00f3
 1d51: f0 03     beq   $1d56
-1d53: c5 f3 00  mov   $00f3,a
+1d53: c5 f3 00  mov   $00f3,a           ; set EVOL(R)
 1d56: 8f 2c f2  mov   $f2,#$2c
 1d59: e5 92 03  mov   a,$0392
 1d5c: 65 f3 00  cmp   a,$00f3
 1d5f: f0 03     beq   $1d64
-1d61: c5 f3 00  mov   $00f3,a
+1d61: c5 f3 00  mov   $00f3,a           ; set EVOL(L)
 1d64: 6f        ret
 
+; read voice byte, increase index Y
 1d65: f8 68     mov   x,$68
 1d67: f7 08     mov   a,($08)+y
 1d69: d4 30     mov   $30+x,a
@@ -1171,11 +1306,11 @@
 1e28: fd        mov   y,a
 1e29: f4 50     mov   a,$50+x
 1e2b: cb f2     mov   $f2,y
-1e2d: c4 f3     mov   $f3,a
+1e2d: c4 f3     mov   $f3,a             ; set P(L)
 1e2f: fc        inc   y
 1e30: f4 58     mov   a,$58+x
 1e32: cb f2     mov   $f2,y
-1e34: c4 f3     mov   $f3,a
+1e34: c4 f3     mov   $f3,a             ; set P(H)
 1e36: 6f        ret
 
 1e37: f8 68     mov   x,$68
@@ -1244,16 +1379,16 @@
 1ea1: 6f        ret
 
 1ea2: 8d 0c     mov   y,#$0c
-1ea4: 3f 45 1f  call  $1f45
+1ea4: 3f 45 1f  call  $1f45             ; set MVOL(L)
 1ea7: 8d 1c     mov   y,#$1c
-1ea9: 5f 45 1f  jmp   $1f45
+1ea9: 5f 45 1f  jmp   $1f45             ; set MVOL(R)
 
 1eac: 8d 2c     mov   y,#$2c
 1eae: cc 92 03  mov   $0392,y
-1eb1: 3f 45 1f  call  $1f45
+1eb1: 3f 45 1f  call  $1f45             ; set EVOL(L)
 1eb4: 8d 3c     mov   y,#$3c
 1eb6: cc 93 03  mov   $0393,y
-1eb9: 5f 45 1f  jmp   $1f45
+1eb9: 5f 45 1f  jmp   $1f45             ; set EVOL(R)
 
 1ebc: 2d        push  a
 1ebd: 7d        mov   a,x
@@ -1278,7 +1413,7 @@
 1ed7: 5d        mov   x,a
 1ed8: d8 f2     mov   $f2,x
 1eda: ae        pop   a
-1edb: c4 f3     mov   $f3,a
+1edb: c4 f3     mov   $f3,a             ; set SRCN
 1edd: 1c        asl   a
 1ede: 1c        asl   a
 1edf: 60        clrc
@@ -1292,12 +1427,12 @@
 1eee: fc        inc   y
 1eef: 3d        inc   x
 1ef0: d8 f2     mov   $f2,x
-1ef2: c4 f3     mov   $f3,a
+1ef2: c4 f3     mov   $f3,a             ; set ADSR(1)
 1ef4: f7 18     mov   a,($18)+y
 1ef6: fc        inc   y
 1ef7: 3d        inc   x
 1ef8: d8 f2     mov   $f2,x
-1efa: c4 f3     mov   $f3,a
+1efa: c4 f3     mov   $f3,a             ; set ADSR(2)
 1efc: f8 0d     mov   x,$0d
 1efe: f7 18     mov   a,($18)+y
 1f00: d5 08 03  mov   $0308+x,a
@@ -1314,7 +1449,7 @@
 1f0f: 8f 08 0c  mov   $0c,#$08
 1f12: 8d 0f     mov   y,#$0f
 1f14: f5 25 1f  mov   a,$1f25+x
-1f17: 3f 45 1f  call  $1f45
+1f17: 3f 45 1f  call  $1f45             ; set FIR C0-C7
 1f1a: dd        mov   a,y
 1f1b: 60        clrc
 1f1c: 88 10     adc   a,#$10
@@ -1324,11 +1459,13 @@
 1f22: d0 f0     bne   $1f14
 1f24: 6f        ret
 
+; FIR
 1f25: db $7f,$00,$00,$00,$00,$00,$00,$00
 1f2d: db $0c,$21,$2b,$2b,$13,$fe,$f3,$f9
 1f35: db $58,$bf,$db,$f0,$fe,$07,$0c,$0c
 1f3d: db $34,$33,$00,$d9,$e5,$01,$fc,$eb
 
+; write A to dsp reg Y
 1f45: cb f2     mov   $f2,y
 1f47: c4 f3     mov   $f3,a
 1f49: 6f        ret
@@ -1361,7 +1498,7 @@
 1fb8: 8f 7d f2  mov   $f2,#$7d
 1fbb: e5 9d 03  mov   a,$039d
 1fbe: 64 f3     cmp   a,$f3
-1fc0: f0 06     beq   $1fc8
+1fc0: f0 06     beq   $1fc8             ; branch if EDL == 0
 1fc2: 3f 16 20  call  $2016
 1fc5: 5f 15 20  jmp   $2015
 
@@ -1369,48 +1506,48 @@
 1fcb: 42 74     set2  $74
 1fcd: e5 9b 03  mov   a,$039b
 1fd0: 8f 0d f2  mov   $f2,#$0d
-1fd3: c4 f3     mov   $f3,a
+1fd3: c4 f3     mov   $f3,a             ; set EFB
 1fd5: e5 a3 03  mov   a,$03a3
 1fd8: 3f 0b 1f  call  $1f0b
 1fdb: 32 74     clr1  $74
 1fdd: 53 74 28  bbc2  $74,$2008
 1fe0: e5 9a 03  mov   a,$039a
 1fe3: 8f 4d f2  mov   $f2,#$4d
-1fe6: c4 f3     mov   $f3,a
+1fe6: c4 f3     mov   $f3,a             ; set EON
 1fe8: f0 12     beq   $1ffc
 1fea: e5 93 03  mov   a,$0393
 1fed: 8f 3c f2  mov   $f2,#$3c
-1ff0: c4 f3     mov   $f3,a
+1ff0: c4 f3     mov   $f3,a             ; set EVOL(R)
 1ff2: e5 92 03  mov   a,$0392
 1ff5: 8f 2c f2  mov   $f2,#$2c
-1ff8: c4 f3     mov   $f3,a
+1ff8: c4 f3     mov   $f3,a             ; set EVOL(L)
 1ffa: 2f 0a     bra   $2006
 1ffc: 8f 3c f2  mov   $f2,#$3c
-1fff: c4 f3     mov   $f3,a
+1fff: c4 f3     mov   $f3,a             ; set EVOL(R)
 2001: 8f 2c f2  mov   $f2,#$2c
-2004: c4 f3     mov   $f3,a
+2004: c4 f3     mov   $f3,a             ; set EVOL(L)
 2006: 52 74     clr2  $74
 2008: e5 9e 03  mov   a,$039e
 200b: 28 1f     and   a,#$1f
 200d: 8f 6c f2  mov   $f2,#$6c
-2010: c4 f3     mov   $f3,a
+2010: c4 f3     mov   $f3,a             ; set FLG
 2012: c5 9e 03  mov   $039e,a
 2015: 6f        ret
 
 2016: 8f 7d f2  mov   $f2,#$7d
-2019: e4 f3     mov   a,$f3
+2019: e4 f3     mov   a,$f3             ; set EDL
 201b: bc        inc   a
 201c: c5 6c 00  mov   $006c,a
 201f: e8 00     mov   a,#$00
 2021: 8f 4d f2  mov   $f2,#$4d
-2024: c4 f3     mov   $f3,a
+2024: c4 f3     mov   $f3,a             ; set EON
 2026: 8f 2c f2  mov   $f2,#$2c
-2029: c4 f3     mov   $f3,a
+2029: c4 f3     mov   $f3,a             ; set EVOL(L)
 202b: 8f 3c f2  mov   $f2,#$3c
-202e: c4 f3     mov   $f3,a
+202e: c4 f3     mov   $f3,a             ; set EVOL(R)
 2030: e5 9d 03  mov   a,$039d
 2033: 8f 7d f2  mov   $f2,#$7d
-2036: c4 f3     mov   $f3,a
+2036: c4 f3     mov   $f3,a             ; set EDL
 2038: 6f        ret
 
 2039: 9c        dec   a
@@ -1428,17 +1565,17 @@
 2052: 9c        dec   a
 2053: c5 94 03  mov   $0394,a
 2056: 8f 0c f2  mov   $f2,#$0c
-2059: c4 f3     mov   $f3,a
+2059: c4 f3     mov   $f3,a             ; set MVOL(L)
 205b: 8f 1c f2  mov   $f2,#$1c
-205e: c4 f3     mov   $f3,a
+205e: c4 f3     mov   $f3,a             ; set MVOL(R)
 2060: e5 95 03  mov   a,$0395
 2063: f0 0e     beq   $2073
 2065: 9c        dec   a
 2066: c5 95 03  mov   $0395,a
 2069: 8f 2c f2  mov   $f2,#$2c
-206c: c4 f3     mov   $f3,a
+206c: c4 f3     mov   $f3,a             ; set EVOL(L)
 206e: 8f 3c f2  mov   $f2,#$3c
-2071: c4 f3     mov   $f3,a
+2071: c4 f3     mov   $f3,a             ; set EVOL(R)
 2073: e5 94 03  mov   a,$0394
 2076: 05 95 03  or    a,$0395
 2079: d0 03     bne   $207e
@@ -1597,23 +1734,24 @@
 21aa: 5d        mov   x,a
 21ab: 1f ae 21  jmp   ($21ae+x)
 
-21ae: dw $21ce  ; f0
-21b0: dw $21ce  ; f1
+21ae: dw $21ce  ; f0 - halt
+21b0: dw $21ce  ; f1 - halt
 21b2: dw $21d1  ; f2
-21b4: dw $21ce  ; f3
-21b6: dw $21ce  ; f4
-21b8: dw $21ce  ; f5
+21b4: dw $21ce  ; f3 - halt
+21b6: dw $21ce  ; f4 - halt
+21b8: dw $21ce  ; f5 - halt
 21ba: dw $21de  ; f6
 21bc: dw $21f4  ; f7
-21be: dw $21ce  ; f8
-21c0: dw $21ce  ; f9
-21c2: dw $21ce  ; fa
+21be: dw $21ce  ; f8 - halt
+21c0: dw $21ce  ; f9 - halt
+21c2: dw $21ce  ; fa - halt
 21c4: dw $2201  ; fb
 21c6: dw $221e  ; fc
-21c8: dw $21ce  ; fd
+21c8: dw $21ce  ; fd - halt
 21ca: dw $2243  ; fe
-21cc: dw $21ce  ; ff
+21cc: dw $21ce  ; ff - halt
 
+; halt
 21ce: 5f ce 21  jmp   $21ce
 
 21d1: 3f 86 22  call  $2286
