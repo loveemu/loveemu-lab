@@ -11,10 +11,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CopyNonZero", "CopyNonZero\
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "minigen", "minigen\minigen.vcxproj", "{A85AD845-04C6-4A56-8B0A-8BF9CDE5D2D5}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "psfprint", "psfprint\psfprint.vcxproj", "{57D3B3A5-B91A-430D-9887-008AE59488F7}"
-EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PSXCopyFunc", "PSXCopyFunc\PSXCopyFunc.vcxproj", "{6255FEBF-3977-40C8-820B-2D7A87D54B51}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -37,14 +33,6 @@ Global
 		{A85AD845-04C6-4A56-8B0A-8BF9CDE5D2D5}.Debug|Win32.Build.0 = Debug|Win32
 		{A85AD845-04C6-4A56-8B0A-8BF9CDE5D2D5}.Release|Win32.ActiveCfg = Release|Win32
 		{A85AD845-04C6-4A56-8B0A-8BF9CDE5D2D5}.Release|Win32.Build.0 = Release|Win32
-		{57D3B3A5-B91A-430D-9887-008AE59488F7}.Debug|Win32.ActiveCfg = Debug|Win32
-		{57D3B3A5-B91A-430D-9887-008AE59488F7}.Debug|Win32.Build.0 = Debug|Win32
-		{57D3B3A5-B91A-430D-9887-008AE59488F7}.Release|Win32.ActiveCfg = Release|Win32
-		{57D3B3A5-B91A-430D-9887-008AE59488F7}.Release|Win32.Build.0 = Release|Win32
-		{6255FEBF-3977-40C8-820B-2D7A87D54B51}.Debug|Win32.ActiveCfg = Debug|Win32
-		{6255FEBF-3977-40C8-820B-2D7A87D54B51}.Debug|Win32.Build.0 = Debug|Win32
-		{6255FEBF-3977-40C8-820B-2D7A87D54B51}.Release|Win32.ActiveCfg = Release|Win32
-		{6255FEBF-3977-40C8-820B-2D7A87D54B51}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
