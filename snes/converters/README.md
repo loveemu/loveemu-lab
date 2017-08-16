@@ -6,4 +6,4 @@ The source code is extremely messy and it is hard to read!
 
 Currently, I am trying to implement those converter functions into [VGMTrans](https://github.com/vgmtrans/vgmtrans), in more beautiful manner and improved accuracy.
 
-However, these tools are still not removed from this repository, to maintain disassembly codes.
+Disassembly codes has been moved to <https://github.com/loveemu/vgm-disasm>.
