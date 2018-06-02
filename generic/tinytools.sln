@@ -9,8 +9,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "bincut2", "bincut2\bincut2.
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CopyNonZero", "CopyNonZero\CopyNonZero.vcxproj", "{98DB79D6-0B83-4209-9B68-7B91E9E58EB1}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "minigen", "minigen\minigen.vcxproj", "{A85AD845-04C6-4A56-8B0A-8BF9CDE5D2D5}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -29,10 +27,6 @@ Global
 		{98DB79D6-0B83-4209-9B68-7B91E9E58EB1}.Debug|Win32.Build.0 = Debug|Win32
 		{98DB79D6-0B83-4209-9B68-7B91E9E58EB1}.Release|Win32.ActiveCfg = Release|Win32
 		{98DB79D6-0B83-4209-9B68-7B91E9E58EB1}.Release|Win32.Build.0 = Release|Win32
-		{A85AD845-04C6-4A56-8B0A-8BF9CDE5D2D5}.Debug|Win32.ActiveCfg = Debug|Win32
-		{A85AD845-04C6-4A56-8B0A-8BF9CDE5D2D5}.Debug|Win32.Build.0 = Debug|Win32
-		{A85AD845-04C6-4A56-8B0A-8BF9CDE5D2D5}.Release|Win32.ActiveCfg = Release|Win32
-		{A85AD845-04C6-4A56-8B0A-8BF9CDE5D2D5}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
